@@ -3,7 +3,7 @@
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, QrCode, ClipboardCheck, BarChart3, Menu, X, User, Users } from 'lucide-react';
+import { LogOut, LayoutDashboard, QrCode, ClipboardCheck, BarChart3, Menu, X, User, Users, Settings, CreditCard } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -19,16 +19,18 @@ export function Navbar() {
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
+    { name: 'Mi Carnet', href: '/dashboard/profile/carnet', icon: CreditCard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
     { name: 'Registrar QR', href: '/dashboard/attendance/scan', icon: QrCode, roles: ['docent', 'admin'] },
     { name: 'Marcaje Manual', href: '/dashboard/attendance/manual', icon: ClipboardCheck, roles: ['coordinator', 'admin', 'secretary'] },
     { name: 'Reportes', href: '/dashboard/reports', icon: BarChart3, roles: ['coordinator', 'admin', 'secretary'] },
     { name: 'Personal', href: '/dashboard/admin/users', icon: Users, roles: ['admin', 'coordinator'] },
+    { name: 'Configuración', href: '/dashboard/admin/settings', icon: Settings, roles: ['admin', 'coordinator'] },
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(user.role));
 
   return (
-    <nav className="bg-white border-b sticky top-0 z-50 shadow-sm">
+    <nav className="bg-white border-b sticky top-0 z-50 shadow-sm no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20">
           <div className="flex items-center gap-8">
@@ -53,16 +55,12 @@ export function Navbar() {
                     href={item.href}
                     className={cn(
                       "inline-flex items-center px-4 text-sm font-semibold transition-all relative h-full",
-                      isActive
-                        ? "text-primary"
-                        : "text-muted-foreground hover:text-primary"
+                      isActive ? "text-primary" : "text-muted-foreground hover:text-primary"
                     )}
                   >
                     <item.icon className="w-4 h-4 mr-2" />
                     {item.name}
-                    {isActive && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full" />
-                    )}
+                    {isActive && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full" />}
                   </Link>
                 );
               })}
@@ -75,15 +73,10 @@ export function Navbar() {
                 <User className="w-3.5 h-3.5 text-primary" />
               </div>
               <span className="text-xs font-bold text-gray-700">
-                <span className="capitalize text-muted-foreground font-medium">{user.role}:</span> {user.name}
+                 {user.name}
               </span>
             </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={logout} 
-              className="text-gray-500 hover:text-primary hover:bg-primary/5 transition-all font-bold"
-            >
+            <Button variant="ghost" size="sm" onClick={logout} className="text-gray-500 hover:text-primary transition-all font-bold">
               <LogOut className="w-4 h-4 mr-2" /> Salir
             </Button>
           </div>
@@ -96,7 +89,6 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Menú Mobile */}
       {mobileMenuOpen && (
         <div className="lg:hidden bg-white border-t animate-in slide-in-from-top duration-300">
           <div className="p-4 space-y-2">
@@ -106,7 +98,7 @@ export function Navbar() {
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
                 className={cn(
-                  "flex items-center px-4 py-3 rounded-xl text-base font-bold transition-all",
+                  "flex items-center px-4 py-3 rounded-xl text-base font-bold",
                   pathname === item.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-gray-50"
                 )}
               >
@@ -115,10 +107,6 @@ export function Navbar() {
               </Link>
             ))}
             <div className="pt-4 border-t mt-4">
-              <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-gray-50 rounded-xl">
-                <User className="w-5 h-5 text-primary" />
-                <span className="font-bold text-sm capitalize">{user.role}: {user.name}</span>
-              </div>
               <Button variant="destructive" className="w-full justify-start h-12 rounded-xl font-bold" onClick={logout}>
                 <LogOut className="w-5 h-5 mr-3" /> Cerrar Sesión
               </Button>

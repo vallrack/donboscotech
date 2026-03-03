@@ -1,3 +1,4 @@
+
 export type UserRole = 'docent' | 'coordinator' | 'secretary' | 'admin';
 
 export interface User {
@@ -6,6 +7,30 @@ export interface User {
   email: string;
   role: UserRole;
   avatarUrl?: string;
+  documentId?: string;
+  campus?: string;
+  program?: string;
+  shiftId?: string;
+}
+
+export interface Campus {
+  id: string;
+  name: string;
+  address?: string;
+}
+
+export interface Program {
+  id: string;
+  name: string;
+  type: 'Technical' | 'Academic' | 'Administrative';
+}
+
+export interface Shift {
+  id: string;
+  name: string;
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  days: string[]; // ["Mon", "Tue"...]
 }
 
 export type AttendanceMethod = 'QR' | 'Manual';
@@ -15,8 +40,8 @@ export interface AttendanceRecord {
   id: string;
   userId: string;
   userName: string;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:mm
+  date: string;
+  time: string;
   type: AttendanceType;
   method: AttendanceMethod;
   location: {
@@ -24,12 +49,4 @@ export interface AttendanceRecord {
     lng: number;
     address?: string;
   };
-}
-
-export interface DayAttendance {
-  userId: string;
-  userName: string;
-  date: string;
-  entry?: AttendanceRecord;
-  exit?: AttendanceRecord;
 }

@@ -13,11 +13,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Mail, Loader2, ShieldCheck, UserCog, 
-  ShieldAlert, UserPlus, Lock, User as UserIcon 
+  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, Contact 
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { UserRole } from '@/lib/types';
+import { UserRole, Campus, Program, Shift } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,18 +40,23 @@ export default function UserManagementPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Queries for selectors
+  const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
+  const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
+  const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
+  const { data: users, loading } = useCollection(db ? query(collection(db, 'userProfiles'), orderBy('name', 'asc')) : null as any);
+
   // New User Form State
-  const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<UserRole>('docent');
-
-  const usersQuery = useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, 'userProfiles'), orderBy('name', 'asc'));
-  }, [db]);
-
-  const { data: users, loading } = useCollection(usersQuery as any);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    documentId: '',
+    campus: '',
+    program: '',
+    shiftId: '',
+    role: 'docent' as UserRole
+  });
 
   const filteredUsers = useMemo(() => {
     return (users || []).filter(u => 
@@ -71,42 +76,31 @@ export default function UserManagementPage() {
       tempApp = initializeApp(firebaseConfig, appName);
       const tempAuth = getFirebaseAuth(tempApp);
       
-      const userCredential = await createUserWithEmailAndPassword(tempAuth, newEmail, newPassword);
+      const userCredential = await createUserWithEmailAndPassword(tempAuth, formData.email, formData.password);
       const newUserId = userCredential.user.uid;
 
       await setDoc(doc(db, 'userProfiles', newUserId), {
-        name: newName,
-        email: newEmail,
-        role: newRole,
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        documentId: formData.documentId,
+        campus: formData.campus,
+        program: formData.program,
+        shiftId: formData.shiftId,
         createdAt: serverTimestamp(),
         createdBy: currentUser?.id
       });
 
-      // Sync role collections
-      if (newRole === 'admin') {
-        await setDoc(doc(db, 'roles_admins', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
-      } else if (newRole === 'coordinator') {
-        await setDoc(doc(db, 'roles_coordinators', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
-      } else if (newRole === 'secretary') {
-        await setDoc(doc(db, 'roles_secretaries', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
-      }
+      // Sync roles collections
+      if (formData.role === 'admin') await setDoc(doc(db, 'roles_admins', newUserId), { email: formData.email });
+      if (formData.role === 'coordinator') await setDoc(doc(db, 'roles_coordinators', newUserId), { email: formData.email });
+      if (formData.role === 'secretary') await setDoc(doc(db, 'roles_secretaries', newUserId), { email: formData.email });
 
-      toast({
-        title: "Usuario Creado",
-        description: `Se ha registrado exitosamente a ${newName} como ${newRole.toUpperCase()}.`
-      });
-
+      toast({ title: "Usuario Creado", description: `Se ha registrado a ${formData.name}.` });
       setIsCreateDialogOpen(false);
-      setNewName('');
-      setNewEmail('');
-      setNewPassword('');
-      setNewRole('docent');
+      setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftId: '', role: 'docent' });
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error al crear usuario",
-        description: error.message || "No se pudo registrar al usuario."
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       if (tempApp) await deleteApp(tempApp);
       setIsCreating(false);
@@ -115,58 +109,17 @@ export default function UserManagementPage() {
 
   const handleRoleChange = async (userId: string, targetRole: UserRole, userEmail: string) => {
     if (!db || !userId) return;
-    
-    // Safety: Coordinators cannot grant or remove Admin role
-    if (currentUser?.role === 'coordinator' && (targetRole === 'admin' || users?.find(u => u.id === userId)?.role === 'admin')) {
-      toast({
-        variant: "destructive",
-        title: "Restricción de nivel",
-        description: "Solo un administrador puede gestionar permisos de alto nivel."
-      });
-      return;
-    }
-
-    // Self-protection: Don't allow an admin to remove their own admin role
-    if (currentUser?.id === userId && targetRole !== 'admin') {
-      toast({
-        variant: "destructive",
-        title: "Operación no permitida",
-        description: "No puedes quitarte tus propios permisos administrativos."
-      });
-      return;
-    }
-
     setUpdatingId(userId);
     try {
-      await updateDoc(doc(db, 'userProfiles', userId), { 
-        role: targetRole,
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser?.id
-      });
-
-      const roleCollections = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
-      for (const col of roleCollections) {
-        await deleteDoc(doc(db, col, userId));
-      }
-
-      if (targetRole === 'admin') {
-        await setDoc(doc(db, 'roles_admins', userId), { email: userEmail, assignedAt: new Date().toISOString() });
-      } else if (targetRole === 'coordinator') {
-        await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail, assignedAt: new Date().toISOString() });
-      } else if (targetRole === 'secretary') {
-        await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail, assignedAt: new Date().toISOString() });
-      }
-
-      toast({ 
-        title: "Permisos Actualizados", 
-        description: `Acceso actualizado a nivel ${targetRole.toUpperCase()}.` 
-      });
+      await updateDoc(doc(db, 'userProfiles', userId), { role: targetRole });
+      const roles = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
+      for (const col of roles) await deleteDoc(doc(db, col, userId));
+      if (targetRole === 'admin') await setDoc(doc(db, 'roles_admins', userId), { email: userEmail });
+      if (targetRole === 'coordinator') await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail });
+      if (targetRole === 'secretary') await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail });
+      toast({ title: "Acceso Actualizado" });
     } catch (error) {
-      toast({ 
-        title: "Error de sincronización", 
-        description: "No se pudieron actualizar las reglas de acceso.",
-        variant: "destructive" 
-      });
+      toast({ title: "Error", variant: "destructive" });
     } finally {
       setUpdatingId(null);
     }
@@ -177,9 +130,6 @@ export default function UserManagementPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-gray-50 rounded-3xl animate-in fade-in duration-500">
         <ShieldAlert className="w-16 h-16 text-destructive mb-6 opacity-20" />
         <h2 className="text-3xl font-black text-destructive">Acceso Restringido</h2>
-        <p className="text-muted-foreground mt-4 max-w-md font-medium">
-          Solo el personal directivo (Administradores y Coordinadores) puede gestionar la nómina y permisos del personal.
-        </p>
       </div>
     );
   }
@@ -189,70 +139,77 @@ export default function UserManagementPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-primary">Gestión de Personal</h1>
-          <div className="text-muted-foreground flex items-center gap-2 mt-1">
+          <p className="text-muted-foreground flex items-center gap-2 mt-1">
              <ShieldCheck className="w-4 h-4 text-primary" />
-             <span className="text-xs font-bold uppercase tracking-wider">Control de roles y accesos institucionales</span>
-          </div>
+             <span className="text-xs font-bold uppercase tracking-wider">Control de roles y carnets institucionales</span>
+          </p>
         </div>
         
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="h-12 px-6 rounded-2xl font-black gap-2 shadow-lg shadow-primary/20">
-              <UserPlus className="w-5 h-5" />
-              Nuevo Miembro
+              <UserPlus className="w-5 h-5" /> Nuevo Miembro
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] rounded-3xl border-none shadow-2xl">
+          <DialogContent className="sm:max-w-[600px] rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
             <form onSubmit={handleCreateUser}>
               <DialogHeader>
                 <DialogTitle className="text-2xl font-black text-primary">Agregar Personal</DialogTitle>
-                <DialogDescription className="font-medium">
-                  Registra una nueva cuenta para un docente o administrativo.
-                </DialogDescription>
+                <DialogDescription>Completa todos los datos institucionales.</DialogDescription>
               </DialogHeader>
-              <div className="grid gap-6 py-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Nombre Completo</Label>
-                  <div className="relative">
-                    <UserIcon className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <Input id="name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Juan Bosco" className="pl-10 h-12 rounded-xl border-gray-100" required />
-                  </div>
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Nombre</Label>
+                  <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Ej: Juan Bosco" className="h-12 rounded-xl" required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Correo Institucional</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <Input id="email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="correo@donbosco.edu" className="pl-10 h-12 rounded-xl border-gray-100" required />
-                  </div>
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Identificación</Label>
+                  <Input value={formData.documentId} onChange={(e) => setFormData({...formData, documentId: e.target.value})} placeholder="C.C. 12345678" className="h-12 rounded-xl" required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pass" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Contraseña Inicial</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <Input id="pass" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" className="pl-10 h-12 rounded-xl border-gray-100" required />
-                  </div>
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Correo</Label>
+                  <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="correo@donbosco.edu" className="h-12 rounded-xl" required />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Rol Inicial</Label>
-                  <Select value={newRole} onValueChange={(val: UserRole) => setNewRole(val)}>
-                    <SelectTrigger className="h-12 rounded-xl border-gray-100 font-bold">
-                      <SelectValue placeholder="Seleccionar Rol" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl border-none shadow-2xl">
-                      <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
-                      <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
-                      <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
-                      {currentUser?.role === 'admin' && (
-                        <SelectItem value="admin" className="font-black py-3 text-primary">Administrador</SelectItem>
-                      )}
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Contraseña</Label>
+                  <Input type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} placeholder="••••••••" className="h-12 rounded-xl" required />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Sede</Label>
+                  <Select value={formData.campus} onValueChange={(val) => setFormData({...formData, campus: val})}>
+                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
+                    <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Programa / Carrera</Label>
+                  <Select value={formData.program} onValueChange={(val) => setFormData({...formData, program: val})}>
+                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
+                    <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Jornada</Label>
+                  <Select value={formData.shiftId} onValueChange={(val) => setFormData({...formData, shiftId: val})}>
+                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Jornada" /></SelectTrigger>
+                    <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id}>{s.name} ({s.startTime}-{s.endTime})</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Rol</Label>
+                  <Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}>
+                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="docent">Docente</SelectItem>
+                      <SelectItem value="secretary">Secretaría</SelectItem>
+                      <SelectItem value="coordinator">Coordinador</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" className="w-full h-12 rounded-xl font-black text-lg" disabled={isCreating}>
-                  {isCreating ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserPlus className="w-5 h-5 mr-2" />}
-                  Confirmar Registro
+                <Button type="submit" className="w-full h-12 rounded-xl font-black" disabled={isCreating}>
+                  {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Registro Institucional"}
                 </Button>
               </DialogFooter>
             </form>
@@ -266,7 +223,7 @@ export default function UserManagementPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input 
               placeholder="Buscar por nombre o correo..." 
-              className="pl-12 h-14 border-gray-200 rounded-2xl bg-white shadow-sm text-base"
+              className="pl-12 h-14 border-gray-200 rounded-2xl bg-white shadow-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -277,84 +234,52 @@ export default function UserManagementPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/30 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-8 py-6">Información</th>
-                  <th className="px-8 py-6">Perfil</th>
+                  <th className="px-8 py-6">Personal</th>
+                  <th className="px-8 py-6">Info Institucional</th>
                   <th className="px-8 py-6">Permisos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr key="loading-users">
-                    <td colSpan={3} className="py-24 text-center">
-                      <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" />
-                    </td>
-                  </tr>
+                  <tr key="load"><td colSpan={3} className="py-24 text-center"><Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" /></td></tr>
                 ) : (
-                  filteredUsers.map((u) => {
-                    const userId = u.id;
-                    const isUpdating = updatingId === userId;
-                    const isSelf = currentUser?.id === userId;
-                    const currentRole = u.role || 'docent';
-                    const canEdit = currentUser?.role === 'admin' || (currentUser?.role === 'coordinator' && currentRole !== 'admin');
-                    
-                    return (
-                      <tr key={userId} className="hover:bg-gray-50/50 transition-all group">
-                        <td className="px-8 py-6">
-                          <div className="flex items-center gap-5">
-                            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-sm group-hover:scale-110 transition-transform">
-                               {u.name?.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex flex-col">
-                              <div className="font-black text-base text-gray-800 flex items-center gap-2">
-                                <span>{u.name}</span>
-                                {isSelf && <Badge variant="outline" className="text-[9px] font-black text-primary border-primary/20">TÚ</Badge>}
-                              </div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1 font-medium mt-0.5">
-                                <Mail className="w-3.5 h-3.5" /> {u.email}
-                              </div>
-                            </div>
+                  filteredUsers.map((u) => (
+                    <tr key={u.id} className="hover:bg-gray-50/50 transition-all">
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-5">
+                          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black">{u.name?.charAt(0)}</div>
+                          <div>
+                            <div className="font-black text-base">{u.name}</div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> {u.email}</div>
                           </div>
-                        </td>
-                        <td className="px-8 py-6">
-                          <Badge 
-                            variant={currentRole === 'admin' ? 'default' : 'secondary'} 
-                            className={cn(
-                              "w-fit capitalize text-[10px] font-black px-4 py-1.5 rounded-xl border-none",
-                              currentRole === 'admin' ? "bg-primary shadow-lg shadow-primary/20" : "bg-gray-200 text-gray-700"
-                            )}
-                          >
-                            {currentRole === 'docent' ? 'Docente' : 
-                             currentRole === 'coordinator' ? 'Coordinador' : 
-                             currentRole === 'secretary' ? 'Secretaría' : 'Administrador'}
-                          </Badge>
-                        </td>
-                        <td className="px-8 py-6">
-                          <div className="flex items-center gap-4">
-                            <Select 
-                              disabled={isUpdating || isSelf || !canEdit}
-                              onValueChange={(val) => handleRoleChange(userId, val as UserRole, u.email)}
-                              value={currentRole}
-                            >
-                              <SelectTrigger className="w-52 h-12 rounded-2xl text-xs font-black border-gray-200 shadow-sm bg-white">
-                                <div className="flex items-center gap-2">
-                                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <UserCog className="w-4 h-4 text-primary" />}
-                                  <SelectValue />
-                                </div>
-                              </SelectTrigger>
-                              <SelectContent className="rounded-2xl border-none shadow-2xl">
-                                <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
-                                <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
-                                <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
-                                {currentUser?.role === 'admin' && (
-                                  <SelectItem value="admin" className="font-black py-3 text-primary">Administrador</SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" /> {u.campus || 'Sin Sede'}</div>
+                          <div className="text-[10px] font-black uppercase text-primary flex items-center gap-1"><BookOpen className="w-3 h-3" /> {u.program || 'Sin Programa'}</div>
+                          <div className="text-[10px] font-bold text-gray-500">ID: {u.documentId || 'N/A'}</div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <Select 
+                          disabled={updatingId === u.id || currentUser?.id === u.id}
+                          onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.email)}
+                          value={u.role}
+                        >
+                          <SelectTrigger className="w-48 h-10 rounded-xl text-xs font-black">
+                            {updatingId === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <SelectValue />}
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="docent">Docente</SelectItem>
+                            <SelectItem value="secretary">Secretaría</SelectItem>
+                            <SelectItem value="coordinator">Coordinador</SelectItem>
+                            {currentUser?.role === 'admin' && <SelectItem value="admin">Administrador</SelectItem>}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>

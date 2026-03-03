@@ -3,66 +3,56 @@
   "entities": {
     "UserProfile": {
       "title": "User Profile",
-      "description": "Information about docents, coordinators, secretaries, and admins.",
+      "description": "Información detallada del personal incluyendo datos institucionales.",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "role": { "type": "string", "enum": ["docent", "coordinator", "secretary", "admin"] },
-        "avatarUrl": { "type": "string" }
+        "documentId": { "type": "string", "description": "Documento de identidad" },
+        "campus": { "type": "string", "description": "Sede asignada" },
+        "program": { "type": "string", "description": "Programa o carrera que enseña/coordina" },
+        "shiftId": { "type": "string", "description": "ID de la jornada asignada" },
+        "avatarUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
       },
-      "required": ["name", "email", "role"]
+      "required": ["name", "email", "role", "documentId", "campus", "program"]
     },
-    "AttendanceRecord": {
-      "title": "Attendance Record",
-      "description": "A single entry or exit event for a docent.",
+    "Campus": {
+      "title": "Campus",
       "type": "object",
       "properties": {
-        "userId": { "type": "string" },
-        "userName": { "type": "string" },
-        "date": { "type": "string" },
-        "time": { "type": "string" },
-        "type": { "type": "string", "enum": ["entry", "exit"] },
-        "method": { "type": "string", "enum": ["QR", "Manual"] },
-        "location": {
-          "type": "object",
-          "properties": {
-            "lat": { "type": "number" },
-            "lng": { "type": "number" },
-            "address": { "type": "string" }
-          }
-        }
-      },
-      "required": ["userId", "userName", "date", "time", "type", "method"]
+        "name": { "type": "string" },
+        "address": { "type": "string" }
+      }
+    },
+    "Program": {
+      "title": "Program",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Technical", "Academic", "Administrative"] }
+      }
+    },
+    "Shift": {
+      "title": "Shift",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "days": { "type": "array", "items": { "type": "string" } }
+      }
     }
   },
   "auth": {
     "providers": ["google.com", "password"]
   },
   "firestore": {
-    "/userProfiles/{userId}": {
-      "schema": "UserProfile",
-      "description": "Primary user profiles collection."
-    },
-    "/userProfiles/{userId}/attendanceRecords/{recordId}": {
-      "schema": "AttendanceRecord",
-      "description": "Attendance history per user."
-    },
-    "/roles_admins/{userId}": {
-      "schema": "object",
-      "description": "User IDs that have administrative privileges."
-    },
-    "/roles_coordinators/{userId}": {
-      "schema": "object",
-      "description": "User IDs that have coordinator privileges."
-    },
-    "/roles_secretaries/{userId}": {
-      "schema": "object",
-      "description": "User IDs that have secretary privileges."
-    },
-    "/globalAttendanceRecords/{recordId}": {
-      "schema": "AttendanceRecord",
-      "description": "Consolidated view of all attendance records."
-    }
+    "/userProfiles/{userId}": { "schema": "UserProfile", "description": "Perfiles de usuario." },
+    "/campuses/{id}": { "schema": "Campus", "description": "Sedes institucionales." },
+    "/programs/{id}": { "schema": "Program", "description": "Carreras o programas." },
+    "/shifts/{id}": { "schema": "Shift", "description": "Jornadas y horarios." },
+    "/globalAttendanceRecords/{recordId}": { "schema": "AttendanceRecord", "description": "Historial global." }
   }
 }
