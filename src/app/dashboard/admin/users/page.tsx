@@ -4,15 +4,32 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, doc, updateDoc, deleteDoc, setDoc, query, orderBy } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, setDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { initializeApp, deleteApp, getApps } from 'firebase/app';
+import { getAuth as getFirebaseAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { firebaseConfig } from '@/firebase/config';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Mail, Loader2, ShieldCheck, UserCog, UserCheck, ShieldAlert } from 'lucide-react';
+import { 
+  Search, Mail, Loader2, ShieldCheck, UserCog, UserCheck, 
+  ShieldAlert, UserPlus, X, Lock, User as UserIcon 
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from '@/components/ui/label';
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
@@ -20,6 +37,14 @@ export default function UserManagementPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  // New User Form State
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>('docent');
 
   const usersQuery = useMemo(() => {
     if (!db) return null;
@@ -35,6 +60,66 @@ export default function UserManagementPage() {
     );
   }, [users, searchTerm]);
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || isCreating) return;
+
+    setIsCreating(true);
+    let tempApp;
+    try {
+      // 1. Create the user in Firebase Auth using a secondary app instance
+      // to avoid logging out the current admin.
+      const appName = `temp-app-${Date.now()}`;
+      tempApp = initializeApp(firebaseConfig, appName);
+      const tempAuth = getFirebaseAuth(tempApp);
+      
+      const userCredential = await createUserWithEmailAndPassword(tempAuth, newEmail, newPassword);
+      const newUserId = userCredential.user.uid;
+
+      // 2. Create the User Profile in Firestore
+      await setDoc(doc(db, 'userProfiles', newUserId), {
+        name: newName,
+        email: newEmail,
+        role: newRole,
+        createdAt: serverTimestamp(),
+        createdBy: currentUser?.id
+      });
+
+      // 3. Sync permissions
+      if (newRole === 'admin') {
+        await setDoc(doc(db, 'roles_admins', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
+      } else if (newRole === 'coordinator') {
+        await setDoc(doc(db, 'roles_coordinators', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
+      } else if (newRole === 'secretary') {
+        await setDoc(doc(db, 'roles_secretaries', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
+      }
+
+      toast({
+        title: "Usuario Creado",
+        description: `Se ha registrado exitosamente a ${newName} como ${newRole.toUpperCase()}.`
+      });
+
+      setIsCreateDialogOpen(false);
+      resetForm();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al crear usuario",
+        description: error.message || "No se pudo registrar al usuario en el sistema."
+      });
+    } finally {
+      if (tempApp) await deleteApp(tempApp);
+      setIsCreating(false);
+    }
+  };
+
+  const resetForm = () => {
+    setNewName('');
+    setNewEmail('');
+    setNewPassword('');
+    setNewRole('docent');
+  };
+
   const handleRoleChange = async (userId: string, newRole: UserRole, userEmail: string) => {
     if (!db || !userId) return;
     
@@ -42,7 +127,7 @@ export default function UserManagementPage() {
       toast({
         variant: "destructive",
         title: "Operación no permitida",
-        description: "No puedes cambiar tu propio rol administrativo para evitar perder el acceso al sistema."
+        description: "No puedes quitarte tus propios permisos administrativos."
       });
       return;
     }
@@ -69,12 +154,12 @@ export default function UserManagementPage() {
 
       toast({ 
         title: "Permisos Actualizados", 
-        description: `El usuario ${userEmail} ahora es ${newRole.toUpperCase()}.` 
+        description: `Acceso actualizado a nivel ${newRole.toUpperCase()}.` 
       });
     } catch (error) {
       toast({ 
-        title: "Error al actualizar", 
-        description: "No se pudieron sincronizar los permisos. Intente de nuevo.",
+        title: "Error de sincronización", 
+        description: "No se pudieron actualizar las reglas de acceso.",
         variant: "destructive" 
       });
     } finally {
@@ -87,12 +172,73 @@ export default function UserManagementPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-primary">Gestión de Personal</h1>
-          <p className="text-muted-foreground">Control de accesos y roles institucionales para Ciudad Don Bosco.</p>
+          <div className="text-muted-foreground flex items-center gap-2 mt-1">
+             <ShieldCheck className="w-4 h-4 text-primary" />
+             <span className="text-xs font-bold uppercase tracking-wider">Control de roles y accesos institucionales</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 bg-primary/5 px-4 py-2 rounded-2xl border border-primary/10">
-           <ShieldCheck className="w-5 h-5 text-primary" />
-           <span className="text-xs font-black text-primary uppercase tracking-wider">Modo Administrador Activo</span>
-        </div>
+        
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="h-12 px-6 rounded-2xl font-black gap-2 shadow-lg shadow-primary/20">
+              <UserPlus className="w-5 h-5" />
+              Nuevo Usuario
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] rounded-3xl border-none shadow-2xl">
+            <form onSubmit={handleCreateUser}>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-black text-primary">Agregar Miembro</DialogTitle>
+                <DialogDescription className="font-medium">
+                  Crea una nueva cuenta de acceso para el personal.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-6 py-6">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Nombre Completo</Label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                    <Input id="name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Juan Bosco" className="pl-10 h-12 rounded-xl border-gray-100" required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Correo Electrónico</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                    <Input id="email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="correo@donbosco.edu" className="pl-10 h-12 rounded-xl border-gray-100" required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pass" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Contraseña Inicial</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                    <Input id="pass" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" className="pl-10 h-12 rounded-xl border-gray-100" required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Rol Asignado</Label>
+                  <Select value={newRole} onValueChange={(val: UserRole) => setNewRole(val)}>
+                    <SelectTrigger className="h-12 rounded-xl border-gray-100 font-bold">
+                      <SelectValue placeholder="Seleccionar Rol" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-none shadow-2xl">
+                      <SelectItem value="docent" className="font-bold py-3">Docente (Acceso Base)</SelectItem>
+                      <SelectItem value="secretary" className="font-bold py-3">Secretaría (Reportes)</SelectItem>
+                      <SelectItem value="coordinator" className="font-bold py-3">Coordinador (Marcaje Manual)</SelectItem>
+                      <SelectItem value="admin" className="font-black py-3 text-primary">Administrador (Total)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" className="w-full h-12 rounded-xl font-black text-lg" disabled={isCreating}>
+                  {isCreating ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserPlus className="w-5 h-5 mr-2" />}
+                  Crear Cuenta de Personal
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-white">
@@ -140,7 +286,7 @@ export default function UserManagementPage() {
                             </div>
                             <div>
                               <div className="font-black text-base text-gray-800 flex items-center gap-2">
-                                {u.name}
+                                <span>{u.name}</span>
                                 {isSelf && <Badge variant="outline" className="text-[9px] font-black text-primary border-primary/20">TÚ</Badge>}
                               </div>
                               <div className="text-xs text-muted-foreground flex items-center gap-1 font-medium mt-0.5">
