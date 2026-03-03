@@ -1,14 +1,16 @@
+
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
-import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
   login: () => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -37,19 +39,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return {
       id: authUser.uid,
-      name: authUser.displayName || 'Usuario',
+      name: userProfile?.name || authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
       email: authUser.email || '',
       role,
-      avatarUrl: authUser.photoURL || undefined
+      avatarUrl: userProfile?.avatarUrl || authUser.photoURL || undefined
     };
   }, [authUser, adminRole, coordRole, userProfile]);
 
-  // Sync profile to Firestore on login if it doesn't exist or role is docent
+  // Sync profile to Firestore on login if it doesn't exist
   useEffect(() => {
     if (authUser && !profileLoading && !userProfile && db) {
       const profileRef = doc(db, 'userProfiles', authUser.uid);
       setDoc(profileRef, {
-        name: authUser.displayName || 'Usuario',
+        name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
         email: authUser.email || '',
         role: resolvedUser?.role || 'docent',
         avatarUrl: authUser.photoURL || ''
@@ -63,13 +65,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithPopup(auth, provider);
   };
 
+  const loginWithEmail = async (email: string, pass: string) => {
+    if (!auth) return;
+    await signInWithEmailAndPassword(auth, email, pass);
+  };
+
   const logout = async () => {
     if (!auth) return;
     await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user: resolvedUser, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user: resolvedUser, login, loginWithEmail, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
