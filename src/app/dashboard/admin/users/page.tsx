@@ -38,7 +38,6 @@ export default function UserManagementPage() {
   const handleRoleChange = async (userId: string, newRole: UserRole, userEmail: string) => {
     if (!db || !userId) return;
     
-    // Evitar que el admin se quite permisos a sí mismo por error
     if (currentUser?.id === userId && newRole !== 'admin') {
       toast({
         variant: "destructive",
@@ -50,19 +49,16 @@ export default function UserManagementPage() {
 
     setUpdatingId(userId);
     try {
-      // 1. Actualizar el perfil principal
       await updateDoc(doc(db, 'userProfiles', userId), { 
         role: newRole,
         updatedAt: new Date().toISOString()
       });
 
-      // 2. Limpiar registros en colecciones de roles de seguridad (Security Rules)
       const roleCollections = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
       for (const col of roleCollections) {
         await deleteDoc(doc(db, col, userId));
       }
 
-      // 3. Asignar a la nueva colección si corresponde para habilitar las reglas de Firestore
       if (newRole === 'admin') {
         await setDoc(doc(db, 'roles_admins', userId), { email: userEmail, assignedAt: new Date().toISOString() });
       } else if (newRole === 'coordinator') {
@@ -76,7 +72,6 @@ export default function UserManagementPage() {
         description: `El usuario ${userEmail} ahora es ${newRole.toUpperCase()}.` 
       });
     } catch (error) {
-      console.error(error);
       toast({ 
         title: "Error al actualizar", 
         description: "No se pudieron sincronizar los permisos. Intente de nuevo.",
@@ -144,13 +139,13 @@ export default function UserManagementPage() {
                                {u.name?.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <p className="font-black text-base text-gray-800 flex items-center gap-2">
+                              <div className="font-black text-base text-gray-800 flex items-center gap-2">
                                 {u.name}
                                 {isSelf && <Badge variant="outline" className="text-[9px] font-black text-primary border-primary/20">TÚ</Badge>}
-                              </p>
-                              <p className="text-xs text-muted-foreground flex items-center gap-1 font-medium mt-0.5">
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1 font-medium mt-0.5">
                                 <Mail className="w-3.5 h-3.5" /> {u.email}
-                              </p>
+                              </div>
                             </div>
                           </div>
                         </td>
