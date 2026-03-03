@@ -12,6 +12,7 @@ import { Search, Mail, Loader2, ShieldCheck, UserCog, UserCheck, ShieldAlert } f
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { UserRole } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
