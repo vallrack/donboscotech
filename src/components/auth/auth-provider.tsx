@@ -1,52 +1,75 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User, UserRole } from '@/lib/types';
-import { MOCK_USERS } from '@/lib/mock-data';
+import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
+import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string) => Promise<void>;
-  logout: () => void;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const auth = useFirebaseAuth();
+  const db = useFirestore();
+  const { user: authUser, loading: authLoading } = useUser();
 
+  // Fetch roles to determine privileges
+  const { data: adminRole, loading: adminLoading } = useDoc(authUser ? doc(db!, 'roles_admins', authUser.uid) : null);
+  const { data: coordRole, loading: coordLoading } = useDoc(authUser ? doc(db!, 'roles_coordinators', authUser.uid) : null);
+  const { data: userProfile, loading: profileLoading } = useDoc(authUser ? doc(db!, 'userProfiles', authUser.uid) : null);
+
+  const isLoading = authLoading || adminLoading || coordLoading || profileLoading;
+
+  const resolvedUser = useMemo(() => {
+    if (!authUser) return null;
+
+    let role: UserRole = 'docent';
+    if (adminRole) role = 'admin';
+    else if (coordRole) role = 'coordinator';
+    else if (userProfile?.role) role = userProfile.role as UserRole;
+
+    return {
+      id: authUser.uid,
+      name: authUser.displayName || 'Usuario',
+      email: authUser.email || '',
+      role,
+      avatarUrl: authUser.photoURL || undefined
+    };
+  }, [authUser, adminRole, coordRole, userProfile]);
+
+  // Sync profile to Firestore on login if it doesn't exist or role is docent
   useEffect(() => {
-    const savedUser = localStorage.getItem('don_bosco_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    if (authUser && !profileLoading && !userProfile && db) {
+      const profileRef = doc(db, 'userProfiles', authUser.uid);
+      setDoc(profileRef, {
+        name: authUser.displayName || 'Usuario',
+        email: authUser.email || '',
+        role: resolvedUser?.role || 'docent',
+        avatarUrl: authUser.photoURL || ''
+      }, { merge: true });
     }
-    setIsLoading(false);
-  }, []);
+  }, [authUser, userProfile, profileLoading, db, resolvedUser?.role]);
 
-  const login = async (email: string) => {
-    setIsLoading(true);
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const foundUser = MOCK_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem('don_bosco_user', JSON.stringify(foundUser));
-    } else {
-      throw new Error('Usuario no encontrado');
-    }
-    setIsLoading(false);
+  const login = async () => {
+    if (!auth) return;
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('don_bosco_user');
+  const logout = async () => {
+    if (!auth) return;
+    await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user: resolvedUser, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

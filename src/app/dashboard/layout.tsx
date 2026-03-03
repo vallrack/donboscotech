@@ -1,6 +1,6 @@
 "use client"
 
-import { AuthProvider, useAuth } from '@/components/auth/auth-provider';
+import { useAuth } from '@/components/auth/auth-provider';
 import { Navbar } from '@/components/layout/Navbar';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -38,10 +38,8 @@ function DashboardGuard({ children }: { children: React.ReactNode }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider>
-      <DashboardGuard>
-        {children}
-      </DashboardGuard>
-    </AuthProvider>
+    <DashboardGuard>
+      {children}
+    </DashboardGuard>
   );
 }
