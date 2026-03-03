@@ -1,9 +1,9 @@
 
 export const firebaseConfig = {
-  apiKey: "AIzaSy...", // This would be populated with real keys in a live environment
-  authDomain: "schedulecontrol-f8b77.firebaseapp.com",
-  projectId: "schedulecontrol-f8b77",
-  storageBucket: "schedulecontrol-f8b77.firebasestorage.app",
+  apiKey: "AIzaSy...", // Los servicios de Firebase Studio inyectarán las claves reales automáticamente
+  authDomain: "boscotech-3231f.firebaseapp.com",
+  projectId: "boscotech-3231f",
+  storageBucket: "boscotech-3231f.firebasestorage.app",
   messagingSenderId: "...",
   appId: "..."
 };

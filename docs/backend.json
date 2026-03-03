@@ -34,23 +34,6 @@
         }
       },
       "required": ["userId", "userName", "date", "time", "type", "method"]
-    },
-    "Shift": {
-      "title": "Shift",
-      "description": "Defined work shifts for the institution.",
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "startTime": { "type": "string" },
-        "endTime": { "type": "string" }
-      },
-      "required": ["name", "startTime", "endTime"]
-    },
-    "RoleMarker": {
-      "title": "Role Marker",
-      "description": "An empty document indicating special permissions for a user ID.",
-      "type": "object",
-      "properties": {}
     }
   },
   "auth": {
@@ -66,20 +49,16 @@
       "description": "Attendance history per user."
     },
     "/roles_admins/{userId}": {
-      "schema": "RoleMarker",
+      "schema": "object",
       "description": "User IDs that have administrative privileges."
     },
     "/roles_coordinators/{userId}": {
-      "schema": "RoleMarker",
+      "schema": "object",
       "description": "User IDs that have coordinator privileges."
-    },
-    "/shifts/{shiftId}": {
-      "schema": "Shift",
-      "description": "Institutional work shifts."
     },
     "/globalAttendanceRecords/{recordId}": {
       "schema": "AttendanceRecord",
-      "description": "Consolidated view of all attendance records for easier reporting."
+      "description": "Consolidated view of all attendance records."
     }
   }
 }

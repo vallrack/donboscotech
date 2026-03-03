@@ -23,7 +23,7 @@ service cloud.firestore {
 
     match /roles_admins/{userId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || (isOwner(userId) && !exists(/databases/$(database)/documents/roles_admins/$(userId)));
+      allow create, update, delete: if isAdmin();
     }
 
     match /roles_coordinators/{userId} {
@@ -31,13 +31,8 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /shifts/{shiftId} {
-      allow read: if true;
-      allow write: if isPrivileged();
-    }
-
     match /globalAttendanceRecords/{recordId} {
-      allow read: if isSignedIn(); 
+      allow read: if isSignedIn();
       allow create, update: if isSignedIn();
       allow delete: if isAdmin();
     }
