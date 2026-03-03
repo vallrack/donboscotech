@@ -1,8 +1,9 @@
+
 "use client"
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, QrCode, ClipboardCheck, BarChart3, Menu, X, User } from 'lucide-react';
+import { LogOut, LayoutDashboard, QrCode, ClipboardCheck, BarChart3, Menu, X, User, Users } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -17,10 +18,11 @@ export function Navbar() {
   if (!user) return null;
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['docent', 'coordinator', 'admin'] },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
     { name: 'Registrar QR', href: '/attendance/scan', icon: QrCode, roles: ['docent'] },
-    { name: 'Marcaje Manual', href: '/attendance/manual', icon: ClipboardCheck, roles: ['coordinator', 'admin'] },
-    { name: 'Reportes', href: '/reports', icon: BarChart3, roles: ['coordinator', 'admin'] },
+    { name: 'Marcaje Manual', href: '/attendance/manual', icon: ClipboardCheck, roles: ['coordinator', 'admin', 'secretary'] },
+    { name: 'Reportes', href: '/reports', icon: BarChart3, roles: ['coordinator', 'admin', 'secretary'] },
+    { name: 'Personal', href: '/admin/users', icon: Users, roles: ['admin'] },
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(user.role));

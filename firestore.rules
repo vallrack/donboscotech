@@ -1,16 +1,18 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
     function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/roles_admins/$(request.auth.uid)); }
     function isCoordinator() { return isSignedIn() && exists(/databases/$(database)/documents/roles_coordinators/$(request.auth.uid)); }
-    function isPrivileged() { return isAdmin() || isCoordinator(); }
+    function isSecretary() { return isSignedIn() && exists(/databases/$(database)/documents/roles_secretaries/$(request.auth.uid)); }
+    function isPrivileged() { return isAdmin() || isCoordinator() || isSecretary(); }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
 
     match /userProfiles/{userId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isPrivileged() || isOwner(userId);
-      allow update: if isPrivileged() || (isOwner(userId) && (request.resource.data.role == resource.data.role || !('role' in request.resource.data)));
+      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.role == resource.data.role || !('role' in request.resource.data)));
       allow delete: if isAdmin();
 
       match /attendanceRecords/{recordId} {
@@ -22,11 +24,15 @@ service cloud.firestore {
 
     match /roles_admins/{userId} {
       allow read: if isSignedIn();
-      // Permite auto-registro si el documento no existe (útil para el primer admin)
       allow create, update, delete: if isAdmin() || (isOwner(userId) && !exists(/databases/$(database)/documents/roles_admins/$(userId)));
     }
 
     match /roles_coordinators/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /roles_secretaries/{userId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
@@ -37,7 +43,7 @@ service cloud.firestore {
     }
 
     match /globalAttendanceRecords/{recordId} {
-      allow read: if isSignedIn();
+      allow read: if isPrivileged();
       allow create, update: if isSignedIn();
       allow delete: if isAdmin();
     }

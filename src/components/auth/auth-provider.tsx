@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
@@ -24,13 +25,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser, db]);
   const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser, db]);
+  const sectRef = useMemo(() => authUser && db ? doc(db, 'roles_secretaries', authUser.uid) : null, [authUser, db]);
   const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser, db]);
 
   const { data: adminRole, loading: adminLoading } = useDoc(adminRef);
   const { data: coordRole, loading: coordLoading } = useDoc(coordRef);
+  const { data: sectRole, loading: sectLoading } = useDoc(sectRef);
   const { data: userProfile, loading: profileLoading } = useDoc(profileRef);
 
-  const isLoading = authLoading || adminLoading || coordLoading || profileLoading;
+  const isLoading = authLoading || adminLoading || coordLoading || sectLoading || profileLoading;
 
   const resolvedUser = useMemo(() => {
     if (!authUser) return null;
@@ -40,6 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role = 'admin';
     } else if (coordRole) {
       role = 'coordinator';
+    } else if (sectRole) {
+      role = 'secretary';
     } else if (userProfile?.role) {
       role = userProfile.role as UserRole;
     }
@@ -51,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       avatarUrl: userProfile?.avatarUrl || authUser.photoURL || undefined
     };
-  }, [authUser, adminRole, coordRole, userProfile]);
+  }, [authUser, adminRole, coordRole, sectRole, userProfile]);
 
   useEffect(() => {
     if (authUser && db && !profileLoading && !userProfile) {

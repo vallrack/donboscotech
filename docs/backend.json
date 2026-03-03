@@ -3,12 +3,12 @@
   "entities": {
     "UserProfile": {
       "title": "User Profile",
-      "description": "Information about docents, coordinators, and admins.",
+      "description": "Information about docents, coordinators, secretaries, and admins.",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "enum": ["docent", "coordinator", "admin"] },
+        "role": { "type": "string", "enum": ["docent", "coordinator", "secretary", "admin"] },
         "avatarUrl": { "type": "string" }
       },
       "required": ["name", "email", "role"]
@@ -55,6 +55,10 @@
     "/roles_coordinators/{userId}": {
       "schema": "object",
       "description": "User IDs that have coordinator privileges."
+    },
+    "/roles_secretaries/{userId}": {
+      "schema": "object",
+      "description": "User IDs that have secretary privileges."
     },
     "/globalAttendanceRecords/{recordId}": {
       "schema": "AttendanceRecord",
