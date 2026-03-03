@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -22,10 +22,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const db = useFirestore();
   const { user: authUser, loading: authLoading } = useUser();
 
-  // Fetch roles to determine privileges
-  const { data: adminRole, loading: adminLoading } = useDoc(authUser ? doc(db!, 'roles_admins', authUser.uid) : null);
-  const { data: coordRole, loading: coordLoading } = useDoc(authUser ? doc(db!, 'roles_coordinators', authUser.uid) : null);
-  const { data: userProfile, loading: profileLoading } = useDoc(authUser ? doc(db!, 'userProfiles', authUser.uid) : null);
+  // Fetch roles and profile from Firestore to determine privileges
+  const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser, db]);
+  const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser, db]);
+  const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser, db]);
+
+  const { data: adminRole, loading: adminLoading } = useDoc(adminRef);
+  const { data: coordRole, loading: coordLoading } = useDoc(coordRef);
+  const { data: userProfile, loading: profileLoading } = useDoc(profileRef);
 
   const isLoading = authLoading || adminLoading || coordLoading || profileLoading;
 
@@ -33,9 +37,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!authUser) return null;
 
     let role: UserRole = 'docent';
-    if (adminRole) role = 'admin';
-    else if (coordRole) role = 'coordinator';
-    else if (userProfile?.role) role = userProfile.role as UserRole;
+    if (adminRole) {
+      role = 'admin';
+    } else if (coordRole) {
+      role = 'coordinator';
+    } else if (userProfile?.role) {
+      role = userProfile.role as UserRole;
+    }
 
     return {
       id: authUser.uid,
@@ -46,15 +54,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authUser, adminRole, coordRole, userProfile]);
 
-  // Sync profile to Firestore on login if it doesn't exist
+  // Sync profile to Firestore on login if it's new or needs update
   useEffect(() => {
-    if (authUser && !profileLoading && !userProfile && db) {
-      const profileRef = doc(db, 'userProfiles', authUser.uid);
-      setDoc(profileRef, {
+    if (authUser && db && !profileLoading && !userProfile) {
+      const pRef = doc(db, 'userProfiles', authUser.uid);
+      setDoc(pRef, {
         name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
         email: authUser.email || '',
         role: resolvedUser?.role || 'docent',
-        avatarUrl: authUser.photoURL || ''
+        avatarUrl: authUser.photoURL || '',
+        createdAt: serverTimestamp()
       }, { merge: true });
     }
   }, [authUser, userProfile, profileLoading, db, resolvedUser?.role]);

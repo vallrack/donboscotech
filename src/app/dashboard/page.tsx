@@ -1,25 +1,45 @@
+
 "use client"
 
+import { useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
+import { useCollection, useFirestore } from '@/firebase';
+import { collection, query, orderBy, limit, where } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
-import { MOCK_ATTENDANCE } from '@/lib/mock-data';
-import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3 } from 'lucide-react';
+import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { AttendanceRecord } from '@/lib/types';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const db = useFirestore();
   
-  // Filter attendance based on role
-  const records = user?.role === 'docent' 
-    ? MOCK_ATTENDANCE.filter(r => r.userId === user.id)
-    : MOCK_ATTENDANCE;
+  // Dynamic query based on role
+  const recordsQuery = useMemo(() => {
+    if (!db || !user) return null;
+    if (user.role === 'docent') {
+      return query(
+        collection(db, 'userProfiles', user.id, 'attendanceRecords'),
+        orderBy('date', 'desc'),
+        limit(5)
+      );
+    } else {
+      return query(
+        collection(db, 'globalAttendanceRecords'),
+        orderBy('date', 'desc'),
+        limit(10)
+      );
+    }
+  }, [db, user]);
+
+  const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery as any);
 
   const stats = [
     { 
       label: user?.role === 'docent' ? 'Horas esta semana' : 'Docentes presentes hoy', 
-      value: user?.role === 'docent' ? '32h' : '12/15', 
+      value: user?.role === 'docent' ? '32h' : 'Real-time', 
       icon: Clock, 
       color: 'text-primary' 
     },
@@ -31,7 +51,7 @@ export default function DashboardPage() {
     },
     { 
       label: 'Registros Pendientes', 
-      value: '2', 
+      value: '0', 
       icon: AlertTriangle, 
       color: 'text-yellow-600' 
     },
@@ -42,40 +62,24 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-primary">Bienvenido, {user?.name}</h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm">
             {user?.role === 'docent' 
-              ? 'Aquí tienes un resumen de tu actividad de asistencia.' 
-              : 'Vista general del estado de asistencia de la institución.'}
+              ? 'Has iniciado sesión con éxito. Revisa tu historial de asistencia.' 
+              : 'Panel administrativo de Ciudad Don Bosco.'}
           </p>
         </div>
         <div className="flex gap-2">
           {user?.role === 'docent' ? (
             <Link href="/attendance/scan">
-              <Card className="hover:bg-primary/5 transition-colors cursor-pointer border-primary/20 bg-white">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="bg-primary/10 p-2 rounded-lg">
-                    <Clock className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-primary">Marcar Ahora</p>
-                    <p className="text-xs text-muted-foreground">Escanear código QR</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <Button className="h-12 shadow-md">
+                <Clock className="w-5 h-5 mr-2" /> Marcar Asistencia
+              </Button>
             </Link>
           ) : (
             <Link href="/reports">
-              <Card className="hover:bg-primary/5 transition-colors cursor-pointer border-primary/20 bg-white">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="bg-primary/10 p-2 rounded-lg">
-                    <BarChart3 className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-primary">Generar Reporte</p>
-                    <p className="text-xs text-muted-foreground">Análisis de horas</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <Button variant="outline" className="h-12 shadow-sm">
+                <BarChart3 className="w-5 h-5 mr-2" /> Reportes Administrativos
+              </Button>
             </Link>
           )}
         </div>
@@ -98,71 +102,80 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="shadow-sm border-none bg-white">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
               <CalendarDays className="w-5 h-5 text-primary" />
-              Actividad Reciente
+              Actividad en Tiempo Real
             </CardTitle>
             <CardDescription>
-              Últimos registros de entrada y salida detectados.
+              Últimos registros sincronizados con la base de datos.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {records.map((record) => (
-                <div key={record.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50/50 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold",
-                      record.type === 'entry' ? "bg-green-500" : "bg-primary"
-                    )}>
-                      {record.type === 'entry' ? 'E' : 'S'}
+            {recordsLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {records.map((record, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-4 rounded-lg border bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm",
+                        record.type === 'entry' ? "bg-green-500" : "bg-primary"
+                      )}>
+                        {record.type === 'entry' ? 'E' : 'S'}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm leading-none">{record.userName}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{record.date} • {record.time}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{record.userName}</p>
-                      <p className="text-xs text-muted-foreground">{record.date} a las {record.time}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={record.method === 'QR' ? 'secondary' : 'outline'} className="text-[10px] uppercase font-bold px-2">
+                        {record.method}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <Badge variant={record.method === 'QR' ? 'secondary' : 'outline'} className="text-[10px] h-5">
-                      {record.method}
-                    </Badge>
+                ))}
+                {records.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <CalendarDays className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p className="text-sm">No se encontraron registros recientes.</p>
                   </div>
-                </div>
-              ))}
-              {records.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">No hay actividad reciente.</p>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="shadow-sm border-none bg-white overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="w-5 h-5 text-primary" />
-              Notificaciones Institucionales
+              Avisos del Sistema
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
               <div className="p-6 hover:bg-gray-50 transition-colors">
-                <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">Mantenimiento</p>
-                <h4 className="font-semibold mb-2">Actualización de Lector QR</h4>
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  El próximo lunes se actualizarán los terminales de acceso. Por favor use el marcaje manual si tiene inconvenientes.
+                <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-1">Mantenimiento</p>
+                <h4 className="font-bold text-sm mb-2">Sincronización de Base de Datos</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Estamos integrando las colecciones de roles dinámicos. Tu sesión es ahora 100% persistente.
                 </p>
               </div>
               <div className="p-6 hover:bg-gray-50 transition-colors">
-                <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">Recordatorio</p>
-                <h4 className="font-semibold mb-2">Cierre de Nómina Octubre</h4>
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  Asegúrese de validar todas sus horas antes del 28 de octubre para el procesamiento correcto de honorarios.
+                <p className="text-[10px] text-primary font-bold uppercase tracking-wider mb-1">Seguridad</p>
+                <h4 className="font-bold text-sm mb-2">Verificación de GPS</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Recuerda que los registros deben realizarse dentro de los perímetros de la institución.
                 </p>
               </div>
             </div>
-            <div className="bg-primary/5 p-4 text-center">
-              <Link href="#" className="text-sm font-semibold text-primary flex items-center justify-center gap-1">
-                Ver todo el boletín <ArrowRight className="w-4 h-4" />
+            <div className="bg-primary/5 p-4 text-center border-t">
+              <Link href="#" className="text-xs font-bold text-primary flex items-center justify-center gap-1">
+                Ver historial completo <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
           </CardContent>
