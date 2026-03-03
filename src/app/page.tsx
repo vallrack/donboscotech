@@ -150,6 +150,7 @@ export default function LoginPage() {
                     <Input 
                       id="password" 
                       type="password" 
+                      placeholder="••••••••"
                       className="pl-12 h-14 rounded-2xl border-gray-100 bg-gray-50/50"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -204,8 +205,8 @@ export default function LoginPage() {
                         <SelectValue placeholder="Seleccionar Rol" />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl border-none shadow-2xl">
-                        <SelectItem value="docent" className="font-bold py-3">Docente / Profesor</SelectItem>
-                        <SelectItem value="secretary" className="font-bold py-3">Secretaría / Administrativo</SelectItem>
+                        <SelectItem value="docent" className="font-bold py-3 italic">Docente / Profesor</SelectItem>
+                        <SelectItem value="secretary" className="font-bold py-3 italic">Secretaría / Administrativo</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -217,6 +218,7 @@ export default function LoginPage() {
                     <Input 
                       id="reg-password" 
                       type="password" 
+                      placeholder="••••••••"
                       className="pl-12 h-14 rounded-2xl border-gray-100 bg-gray-50/50"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
