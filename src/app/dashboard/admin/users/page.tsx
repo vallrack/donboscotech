@@ -8,7 +8,7 @@ import { collection, doc, updateDoc, deleteDoc, setDoc, query, orderBy } from 'f
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Mail, Loader2, ShieldCheck } from 'lucide-react';
+import { Search, Mail, Loader2, ShieldCheck, UserCog } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { UserRole } from '@/lib/types';
@@ -18,7 +18,7 @@ export default function UserManagementPage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const usersQuery = useMemo(() => {
     if (!db) return null;
@@ -35,24 +35,54 @@ export default function UserManagementPage() {
   }, [users, searchTerm]);
 
   const handleRoleChange = async (userId: string, newRole: UserRole, userEmail: string) => {
-    if (!db || currentUser?.id === userId) return;
+    if (!db || !userId) return;
+    
+    // Evitar que el admin se quite permisos a sí mismo por error
+    if (currentUser?.id === userId && newRole !== 'admin') {
+      toast({
+        variant: "destructive",
+        title: "Operación no permitida",
+        description: "No puedes cambiar tu propio rol administrativo para evitar bloqueos del sistema."
+      });
+      return;
+    }
 
-    setUpdating(userId);
+    setUpdatingId(userId);
     try {
-      await updateDoc(doc(db, 'userProfiles', userId), { role: newRole });
-      await deleteDoc(doc(db, 'roles_admins', userId));
-      await deleteDoc(doc(db, 'roles_coordinators', userId));
-      await deleteDoc(doc(db, 'roles_secretaries', userId));
+      // 1. Actualizar el perfil principal
+      await updateDoc(doc(db, 'userProfiles', userId), { 
+        role: newRole,
+        updatedAt: new Date().toISOString()
+      });
 
-      if (newRole === 'admin') await setDoc(doc(db, 'roles_admins', userId), { email: userEmail });
-      else if (newRole === 'coordinator') await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail });
-      else if (newRole === 'secretary') await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail });
+      // 2. Limpiar registros en colecciones de roles de seguridad
+      const roleCollections = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
+      for (const col of roleCollections) {
+        await deleteDoc(doc(db, col, userId));
+      }
 
-      toast({ title: "Permisos Sincronizados", description: `El usuario ahora es ${newRole}.` });
+      // 3. Asignar a la nueva colección si corresponde
+      if (newRole === 'admin') {
+        await setDoc(doc(db, 'roles_admins', userId), { email: userEmail, assignedAt: new Date().toISOString() });
+      } else if (newRole === 'coordinator') {
+        await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail, assignedAt: new Date().toISOString() });
+      } else if (newRole === 'secretary') {
+        await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail, assignedAt: new Date().toISOString() });
+      }
+
+      toast({ 
+        title: "Permisos Sincronizados", 
+        description: `El usuario ${userEmail} ahora tiene nivel de acceso: ${newRole}.` 
+      });
     } catch (error) {
-      toast({ title: "Error", variant: "destructive" });
+      console.error(error);
+      toast({ 
+        title: "Error de sincronización", 
+        description: "No se pudieron actualizar los permisos en Firebase.",
+        variant: "destructive" 
+      });
     } finally {
-      setUpdating(null);
+      setUpdatingId(null);
     }
   };
 
@@ -74,7 +104,7 @@ export default function UserManagementPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder="Buscar por nombre o correo..." 
-              className="pl-10 h-12 border-gray-200 rounded-xl"
+              className="pl-10 h-12 border-gray-200 rounded-xl bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -92,49 +122,75 @@ export default function UserManagementPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr key="loading-users-row">
-                    <td colSpan={3} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></td>
+                  <tr key="loading-users">
+                    <td colSpan={3} className="py-20 text-center">
+                      <Loader2 className="w-10 h-10 animate-spin mx-auto text-primary opacity-20" />
+                      <p className="text-xs mt-4 font-bold text-muted-foreground">Cargando base de datos...</p>
+                    </td>
                   </tr>
                 ) : (
-                  filteredUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-gray-50/30 transition-all">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xs">
-                             {u.name?.charAt(0)}
+                  filteredUsers.map((u) => {
+                    const userId = u.id || u.uid;
+                    const isUpdating = updatingId === userId;
+                    
+                    return (
+                      <tr key={userId} className="hover:bg-gray-50/30 transition-all group">
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xs group-hover:scale-110 transition-transform">
+                               {u.name?.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm text-gray-800">{u.name}</p>
+                              <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
+                                <Mail className="w-3 h-3" /> {u.email}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold text-sm">{u.name}</p>
-                            <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium"><Mail className="w-3 h-3" /> {u.email}</p>
+                        </td>
+                        <td className="px-6 py-5">
+                          <Badge 
+                            variant={u.role === 'admin' ? 'default' : 'outline'} 
+                            className="capitalize text-[10px] font-black px-3 py-1"
+                          >
+                            {u.role || 'docent'}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-3">
+                            <Select 
+                              disabled={isUpdating || (currentUser?.id === userId)}
+                              onValueChange={(val) => handleRoleChange(userId, val as UserRole, u.email)}
+                              defaultValue={u.role || 'docent'}
+                            >
+                              <SelectTrigger className="w-44 h-11 rounded-xl text-xs font-bold border-gray-200">
+                                <div className="flex items-center gap-2">
+                                  <UserCog className="w-3.5 h-3.5 text-muted-foreground" />
+                                  <SelectValue />
+                                </div>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="docent">Docente (Base)</SelectItem>
+                                <SelectItem value="secretary">Secretaría</SelectItem>
+                                <SelectItem value="coordinator">Coordinador</SelectItem>
+                                <SelectItem value="admin">Administrador</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {isUpdating && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="capitalize text-[10px] font-black">{u.role}</Badge>
-                      </td>
-                      <td className="px-6 py-5">
-                        <Select 
-                          disabled={updating === u.id || currentUser?.id === u.id}
-                          onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.email)}
-                          defaultValue={u.role}
-                        >
-                          <SelectTrigger className="w-40 h-10 rounded-xl text-xs font-bold">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="docent">Docente</SelectItem>
-                            <SelectItem value="secretary">Secretaría</SelectItem>
-                            <SelectItem value="coordinator">Coordinador</SelectItem>
-                            <SelectItem value="admin">Administrador</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+          {!loading && filteredUsers.length === 0 && (
+            <div className="p-20 text-center">
+              <p className="text-muted-foreground italic text-sm">No se encontraron usuarios registrados.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
