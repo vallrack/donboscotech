@@ -1,16 +1,16 @@
-
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
-import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
   login: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -22,7 +22,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const db = useFirestore();
   const { user: authUser, loading: authLoading } = useUser();
 
-  // Fetch roles and profile from Firestore to determine privileges
   const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser, db]);
   const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser, db]);
   const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser, db]);
@@ -54,7 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authUser, adminRole, coordRole, userProfile]);
 
-  // Sync profile to Firestore on login if it's new or needs update
   useEffect(() => {
     if (authUser && db && !profileLoading && !userProfile) {
       const pRef = doc(db, 'userProfiles', authUser.uid);
@@ -79,13 +77,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
+  const signUpWithEmail = async (email: string, pass: string, name: string) => {
+    if (!auth || !db) return;
+    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+    const pRef = doc(db, 'userProfiles', userCredential.user.uid);
+    await setDoc(pRef, {
+      name,
+      email,
+      role: 'docent',
+      createdAt: serverTimestamp()
+    });
+  };
+
   const logout = async () => {
     if (!auth) return;
     await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user: resolvedUser, login, loginWithEmail, logout, isLoading }}>
+    <AuthContext.Provider value={{ user: resolvedUser, login, loginWithEmail, signUpWithEmail, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

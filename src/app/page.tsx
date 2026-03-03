@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from 'react';
@@ -6,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
-import { ShieldCheck, GraduationCap, Mail, Lock, Loader2 } from 'lucide-react';
+import { ShieldCheck, GraduationCap, Mail, Lock, Loader2, UserPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,7 +16,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { user, login, loginWithEmail, isLoading: authLoading } = useAuth();
+  const [name, setName] = useState('');
+  const { user, login, loginWithEmail, signUpWithEmail, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -60,6 +60,28 @@ export default function LoginPage() {
     }
   };
 
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || !name) return;
+
+    setLoading(true);
+    try {
+      await signUpWithEmail(email, password, name);
+      toast({
+        title: 'Cuenta creada',
+        description: 'Ya puedes reclamar tus privilegios administrativos en el Dashboard.',
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error de registro',
+        description: err.message || 'No se pudo crear la cuenta.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -85,19 +107,20 @@ export default function LoginPage() {
 
       <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary bg-white">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Iniciar Sesión</CardTitle>
+          <CardTitle className="text-2xl font-bold">Bienvenido</CardTitle>
           <CardDescription>
-            Ingrese sus credenciales para acceder al sistema.
+            Inicia sesión o crea una cuenta nueva.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="email" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="email">Correo</TabsTrigger>
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="login">Entrar</TabsTrigger>
+              <TabsTrigger value="register">Registro</TabsTrigger>
               <TabsTrigger value="google">Google</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="email">
+            <TabsContent value="login">
               <form onSubmit={handleEmailLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo Institucional</Label>
@@ -134,10 +157,62 @@ export default function LoginPage() {
               </form>
             </TabsContent>
 
+            <TabsContent value="register">
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reg-name">Nombre Completo</Label>
+                  <div className="relative">
+                    <UserPlus className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="reg-name" 
+                      type="text" 
+                      placeholder="Ej: Juan Pérez" 
+                      className="pl-10"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reg-email">Correo Institucional</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="reg-email" 
+                      type="email" 
+                      placeholder="usuario@donbosco.edu" 
+                      className="pl-10"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reg-password">Contraseña</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      id="reg-password" 
+                      type="password" 
+                      className="pl-10"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full font-bold h-11" disabled={loading}>
+                  {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Crear Cuenta"}
+                </Button>
+              </form>
+            </TabsContent>
+
             <TabsContent value="google">
               <div className="space-y-4 pt-2">
                 <p className="text-sm text-muted-foreground text-center mb-4">
-                  Utilice su cuenta institucional vinculada para un acceso rápido.
+                  Acceso rápido con tu cuenta de Google.
                 </p>
                 <Button 
                   variant="outline" 
