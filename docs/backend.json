@@ -1,0 +1,85 @@
+
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about docents, coordinators, and admins.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["docent", "coordinator", "admin"] },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "AttendanceRecord": {
+      "title": "Attendance Record",
+      "description": "A single entry or exit event for a docent.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "type": { "type": "string", "enum": ["entry", "exit"] },
+        "method": { "type": "string", "enum": ["QR", "Manual"] },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "address": { "type": "string" }
+          }
+        }
+      },
+      "required": ["userId", "userName", "date", "time", "type", "method"]
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "Defined work shifts for the institution.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" }
+      },
+      "required": ["name", "startTime", "endTime"]
+    },
+    "RoleMarker": {
+      "title": "Role Marker",
+      "description": "An empty document indicating special permissions for a user ID.",
+      "type": "object",
+      "properties": {}
+    }
+  },
+  "auth": {
+    "providers": ["google.com"]
+  },
+  "firestore": {
+    "/userProfiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "Primary user profiles collection."
+    },
+    "/userProfiles/{userId}/attendanceRecords/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Attendance history per user."
+    },
+    "/roles_admins/{userId}": {
+      "schema": "RoleMarker",
+      "description": "User IDs that have administrative privileges."
+    },
+    "/roles_coordinators/{userId}": {
+      "schema": "RoleMarker",
+      "description": "User IDs that have coordinator privileges."
+    },
+    "/shifts/{shiftId}": {
+      "schema": "Shift",
+      "description": "Institutional work shifts."
+    },
+    "/globalAttendanceRecords/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Consolidated view of all attendance records for easier reporting."
+    }
+  }
+}
