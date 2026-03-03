@@ -5,15 +5,15 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, doc, updateDoc, deleteDoc, setDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { initializeApp, deleteApp, getApps } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth as getFirebaseAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Search, Mail, Loader2, ShieldCheck, UserCog, UserCheck, 
-  ShieldAlert, UserPlus, X, Lock, User as UserIcon 
+  Search, Mail, Loader2, ShieldCheck, UserCog, 
+  ShieldAlert, UserPlus, Lock, User as UserIcon 
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -67,8 +67,6 @@ export default function UserManagementPage() {
     setIsCreating(true);
     let tempApp;
     try {
-      // 1. Create the user in Firebase Auth using a secondary app instance
-      // to avoid logging out the current admin.
       const appName = `temp-app-${Date.now()}`;
       tempApp = initializeApp(firebaseConfig, appName);
       const tempAuth = getFirebaseAuth(tempApp);
@@ -76,7 +74,6 @@ export default function UserManagementPage() {
       const userCredential = await createUserWithEmailAndPassword(tempAuth, newEmail, newPassword);
       const newUserId = userCredential.user.uid;
 
-      // 2. Create the User Profile in Firestore
       await setDoc(doc(db, 'userProfiles', newUserId), {
         name: newName,
         email: newEmail,
@@ -85,7 +82,6 @@ export default function UserManagementPage() {
         createdBy: currentUser?.id
       });
 
-      // 3. Sync permissions
       if (newRole === 'admin') {
         await setDoc(doc(db, 'roles_admins', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
       } else if (newRole === 'coordinator') {
@@ -100,12 +96,15 @@ export default function UserManagementPage() {
       });
 
       setIsCreateDialogOpen(false);
-      resetForm();
+      setNewName('');
+      setNewEmail('');
+      setNewPassword('');
+      setNewRole('docent');
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error al crear usuario",
-        description: error.message || "No se pudo registrar al usuario en el sistema."
+        description: error.message || "No se pudo registrar al usuario."
       });
     } finally {
       if (tempApp) await deleteApp(tempApp);
@@ -113,16 +112,10 @@ export default function UserManagementPage() {
     }
   };
 
-  const resetForm = () => {
-    setNewName('');
-    setNewEmail('');
-    setNewPassword('');
-    setNewRole('docent');
-  };
-
   const handleRoleChange = async (userId: string, newRole: UserRole, userEmail: string) => {
     if (!db || !userId) return;
     
+    // Self-protection: Don't allow an admin to remove their own admin role
     if (currentUser?.id === userId && newRole !== 'admin') {
       toast({
         variant: "destructive",
@@ -276,6 +269,7 @@ export default function UserManagementPage() {
                     const userId = u.id;
                     const isUpdating = updatingId === userId;
                     const isSelf = currentUser?.id === userId;
+                    const currentRole = u.role || 'docent';
                     
                     return (
                       <tr key={userId} className="hover:bg-gray-50/50 transition-all group">
@@ -284,7 +278,7 @@ export default function UserManagementPage() {
                             <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-sm group-hover:scale-110 transition-transform">
                                {u.name?.charAt(0).toUpperCase()}
                             </div>
-                            <div>
+                            <div className="flex flex-col">
                               <div className="font-black text-base text-gray-800 flex items-center gap-2">
                                 <span>{u.name}</span>
                                 {isSelf && <Badge variant="outline" className="text-[9px] font-black text-primary border-primary/20">TÚ</Badge>}
@@ -293,29 +287,26 @@ export default function UserManagementPage() {
                                 <Mail className="w-3.5 h-3.5" /> {u.email}
                               </div>
                             </div>
-                          </div>
                         </td>
                         <td className="px-8 py-6">
-                          <div className="flex flex-col gap-1.5">
-                            <Badge 
-                              variant={u.role === 'admin' ? 'default' : 'secondary'} 
-                              className={cn(
-                                "w-fit capitalize text-[10px] font-black px-4 py-1.5 rounded-xl border-none",
-                                u.role === 'admin' ? "bg-primary shadow-lg shadow-primary/20" : "bg-gray-200 text-gray-700"
-                              )}
-                            >
-                              {u.role === 'docent' ? 'Docente' : 
-                               u.role === 'coordinator' ? 'Coordinador' : 
-                               u.role === 'secretary' ? 'Secretaría' : 'Administrador'}
-                            </Badge>
-                          </div>
+                          <Badge 
+                            variant={currentRole === 'admin' ? 'default' : 'secondary'} 
+                            className={cn(
+                              "w-fit capitalize text-[10px] font-black px-4 py-1.5 rounded-xl border-none",
+                              currentRole === 'admin' ? "bg-primary shadow-lg shadow-primary/20" : "bg-gray-200 text-gray-700"
+                            )}
+                          >
+                            {currentRole === 'docent' ? 'Docente' : 
+                             currentRole === 'coordinator' ? 'Coordinador' : 
+                             currentRole === 'secretary' ? 'Secretaría' : 'Administrador'}
+                          </Badge>
                         </td>
                         <td className="px-8 py-6">
                           <div className="flex items-center gap-4">
                             <Select 
                               disabled={isUpdating || isSelf}
                               onValueChange={(val) => handleRoleChange(userId, val as UserRole, u.email)}
-                              defaultValue={u.role || 'docent'}
+                              value={currentRole}
                             >
                               <SelectTrigger className="w-52 h-12 rounded-2xl text-xs font-black border-gray-200 shadow-sm bg-white">
                                 <div className="flex items-center gap-2">
@@ -331,7 +322,7 @@ export default function UserManagementPage() {
                               </SelectContent>
                             </Select>
                             
-                            {u.role === 'admin' && !isSelf && (
+                            {currentRole === 'admin' && !isSelf && (
                               <div className="p-2 bg-yellow-50 rounded-xl text-yellow-600" title="Acceso de alto nivel">
                                 <ShieldAlert className="w-5 h-5" />
                               </div>
@@ -351,7 +342,6 @@ export default function UserManagementPage() {
                 <Search className="w-10 h-10 text-gray-200" />
               </div>
               <p className="text-muted-foreground font-bold text-lg">No se encontraron usuarios registrados.</p>
-              <p className="text-sm text-muted-foreground mt-2">Intenta con otro término de búsqueda.</p>
             </div>
           )}
         </CardContent>

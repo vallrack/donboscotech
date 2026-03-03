@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!authUser) return null;
 
     let role: UserRole = 'docent';
+    // Priority 1: Direct security collections (The Source of Truth)
     if (adminRole) {
       role = 'admin';
     } else if (coordRole) {
@@ -58,18 +59,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authUser, adminRole, coordRole, sectRole, userProfile]);
 
+  // Persistent synchronization of the role in the profile
   useEffect(() => {
-    if (authUser && db && !profileLoading && !userProfile) {
+    if (authUser && db && !profileLoading && resolvedUser) {
       const pRef = doc(db, 'userProfiles', authUser.uid);
-      setDoc(pRef, {
-        name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
-        email: authUser.email || '',
-        role: resolvedUser?.role || 'docent',
-        avatarUrl: authUser.photoURL || '',
-        createdAt: serverTimestamp()
-      }, { merge: true });
+      
+      // If profile doesn't exist, create it
+      if (!userProfile) {
+        setDoc(pRef, {
+          name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
+          email: authUser.email || '',
+          role: resolvedUser.role,
+          avatarUrl: authUser.photoURL || '',
+          createdAt: serverTimestamp()
+        }, { merge: true });
+      } 
+      // If profile exists but the role is out of sync with security collections, update it
+      else if (userProfile.role !== resolvedUser.role) {
+        updateDoc(pRef, { role: resolvedUser.role });
+      }
     }
-  }, [authUser, userProfile, profileLoading, db, resolvedUser?.role]);
+  }, [authUser, userProfile, profileLoading, db, resolvedUser]);
 
   const login = async () => {
     if (!auth) return;
