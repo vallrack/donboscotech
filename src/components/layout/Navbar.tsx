@@ -19,10 +19,10 @@ export function Navbar() {
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
-    { name: 'Registrar QR', href: '/dashboard/attendance/scan', icon: QrCode, roles: ['docent'] },
+    { name: 'Registrar QR', href: '/dashboard/attendance/scan', icon: QrCode, roles: ['docent', 'admin'] },
     { name: 'Marcaje Manual', href: '/dashboard/attendance/manual', icon: ClipboardCheck, roles: ['coordinator', 'admin', 'secretary'] },
     { name: 'Reportes', href: '/dashboard/reports', icon: BarChart3, roles: ['coordinator', 'admin', 'secretary'] },
-    { name: 'Personal', href: '/dashboard/admin/users', icon: Users, roles: ['admin'] },
+    { name: 'Personal', href: '/dashboard/admin/users', icon: Users, roles: ['admin', 'coordinator'] },
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(user.role));

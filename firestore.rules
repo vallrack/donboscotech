@@ -12,7 +12,8 @@ service cloud.firestore {
     match /userProfiles/{userId} {
       allow read: if isSignedIn();
       allow create: if isPrivileged() || isOwner(userId);
-      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.role == resource.data.role || !('role' in request.resource.data)));
+      // Admin and Coordinator can update roles, but coordinators cannot make admins
+      allow update: if isAdmin() || (isCoordinator() && request.resource.data.role != 'admin') || (isOwner(userId) && (request.resource.data.role == resource.data.role || !('role' in request.resource.data)));
       allow delete: if isAdmin();
 
       match /attendanceRecords/{recordId} {
@@ -24,22 +25,17 @@ service cloud.firestore {
 
     match /roles_admins/{userId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || (isOwner(userId) && !exists(/databases/$(database)/documents/roles_admins/$(userId)));
+      allow write: if isAdmin();
     }
 
     match /roles_coordinators/{userId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isCoordinator();
     }
 
     match /roles_secretaries/{userId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /shifts/{shiftId} {
-      allow read: if true;
-      allow write: if isPrivileged();
+      allow write: if isAdmin() || isCoordinator();
     }
 
     match /globalAttendanceRecords/{recordId} {

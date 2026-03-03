@@ -82,6 +82,7 @@ export default function UserManagementPage() {
         createdBy: currentUser?.id
       });
 
+      // Sync role collections
       if (newRole === 'admin') {
         await setDoc(doc(db, 'roles_admins', newUserId), { email: newEmail, assignedAt: new Date().toISOString() });
       } else if (newRole === 'coordinator') {
@@ -112,11 +113,21 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: UserRole, userEmail: string) => {
+  const handleRoleChange = async (userId: string, targetRole: UserRole, userEmail: string) => {
     if (!db || !userId) return;
     
+    // Safety: Coordinators cannot grant or remove Admin role
+    if (currentUser?.role === 'coordinator' && (targetRole === 'admin' || users?.find(u => u.id === userId)?.role === 'admin')) {
+      toast({
+        variant: "destructive",
+        title: "Restricción de nivel",
+        description: "Solo un administrador puede gestionar permisos de alto nivel."
+      });
+      return;
+    }
+
     // Self-protection: Don't allow an admin to remove their own admin role
-    if (currentUser?.id === userId && newRole !== 'admin') {
+    if (currentUser?.id === userId && targetRole !== 'admin') {
       toast({
         variant: "destructive",
         title: "Operación no permitida",
@@ -128,8 +139,9 @@ export default function UserManagementPage() {
     setUpdatingId(userId);
     try {
       await updateDoc(doc(db, 'userProfiles', userId), { 
-        role: newRole,
-        updatedAt: new Date().toISOString()
+        role: targetRole,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser?.id
       });
 
       const roleCollections = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
@@ -137,17 +149,17 @@ export default function UserManagementPage() {
         await deleteDoc(doc(db, col, userId));
       }
 
-      if (newRole === 'admin') {
+      if (targetRole === 'admin') {
         await setDoc(doc(db, 'roles_admins', userId), { email: userEmail, assignedAt: new Date().toISOString() });
-      } else if (newRole === 'coordinator') {
+      } else if (targetRole === 'coordinator') {
         await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail, assignedAt: new Date().toISOString() });
-      } else if (newRole === 'secretary') {
+      } else if (targetRole === 'secretary') {
         await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail, assignedAt: new Date().toISOString() });
       }
 
       toast({ 
         title: "Permisos Actualizados", 
-        description: `Acceso actualizado a nivel ${newRole.toUpperCase()}.` 
+        description: `Acceso actualizado a nivel ${targetRole.toUpperCase()}.` 
       });
     } catch (error) {
       toast({ 
@@ -159,6 +171,18 @@ export default function UserManagementPage() {
       setUpdatingId(null);
     }
   };
+
+  if (currentUser?.role !== 'admin' && currentUser?.role !== 'coordinator') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-gray-50 rounded-3xl animate-in fade-in duration-500">
+        <ShieldAlert className="w-16 h-16 text-destructive mb-6 opacity-20" />
+        <h2 className="text-3xl font-black text-destructive">Acceso Restringido</h2>
+        <p className="text-muted-foreground mt-4 max-w-md font-medium">
+          Solo el personal directivo (Administradores y Coordinadores) puede gestionar la nómina y permisos del personal.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -175,15 +199,15 @@ export default function UserManagementPage() {
           <DialogTrigger asChild>
             <Button className="h-12 px-6 rounded-2xl font-black gap-2 shadow-lg shadow-primary/20">
               <UserPlus className="w-5 h-5" />
-              Nuevo Usuario
+              Nuevo Miembro
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] rounded-3xl border-none shadow-2xl">
             <form onSubmit={handleCreateUser}>
               <DialogHeader>
-                <DialogTitle className="text-2xl font-black text-primary">Agregar Miembro</DialogTitle>
+                <DialogTitle className="text-2xl font-black text-primary">Agregar Personal</DialogTitle>
                 <DialogDescription className="font-medium">
-                  Crea una nueva cuenta de acceso para el personal.
+                  Registra una nueva cuenta para un docente o administrativo.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-6 py-6">
@@ -195,7 +219,7 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Correo Electrónico</Label>
+                  <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Correo Institucional</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                     <Input id="email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="correo@donbosco.edu" className="pl-10 h-12 rounded-xl border-gray-100" required />
@@ -209,16 +233,18 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Rol Asignado</Label>
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Rol Inicial</Label>
                   <Select value={newRole} onValueChange={(val: UserRole) => setNewRole(val)}>
                     <SelectTrigger className="h-12 rounded-xl border-gray-100 font-bold">
                       <SelectValue placeholder="Seleccionar Rol" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl border-none shadow-2xl">
-                      <SelectItem value="docent" className="font-bold py-3">Docente (Acceso Base)</SelectItem>
-                      <SelectItem value="secretary" className="font-bold py-3">Secretaría (Reportes)</SelectItem>
-                      <SelectItem value="coordinator" className="font-bold py-3">Coordinador (Marcaje Manual)</SelectItem>
-                      <SelectItem value="admin" className="font-black py-3 text-primary">Administrador (Total)</SelectItem>
+                      <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
+                      <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
+                      <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
+                      {currentUser?.role === 'admin' && (
+                        <SelectItem value="admin" className="font-black py-3 text-primary">Administrador</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -226,7 +252,7 @@ export default function UserManagementPage() {
               <DialogFooter>
                 <Button type="submit" className="w-full h-12 rounded-xl font-black text-lg" disabled={isCreating}>
                   {isCreating ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserPlus className="w-5 h-5 mr-2" />}
-                  Crear Cuenta de Personal
+                  Confirmar Registro
                 </Button>
               </DialogFooter>
             </form>
@@ -239,7 +265,7 @@ export default function UserManagementPage() {
           <div className="relative max-w-xl">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input 
-              placeholder="Buscar por nombre, apellido o correo electrónico..." 
+              placeholder="Buscar por nombre o correo..." 
               className="pl-12 h-14 border-gray-200 rounded-2xl bg-white shadow-sm text-base"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -251,9 +277,9 @@ export default function UserManagementPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/30 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-8 py-6">Información del Usuario</th>
-                  <th className="px-8 py-6">Nivel de Acceso</th>
-                  <th className="px-8 py-6">Acción de Permisos</th>
+                  <th className="px-8 py-6">Información</th>
+                  <th className="px-8 py-6">Perfil</th>
+                  <th className="px-8 py-6">Permisos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -261,7 +287,6 @@ export default function UserManagementPage() {
                   <tr key="loading-users">
                     <td colSpan={3} className="py-24 text-center">
                       <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" />
-                      <p className="text-sm mt-4 font-bold text-muted-foreground">Sincronizando con base de datos...</p>
                     </td>
                   </tr>
                 ) : (
@@ -270,6 +295,7 @@ export default function UserManagementPage() {
                     const isUpdating = updatingId === userId;
                     const isSelf = currentUser?.id === userId;
                     const currentRole = u.role || 'docent';
+                    const canEdit = currentUser?.role === 'admin' || (currentUser?.role === 'coordinator' && currentRole !== 'admin');
                     
                     return (
                       <tr key={userId} className="hover:bg-gray-50/50 transition-all group">
@@ -305,7 +331,7 @@ export default function UserManagementPage() {
                         <td className="px-8 py-6">
                           <div className="flex items-center gap-4">
                             <Select 
-                              disabled={isUpdating || isSelf}
+                              disabled={isUpdating || isSelf || !canEdit}
                               onValueChange={(val) => handleRoleChange(userId, val as UserRole, u.email)}
                               value={currentRole}
                             >
@@ -316,18 +342,14 @@ export default function UserManagementPage() {
                                 </div>
                               </SelectTrigger>
                               <SelectContent className="rounded-2xl border-none shadow-2xl">
-                                <SelectItem value="docent" className="font-bold py-3">Docente (Acceso Base)</SelectItem>
-                                <SelectItem value="secretary" className="font-bold py-3">Secretaría (Reportes)</SelectItem>
-                                <SelectItem value="coordinator" className="font-bold py-3">Coordinador (Marcaje Manual)</SelectItem>
-                                <SelectItem value="admin" className="font-black py-3 text-primary">Administrador (Total)</SelectItem>
+                                <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
+                                <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
+                                <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
+                                {currentUser?.role === 'admin' && (
+                                  <SelectItem value="admin" className="font-black py-3 text-primary">Administrador</SelectItem>
+                                )}
                               </SelectContent>
                             </Select>
-                            
-                            {currentRole === 'admin' && !isSelf && (
-                              <div className="p-2 bg-yellow-50 rounded-xl text-yellow-600" title="Acceso de alto nivel">
-                                <ShieldAlert className="w-5 h-5" />
-                              </div>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -337,20 +359,8 @@ export default function UserManagementPage() {
               </tbody>
             </table>
           </div>
-          {!loading && filteredUsers.length === 0 && (
-            <div className="p-24 text-center">
-              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Search className="w-10 h-10 text-gray-200" />
-              </div>
-              <p className="text-muted-foreground font-bold text-lg">No se encontraron usuarios registrados.</p>
-            </div>
-          )}
         </CardContent>
       </Card>
-      
-      <p className="text-center text-[10px] text-muted-foreground font-bold uppercase tracking-widest opacity-50 pt-4">
-        &copy; Sistema de Gestión de Permisos Ciudad Don Bosco
-      </p>
     </div>
   );
 }
