@@ -129,6 +129,30 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Tabla de Indicadores con Keys únicas */}
+      <Card className="border-none shadow-xl bg-white rounded-3xl overflow-hidden">
+        <CardHeader className="bg-gray-50/50">
+          <CardTitle className="text-xl font-bold">Top Indicadores de Desempeño</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
+           <div className="space-y-4">
+              {[
+                { id: 'top-1', name: 'Juan Pérez', hours: 168, status: 'Excedido' },
+                { id: 'top-2', name: 'María García', hours: 160, status: 'Normal' },
+                { id: 'top-3', name: 'Lucía Fernández', hours: 158, status: 'Normal' },
+              ].map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-xl border">
+                  <div className="font-bold text-sm">{item.name}</div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs font-black">{item.hours}H</span>
+                    <Badge variant={item.status === 'Excedido' ? 'destructive' : 'secondary'} className="text-[10px]">{item.status}</Badge>
+                  </div>
+                </div>
+              ))}
+           </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -41,18 +41,21 @@ export default function DashboardPage() {
 
   const stats = [
     { 
+      id: 'stat-hours',
       label: user?.role === 'docent' ? 'Horas esta semana' : 'Docentes presentes hoy', 
       value: user?.role === 'docent' ? '32h' : 'Real-time', 
       icon: Clock, 
       color: 'text-primary' 
     },
     { 
+      id: 'stat-punctuality',
       label: 'Puntualidad General', 
       value: '94%', 
       icon: CheckCircle2, 
       color: 'text-green-600' 
     },
     { 
+      id: 'stat-pending',
       label: 'Registros Pendientes', 
       value: '0', 
       icon: AlertTriangle, 
@@ -99,19 +102,21 @@ export default function DashboardPage() {
             Bienvenido, {user?.name.split(' ')[0]}
           </h1>
           <p className="text-muted-foreground mt-2 text-lg font-medium">
-            {user?.role === 'docent' 
-              ? 'Panel de control institucional para docentes.' 
-              : `Panel de gestión con rol de ${user?.role}.`}
+            {user?.role === 'admin' 
+              ? 'Panel de control administrativo institucional.' 
+              : `Panel de control para el rol de ${user?.role}.`}
           </p>
         </div>
         <div className="flex gap-3">
-          {user?.role === 'docent' ? (
+          {/* Permitimos el botón de QR para docents y admins para facilitar pruebas */}
+          {(user?.role === 'docent' || user?.role === 'admin') && (
             <Link href="/dashboard/attendance/scan">
-              <Button size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl">
-                <Clock className="w-5 h-5 mr-2" /> Marcar Asistencia
+              <Button size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl bg-primary hover:bg-primary/90">
+                <Clock className="w-5 h-5 mr-2" /> Marcar Asistencia (QR)
               </Button>
             </Link>
-          ) : (
+          )}
+          {user?.role !== 'docent' && (
             <Link href="/dashboard/reports">
               <Button variant="outline" size="lg" className="h-14 px-8 shadow-md font-bold rounded-2xl bg-white border-gray-200">
                 <BarChart3 className="w-5 h-5 mr-2" /> Reportes Administrativos
@@ -121,6 +126,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Solo mostramos la opción de reclamar admin si el usuario es docent (rol base) */}
       {user?.role === 'docent' && (
         <Card className="border-none bg-primary shadow-2xl shadow-primary/20 text-white rounded-3xl overflow-hidden relative">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -130,7 +136,7 @@ export default function DashboardPage() {
               Configuración Inicial
             </CardTitle>
             <CardDescription className="text-primary-foreground/80 text-base">
-              Si eres el administrador principal de boscotech-3231f, activa tus privilegios aquí.
+              Si eres el administrador principal del sistema, activa tus privilegios aquí.
             </CardDescription>
           </CardHeader>
           <CardFooter className="relative z-10">
@@ -144,7 +150,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {stats.map((stat) => (
-          <Card key={stat.label} className="border-none shadow-xl shadow-gray-200/50 bg-white rounded-3xl p-2">
+          <Card key={stat.id} className="border-none shadow-xl shadow-gray-200/50 bg-white rounded-3xl p-2">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest">
                 <stat.icon className={`w-4 h-4 ${stat.color}`} />
@@ -176,8 +182,8 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {records.map((record, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-5 rounded-2xl border bg-gray-50/30 hover:bg-gray-50 transition-all group">
+                {records.map((record) => (
+                  <div key={record.id} className="flex items-center justify-between p-5 rounded-2xl border bg-gray-50/30 hover:bg-gray-50 transition-all group">
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-lg transition-transform group-hover:scale-105",
