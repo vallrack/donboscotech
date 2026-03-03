@@ -10,17 +10,27 @@ export function FirebaseErrorListener() {
 
   useEffect(() => {
     const handlePermissionError = (error: FirestorePermissionError) => {
-      // In production, we might just show a generic message.
-      // In development, this architecture surfaces rich errors to the UI.
+      // In production, we show a generic friendly message.
+      // In development, we surface the exact path and operation that failed.
+      const isDev = process.env.NODE_ENV === 'development';
+      
       toast({
         variant: 'destructive',
-        title: 'Error de Permisos (Firestore)',
-        description: `No tienes permiso para realizar esta acción: ${error.context.operation} en ${error.context.path}`,
+        title: 'Error de Seguridad (Firestore)',
+        description: isDev 
+          ? `Acceso denegado: ${error.context.operation} en la ruta [${error.context.path}]`
+          : 'No tienes permisos suficientes para ver esta información.',
       });
       
-      // We also throw to trigger the Next.js error boundary/overlay in dev
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Firestore Security Rule Denied:', error.context);
+      if (isDev) {
+        // Detailed log for the developer to fix security rules
+        console.group('🔥 Firestore Security Denied');
+        console.error('Operation:', error.context.operation);
+        console.error('Path:', error.context.path);
+        if (error.context.requestResourceData) {
+          console.error('Data attempted:', error.context.requestResourceData);
+        }
+        console.groupEnd();
       }
     };
 

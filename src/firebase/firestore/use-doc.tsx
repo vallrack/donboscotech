@@ -26,15 +26,21 @@ export function useDoc<T = DocumentData>(docRef: DocumentReference<T> | null) {
       (snapshot) => {
         setData(snapshot.data() || null);
         setLoading(false);
+        setError(null);
       },
-      async (serverError: FirestoreError) => {
+      (serverError: FirestoreError) => {
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'get',
         });
+        
         setError(permissionError);
         setLoading(false);
-        errorEmitter.emit('permission-error', permissionError);
+        
+        // Emit only if it's a permission error (code 7 in Firestore)
+        if (serverError.code === 'permission-denied') {
+          errorEmitter.emit('permission-error', permissionError);
+        }
       }
     );
 

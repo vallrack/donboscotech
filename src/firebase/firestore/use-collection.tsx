@@ -24,20 +24,26 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
     const unsubscribe = onSnapshot(
       query,
       (snapshot) => {
-        const items = snapshot.docs.map((doc) => doc.data());
+        const items = snapshot.docs.map((doc) => doc.data() as T);
         setData(items);
         setLoading(false);
+        setError(null);
       },
-      async (serverError: FirestoreError) => {
-        // Since we don't have the direct path from a Query easily in all versions, 
-        // we use a generic label or try to extract it.
+      (serverError: FirestoreError) => {
+        // Try to resolve the collection path from the query internal structure for debugging
+        const path = (query as any)._query?.path?.toString() || 'unknown_collection';
+        
         const permissionError = new FirestorePermissionError({
-          path: 'collection_query',
+          path,
           operation: 'list',
         });
+        
         setError(permissionError);
         setLoading(false);
-        errorEmitter.emit('permission-error', permissionError);
+        
+        if (serverError.code === 'permission-denied') {
+          errorEmitter.emit('permission-error', permissionError);
+        }
       }
     );
 
