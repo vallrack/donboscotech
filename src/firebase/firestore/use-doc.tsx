@@ -24,7 +24,7 @@ export function useDoc<T = DocumentData>(docRef: DocumentReference<T> | null) {
     const unsubscribe = onSnapshot(
       docRef,
       (snapshot) => {
-        setData(snapshot.data() || null);
+        setData(snapshot.exists() ? ({ ...snapshot.data() as any, id: snapshot.id } as T) : null);
         setLoading(false);
         setError(null);
       },
@@ -37,7 +37,6 @@ export function useDoc<T = DocumentData>(docRef: DocumentReference<T> | null) {
         setError(permissionError);
         setLoading(false);
         
-        // Emit only if it's a permission error (code 7 in Firestore)
         if (serverError.code === 'permission-denied') {
           errorEmitter.emit('permission-error', permissionError);
         }

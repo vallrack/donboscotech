@@ -24,13 +24,15 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
     const unsubscribe = onSnapshot(
       query,
       (snapshot) => {
-        const items = snapshot.docs.map((doc) => doc.data() as T);
+        const items = snapshot.docs.map((doc) => ({
+          ...(doc.data() as any),
+          id: doc.id,
+        }) as T);
         setData(items);
         setLoading(false);
         setError(null);
       },
       (serverError: FirestoreError) => {
-        // Try to resolve the collection path from the query internal structure for debugging
         const path = (query as any)._query?.path?.toString() || 'unknown_collection';
         
         const permissionError = new FirestorePermissionError({

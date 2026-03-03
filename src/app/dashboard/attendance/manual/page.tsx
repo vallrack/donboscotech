@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo } from 'react';
@@ -7,7 +6,7 @@ import { useCollection, useFirestore } from '@/firebase';
 import { collection, doc, setDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -56,7 +55,7 @@ export default function ManualAttendancePage() {
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
     const savePromises = Array.from(markedUsers).map(userId => {
-      const docent = allDocents.find(d => (d as any).uid === userId || (d as any).id === userId);
+      const docent = allDocents.find(d => (d as any).id === userId);
       const recordId = `${userId}_${now.getTime()}_manual`;
       
       const recordData = {
@@ -134,14 +133,14 @@ export default function ManualAttendancePage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr key="loading-manual">
+                  <tr key="loading-manual-row">
                     <td colSpan={3} className="py-20 text-center">
                       <Loader2 className="w-10 h-10 animate-spin mx-auto text-muted-foreground opacity-20" />
                     </td>
                   </tr>
                 ) : (
-                  filteredDocents.map((docent) => {
-                    const docentId = (docent as any).uid || (docent as any).id;
+                  filteredDocents.map((docent, index) => {
+                    const docentId = (docent as any).id || `docent-${index}`;
                     return (
                       <tr key={docentId} className="hover:bg-gray-50/30 transition-colors">
                         <td className="px-6 py-4">

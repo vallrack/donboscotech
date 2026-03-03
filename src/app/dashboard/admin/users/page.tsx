@@ -1,15 +1,13 @@
-
 "use client"
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, doc, updateDoc, deleteDoc, setDoc, query, orderBy } from 'firebase/firestore';
-import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Shield, UserCog, Mail, Loader2, ShieldCheck } from 'lucide-react';
+import { Search, Mail, Loader2, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { UserRole } from '@/lib/types';
@@ -93,45 +91,48 @@ export default function UserManagementPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr>
+                  <tr key="loading-users-row">
                     <td colSpan={3} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-primary" /></td>
                   </tr>
                 ) : (
-                  filteredUsers.map((u) => (
-                    <tr key={u.id || u.uid} className="hover:bg-gray-50/30 transition-all">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xs">
-                             {u.name?.charAt(0)}
+                  filteredUsers.map((u, index) => {
+                    const userId = (u as any).id || `user-${index}`;
+                    return (
+                      <tr key={userId} className="hover:bg-gray-50/30 transition-all">
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xs">
+                               {u.name?.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm">{u.name}</p>
+                              <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium"><Mail className="w-3 h-3" /> {u.email}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold text-sm">{u.name}</p>
-                            <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium"><Mail className="w-3 h-3" /> {u.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="capitalize text-[10px] font-black">{u.role}</Badge>
-                      </td>
-                      <td className="px-6 py-5">
-                        <Select 
-                          disabled={updating === (u.id || u.uid) || currentUser?.id === (u.id || u.uid)}
-                          onValueChange={(val) => handleRoleChange(u.id || u.uid, val as UserRole, u.email)}
-                          defaultValue={u.role}
-                        >
-                          <SelectTrigger className="w-40 h-10 rounded-xl text-xs font-bold">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="docent">Docente</SelectItem>
-                            <SelectItem value="secretary">Secretaría</SelectItem>
-                            <SelectItem value="coordinator">Coordinador</SelectItem>
-                            <SelectItem value="admin">Administrador</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-6 py-5">
+                          <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="capitalize text-[10px] font-black">{u.role}</Badge>
+                        </td>
+                        <td className="px-6 py-5">
+                          <Select 
+                            disabled={updating === userId || currentUser?.id === userId}
+                            onValueChange={(val) => handleRoleChange(userId, val as UserRole, u.email)}
+                            defaultValue={u.role}
+                          >
+                            <SelectTrigger className="w-40 h-10 rounded-xl text-xs font-bold">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="docent">Docente</SelectItem>
+                              <SelectItem value="secretary">Secretaría</SelectItem>
+                              <SelectItem value="coordinator">Coordinador</SelectItem>
+                              <SelectItem value="admin">Administrador</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
