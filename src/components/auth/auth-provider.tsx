@@ -11,7 +11,7 @@ interface AuthContextType {
   user: User | null;
   login: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
-  signUpWithEmail: (email: string, pass: string, name: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string, name: string, role?: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -92,16 +92,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
-  const signUpWithEmail = async (email: string, pass: string, name: string) => {
+  const signUpWithEmail = async (email: string, pass: string, name: string, role: UserRole = 'docent') => {
     if (!auth || !db) return;
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     const pRef = doc(db, 'userProfiles', userCredential.user.uid);
     await setDoc(pRef, {
       name,
       email,
-      role: 'docent',
+      role,
       createdAt: serverTimestamp()
     });
+
+    // Special handling for secretary role (sync collection for rules)
+    if (role === 'secretary') {
+      await setDoc(doc(db, 'roles_secretaries', userCredential.user.uid), {
+        email,
+        assignedAt: new Date().toISOString()
+      });
+    }
   };
 
   const logout = async () => {
