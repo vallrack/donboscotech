@@ -1,20 +1,23 @@
-
 "use client"
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy, limit, where } from 'firebase/firestore';
-import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
-import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3, Loader2 } from 'lucide-react';
+import { collection, query, orderBy, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3, Loader2, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AttendanceRecord } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const db = useFirestore();
+  const { toast } = useToast();
+  const [claiming, setClaiming] = useState(false);
   
   // Dynamic query based on role
   const recordsQuery = useMemo(() => {
@@ -57,6 +60,40 @@ export default function DashboardPage() {
     },
   ];
 
+  const handleClaimAdmin = async () => {
+    if (!db || !user) return;
+    setClaiming(true);
+    try {
+      // Registrar en la colección de roles administrativos
+      const adminRef = doc(db, 'roles_admins', user.id);
+      await setDoc(adminRef, { 
+        email: user.email, 
+        grantedAt: serverTimestamp(),
+        grantedBy: 'system_bootstrap'
+      });
+      
+      // Actualizar perfil de usuario
+      const profileRef = doc(db, 'userProfiles', user.id);
+      await setDoc(profileRef, { role: 'admin' }, { merge: true });
+      
+      toast({
+        title: "Rol de Administrador Activado",
+        description: "Ahora tienes privilegios administrativos completos.",
+      });
+      
+      // Recargar para aplicar cambios de contexto
+      window.location.reload();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al reclamar rol",
+        description: "Asegúrate de no tener un rol previo o contacta soporte.",
+      });
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -65,7 +102,7 @@ export default function DashboardPage() {
           <p className="text-muted-foreground mt-1 text-sm">
             {user?.role === 'docent' 
               ? 'Has iniciado sesión con éxito. Revisa tu historial de asistencia.' 
-              : 'Panel administrativo de Ciudad Don Bosco.'}
+              : `Panel de control con rol de ${user?.role}.`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -84,6 +121,27 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Bootstrap Section for first user */}
+      {user?.role === 'docent' && (
+        <Card className="border-2 border-dashed border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-primary" />
+              Configuración Inicial
+            </CardTitle>
+            <CardDescription>
+              Si eres el administrador principal de boscotech-3231f, activa tus privilegios aquí.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button size="sm" onClick={handleClaimAdmin} disabled={claiming}>
+              {claiming ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Reclamar Rol de Administrador
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {stats.map((stat) => (
