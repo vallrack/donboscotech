@@ -287,6 +287,7 @@ export default function UserManagementPage() {
                                 <Mail className="w-3.5 h-3.5" /> {u.email}
                               </div>
                             </div>
+                          </div>
                         </td>
                         <td className="px-8 py-6">
                           <Badge 
