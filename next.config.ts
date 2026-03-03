@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'ciudaddonbosco.org',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };
