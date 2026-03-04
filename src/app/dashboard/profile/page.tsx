@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight, Clock } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight, Clock, Plus, Trash2, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -35,21 +35,18 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Consultas memoizadas para prevenir Quota Exceeded
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
   const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
 
   const { data: campusesRaw } = useCollection<Campus>(campusesQuery);
   const { data: programsRaw } = useCollection<Program>(programsQuery);
-  const { data: shiftsRaw, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
+  const { data: shiftsRaw } = useCollection<Shift>(shiftsQuery);
 
-  // Estabilizar referencias para evitar bucles en componentes controlados
   const campuses = useMemo(() => campusesRaw, [campusesRaw]);
   const programs = useMemo(() => programsRaw, [programsRaw]);
   const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
 
-  // Sincronización inicial única por usuario para evitar bucles infinitos
   useEffect(() => {
     if (user && lastSyncedUserId.current !== user.id) {
       setFormData({
@@ -64,11 +61,20 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  // Funciones de actualización estables con validación de igualdad
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => {
       if (JSON.stringify(prev[field as keyof typeof prev]) === JSON.stringify(value)) return prev;
       return { ...prev, [field]: value };
+    });
+  }, []);
+
+  const toggleShift = useCallback((shiftId: string) => {
+    setFormData(prev => {
+      const current = prev.shiftIds || [];
+      const newShifts = current.includes(shiftId)
+        ? current.filter(id => id !== shiftId)
+        : [...current, shiftId];
+      return { ...prev, shiftIds: newShifts };
     });
   }, []);
 
@@ -96,6 +102,10 @@ export default function ProfilePage() {
       setSaving(false);
     }
   };
+
+  const assignedShifts = useMemo(() => {
+    return shifts.filter(s => formData.shiftIds?.includes(s.id));
+  }, [shifts, formData.shiftIds]);
 
   if (authLoading && !user) {
     return (
@@ -164,7 +174,6 @@ export default function ProfilePage() {
                            onChange={(e) => updateField('name', e.target.value)}
                            className="h-14 rounded-2xl bg-gray-50/50 font-bold" 
                            required 
-                           disabled={saving}
                          />
                       </div>
                       <div className="space-y-3">
@@ -174,16 +183,14 @@ export default function ProfilePage() {
                            onChange={(e) => updateField('documentId', e.target.value)}
                            className="h-14 rounded-2xl bg-gray-50/50 font-bold" 
                            required 
-                           disabled={saving}
                          />
                       </div>
                       
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede Principal</Label>
                          <Select 
-                           value={formData.campus || ""} 
+                           value={formData.campus} 
                            onValueChange={(v) => updateField('campus', v)}
-                           disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Sede" />
@@ -199,9 +206,8 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Cargo</Label>
                          <Select 
-                           value={formData.program || ""} 
+                           value={formData.program} 
                            onValueChange={(v) => updateField('program', v)}
-                           disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Programa" />
@@ -216,37 +222,54 @@ export default function ProfilePage() {
                    </div>
 
                    <div className="space-y-4 pt-4">
-                      <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Asignación de Jornada Laboral</Label>
-                      <div className="mt-2">
-                        {shiftsLoading ? (
-                          <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Cargando horarios...</div>
-                        ) : (
-                          <Select 
-                            value={formData.shiftIds?.[0] || ""} 
-                            onValueChange={(v) => updateField('shiftIds', [v])}
-                            disabled={saving}
-                          >
-                            <SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-sm text-primary">
-                              <div className="flex items-center gap-3">
-                                <Clock className="w-5 h-5" />
-                                <SelectValue placeholder="Elegir Jornada de Trabajo" />
-                              </div>
-                            </SelectTrigger>
-                            <SelectContent className="rounded-[2rem] border-none shadow-2xl p-4">
-                              {shifts?.map(s => (
-                                <SelectItem key={s.id} value={s.id} className="font-black py-4 border-b last:border-0 border-gray-100">
-                                  <div className="flex flex-col">
+                      <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Asignación de Jornadas Laborales</Label>
+                      <div className="space-y-4">
+                        <Select 
+                          onValueChange={(v) => toggleShift(v)}
+                        >
+                          <SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-sm text-primary">
+                            <div className="flex items-center gap-3">
+                              <Plus className="w-5 h-5" />
+                              <span>Añadir Jornada a mi Horario</span>
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent className="rounded-[2rem] border-none shadow-2xl p-4">
+                            {shifts?.map(s => (
+                              <SelectItem key={s.id} value={s.id} className="font-black py-4 border-b last:border-0 border-gray-100">
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2">
                                     <span className="uppercase tracking-tight">{s.name}</span>
-                                    <span className="text-[10px] font-bold text-muted-foreground opacity-60">{s.startTime} - {s.endTime} • {s.days?.join(', ')}</span>
+                                    {formData.shiftIds?.includes(s.id) && <Check className="w-3 h-3 text-green-500" />}
                                   </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                        <p className="text-[10px] font-bold text-muted-foreground mt-3 italic px-2">
-                          * La jornada seleccionada determinará el cálculo automático de puntualidad en tus reportes.
-                        </p>
+                                  <span className="text-[10px] font-bold text-muted-foreground opacity-60">{s.startTime} - {s.endTime} • {s.days?.join(', ')}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                           {assignedShifts.map(s => (
+                             <div key={s.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between group">
+                                <div>
+                                   <p className="text-[10px] font-black text-primary uppercase">{s.name}</p>
+                                   <p className="text-[9px] font-bold text-muted-foreground">{s.startTime} - {s.endTime}</p>
+                                </div>
+                                <Button 
+                                  type="button" 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => toggleShift(s.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                             </div>
+                           ))}
+                           {assignedShifts.length === 0 && (
+                             <p className="text-[10px] text-muted-foreground font-bold italic p-2 col-span-2">No has seleccionado ninguna jornada aún.</p>
+                           )}
+                        </div>
                       </div>
                    </div>
                 </CardContent>

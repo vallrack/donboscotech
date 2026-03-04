@@ -10,10 +10,9 @@ import { firebaseConfig } from '@/firebase/config';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Users, Clock
+  PlusCircle, MapPin, BookOpen, Trash2, Users, Clock, Plus, Trash, Check
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/label';
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
@@ -38,7 +37,6 @@ export default function UserManagementPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  // Consultas memoizadas para prevenir Quota Exceeded
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
   const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
@@ -49,7 +47,6 @@ export default function UserManagementPage() {
   const { data: shiftsRaw } = useCollection<Shift>(shiftsQuery);
   const { data: usersRaw, loading: usersLoading } = useCollection(usersQuery);
 
-  // Estabilizar referencias
   const campuses = useMemo(() => campusesRaw, [campusesRaw]);
   const programs = useMemo(() => programsRaw, [programsRaw]);
   const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
@@ -65,6 +62,14 @@ export default function UserManagementPage() {
     shiftIds: [] as string[],
     role: 'docent' as UserRole
   });
+
+  const toggleCreateShift = (id: string) => {
+    setFormData(prev => {
+      const current = prev.shiftIds || [];
+      const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
+      return { ...prev, shiftIds: next };
+    });
+  };
 
   const filteredUsers = useMemo(() => {
     const search = searchTerm.toLowerCase();
@@ -193,14 +198,14 @@ export default function UserManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Asignada</Label>
-                      <Select value={formData.campus || ""} onValueChange={(val) => setFormData({...formData, campus: val})}>
+                      <Select value={formData.campus} onValueChange={(val) => setFormData({...formData, campus: val})}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
                         <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
-                      <Select value={formData.program || ""} onValueChange={(val) => setFormData({...formData, program: val})}>
+                      <Select value={formData.program} onValueChange={(val) => setFormData({...formData, program: val})}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                         <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
                       </Select>
@@ -208,25 +213,36 @@ export default function UserManagementPage() {
                   </div>
 
                   <div className="space-y-4">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornada Laboral (Obligatorio)</Label>
-                    <Select 
-                      value={formData.shiftIds?.[0] || ""} 
-                      onValueChange={(val) => setFormData({...formData, shiftIds: [val]})}
-                    >
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Laborales (Añadir una o varias)</Label>
+                    <Select onValueChange={(val) => toggleCreateShift(val)}>
                       <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 border-gray-100 font-bold">
                         <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-primary" />
-                          <SelectValue placeholder="Elegir Horario" />
+                          <Plus className="w-4 h-4 text-primary" />
+                          <span>Añadir Jornada</span>
                         </div>
                       </SelectTrigger>
                       <SelectContent>
                         {shifts?.map(s => (
                           <SelectItem key={s.id} value={s.id} className="font-bold py-3">
-                            {s.name} ({s.startTime} - {s.endTime})
+                             <div className="flex items-center gap-2">
+                               {s.name} ({s.startTime} - {s.endTime})
+                               {formData.shiftIds?.includes(s.id) && <Check className="w-3 h-3 text-green-500" />}
+                             </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <div className="flex flex-wrap gap-2">
+                       {formData.shiftIds.map(id => {
+                         const s = shifts.find(sh => sh.id === id);
+                         return (
+                           <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">
+                             {s?.name}
+                             <Trash className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => toggleCreateShift(id)} />
+                           </Badge>
+                         )
+                       })}
+                    </div>
                   </div>
 
                   <div className="space-y-4 pt-4 border-t">
