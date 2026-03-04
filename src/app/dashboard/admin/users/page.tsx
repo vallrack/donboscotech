@@ -45,7 +45,9 @@ export default function UserManagementPage() {
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
   const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
   const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
-  const { data: users, loading } = useCollection(db ? query(collection(db, 'userProfiles'), orderBy('name', 'asc')) : null as any);
+  
+  // Fetching all profiles without orderBy in Firestore to avoid excluding docs without 'name' field
+  const { data: users, loading } = useCollection(db ? collection(db, 'userProfiles') : null as any);
 
   // New User Form State
   const [formData, setFormData] = useState({
@@ -60,9 +62,20 @@ export default function UserManagementPage() {
   });
 
   const filteredUsers = useMemo(() => {
-    return (users || []).filter(u => 
-      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    const search = searchTerm.toLowerCase();
+    const list = (users || []).map(u => ({
+      ...u,
+      name: u.name || 'Sin Nombre',
+      email: u.email || 'Sin Email'
+    }));
+
+    // Local sort
+    list.sort((a: any, b: any) => a.name.localeCompare(b.name));
+
+    return list.filter(u => 
+      u.name.toLowerCase().includes(search) || 
+      u.email.toLowerCase().includes(search) ||
+      u.documentId?.toLowerCase().includes(search)
     );
   }, [users, searchTerm]);
 
@@ -244,7 +257,7 @@ export default function UserManagementPage() {
           <div className="relative max-w-xl">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input 
-              placeholder="Buscar por nombre o correo..." 
+              placeholder="Buscar por nombre, correo o ID..." 
               className="pl-12 h-14 border-gray-200 rounded-2xl bg-white shadow-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -293,7 +306,7 @@ export default function UserManagementPage() {
                         <Select 
                           disabled={updatingId === u.id || currentUser?.id === u.id}
                           onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.email)}
-                          value={u.role}
+                          value={u.role || 'docent'}
                         >
                           <SelectTrigger className="w-48 h-10 rounded-xl text-xs font-black">
                             {updatingId === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <SelectValue />}
@@ -312,6 +325,12 @@ export default function UserManagementPage() {
               </tbody>
             </table>
           </div>
+          {!loading && filteredUsers.length === 0 && (
+             <div className="p-20 text-center space-y-3">
+               <UserIcon className="w-12 h-12 mx-auto text-muted-foreground opacity-20" />
+               <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No se encontró personal registrado</p>
+             </div>
+          )}
         </CardContent>
       </Card>
     </div>

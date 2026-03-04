@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useRef 
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function syncProfile() {
-      if (authUser && db && !profileLoading && !userProfile && !syncAttempted.current) {
+      if (authUser && db && !profileLoading && !syncAttempted.current) {
         syncAttempted.current = true;
         const pRef = doc(db, 'userProfiles', authUser.uid);
         
@@ -73,11 +73,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             avatarUrl: authUser.photoURL || '',
             createdAt: serverTimestamp()
           });
+        } else {
+          // Asegurarse de que el email esté sincronizado si falta
+          const data = existingSnap.data();
+          if (!data.email && authUser.email) {
+            await updateDoc(pRef, { email: authUser.email });
+          }
         }
       }
     }
     syncProfile();
-  }, [authUser, userProfile, profileLoading, db]);
+  }, [authUser, profileLoading, db]);
 
   const login = async () => {
     if (!auth) return;
