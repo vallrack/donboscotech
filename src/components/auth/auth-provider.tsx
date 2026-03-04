@@ -54,13 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       documentId: userProfile?.documentId,
       campus: userProfile?.campus,
       program: userProfile?.program,
-      shiftIds: userProfile?.shiftIds
+      shiftIds: userProfile?.shiftIds || []
     };
   }, [authUser, adminRole, coordRole, sectRole, userProfile]);
 
   useEffect(() => {
     async function syncProfile() {
-      // Solo sincronizar si el usuario existe pero el perfil no ha sido creado en Firestore
       if (authUser && db && !profileLoading && !userProfile && !syncAttempted.current) {
         syncAttempted.current = true;
         const pRef = doc(db, 'userProfiles', authUser.uid);

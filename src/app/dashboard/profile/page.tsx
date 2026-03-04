@@ -18,11 +18,13 @@ import { Campus, Program, Shift } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const db = useFirestore();
   const { toast } = useToast();
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,9 +41,8 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Sync state from user object whenever it changes
   useEffect(() => {
-    if (user) {
+    if (user && !saving) {
       setFormData({
         name: user.name || '',
         documentId: user.documentId || '',
@@ -51,7 +52,7 @@ export default function ProfilePage() {
         avatarUrl: user.avatarUrl || ''
       });
     }
-  }, [user]);
+  }, [user, saving]);
 
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
@@ -72,12 +73,11 @@ export default function ProfilePage() {
       return;
     }
 
-    // Limitar a 500KB para evitar exceder el límite de documento de Firestore
-    if (file.size > 500 * 1024) {
+    if (file.size > 800 * 1024) {
       toast({ 
         variant: "destructive", 
         title: "Imagen muy grande", 
-        description: "El límite es 500KB para asegurar el correcto guardado del carnet." 
+        description: "Intente con una imagen menor a 800KB." 
       });
       return;
     }
@@ -97,7 +97,6 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       const userRef = doc(db, 'userProfiles', user.id);
-      
       const payload = {
         name: formData.name,
         documentId: formData.documentId,
@@ -109,21 +108,12 @@ export default function ProfilePage() {
       };
 
       await updateDoc(userRef, payload);
-      
-      toast({ 
-        title: "Perfil Actualizado", 
-        description: "Tus datos institucionales se han sincronizado correctamente." 
-      });
-      
+      toast({ title: "Perfil Actualizado", description: "Los cambios se guardaron correctamente." });
     } catch (error: any) {
-      console.error("Error saving profile:", error);
-      toast({ 
-        variant: "destructive", 
-        title: "Error al guardar", 
-        description: "Hubo un problema al conectar con el servidor." 
-      });
+      toast({ variant: "destructive", title: "Error al guardar", description: "No se pudo conectar con el servidor." });
     } finally {
-      setSaving(false);
+      // Usamos un timeout pequeño para asegurar que el estado se libere tras el proceso de Firebase
+      setTimeout(() => setSaving(false), 500);
     }
   };
 
@@ -142,7 +132,7 @@ export default function ProfilePage() {
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
           <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales.</p>
         </div>
-        <Button asChild size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl bg-primary hover:bg-primary/90">
+        <Button asChild size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl">
           <Link href="/dashboard/profile/carnet">
             <CreditCard className="w-5 h-5" /> Ver Mi Carnet <ArrowRight className="w-4 h-4 ml-2" />
           </Link>
@@ -151,27 +141,22 @@ export default function ProfilePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden flex flex-col items-center p-10 h-fit">
-           <div className="relative group">
+           <div className="relative group cursor-pointer" onClick={() => !saving && fileInputRef.current?.click()}>
               <div className="w-40 h-40 rounded-[2.5rem] bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl relative">
                 {formData.avatarUrl ? (
                   <Image src={formData.avatarUrl} alt={formData.name} width={160} height={160} className="object-cover w-full h-full" unoptimized />
                 ) : (
                   <User className="w-16 h-16 text-gray-300" />
                 )}
-                <button 
-                  type="button" 
-                  disabled={saving}
-                  onClick={() => fileInputRef.current?.click()} 
-                  className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 disabled:group-hover:opacity-0 transition-opacity flex flex-col items-center justify-center text-white gap-2"
-                >
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
                   <Camera className="w-8 h-8" />
                   <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
-                </button>
+                </div>
               </div>
               <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
            </div>
            <div className="mt-8 text-center">
-             <h3 className="text-xl font-black text-gray-800">{formData.name || 'Usuario'}</h3>
+             <h3 className="text-xl font-black text-gray-800">{formData.name || 'Cargando...'}</h3>
              <Badge variant="outline" className="mt-2 uppercase font-black text-[10px] tracking-widest text-primary bg-primary/5 border-primary/20">
                {user.role}
              </Badge>
@@ -183,7 +168,7 @@ export default function ProfilePage() {
              onClick={() => fileInputRef.current?.click()}
              disabled={saving}
            >
-             <Upload className="w-3 h-3" /> Subir Foto
+             <Upload className="w-3 h-3" /> Subir desde dispositivo
            </Button>
         </Card>
 
@@ -191,7 +176,7 @@ export default function ProfilePage() {
            <form onSubmit={handleSave}>
               <CardHeader className="border-b bg-gray-50/30 p-8">
                  <CardTitle className="text-lg font-black">Información Institucional</CardTitle>
-                 <CardDescription className="text-xs font-bold text-muted-foreground">Datos requeridos para el carnet oficial.</CardDescription>
+                 <CardDescription className="text-xs font-bold text-muted-foreground">Datos requeridos para el carnet oficial de Ciudad Don Bosco.</CardDescription>
               </CardHeader>
               <CardContent className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
@@ -243,7 +228,7 @@ export default function ProfilePage() {
                     </Select>
                  </div>
                  <div className="space-y-2 md:col-span-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jornadas Laborales</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jornadas Laborales (Varias permitidas)</Label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 bg-gray-50 p-6 rounded-3xl border border-dashed border-gray-200">
                       {shifts?.map(s => (
                         <div key={s.id} className="flex items-center space-x-3 bg-white p-4 rounded-2xl border shadow-sm hover:border-primary/30 transition-colors">
@@ -265,11 +250,11 @@ export default function ProfilePage() {
               </CardContent>
               <CardFooter className="bg-gray-50/50 p-8 border-t flex justify-between items-center">
                  <p className="text-[10px] font-bold text-muted-foreground max-w-[250px]">
-                   Al guardar, tu carnet se actualizará automáticamente.
+                   Al guardar, tus cambios se sincronizarán con la terminal institucional.
                  </p>
                  <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg" disabled={saving}>
                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                   Sincronizar Datos
+                   Sincronizar Perfil
                  </Button>
               </CardFooter>
            </form>
