@@ -22,6 +22,9 @@ export default function CarnetPage() {
 
   if (!user) return null;
 
+  // Generamos la URL del QR usando el ID del usuario para validación en terminal
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user.id}`;
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 py-8 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 no-print">
@@ -37,7 +40,7 @@ export default function CarnetPage() {
       </div>
 
       <div className="flex justify-center items-center py-10 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-200">
-        <Card className="w-[350px] min-h-[550px] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card pb-16">
+        <Card className="w-[350px] min-h-[600px] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card pb-20">
           {/* Header */}
           <div className="bg-primary h-32 relative flex flex-col items-center justify-center p-6 text-white text-center">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -50,7 +53,7 @@ export default function CarnetPage() {
             <div className="w-36 h-36 rounded-3xl bg-white p-1 shadow-xl border border-gray-100">
                <div className="w-full h-full rounded-2xl bg-gray-100 flex items-center justify-center overflow-hidden">
                  {user.avatarUrl ? (
-                   <Image src={user.avatarUrl} alt={user.name} width={144} height={144} className="object-cover" />
+                   <Image src={user.avatarUrl} alt={user.name} width={144} height={144} className="object-cover" unoptimized />
                  ) : (
                    <User className="w-16 h-16 text-gray-300" />
                  )}
@@ -99,14 +102,19 @@ export default function CarnetPage() {
             </div>
           </div>
 
-          {/* Footer QR */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gray-100/50 p-6 flex items-center justify-between border-t border-gray-100">
+          {/* Footer QR - Aumentado y funcional */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gray-50 p-6 flex items-center justify-between border-t border-gray-100 h-32">
             <div className="flex flex-col">
               <span className="text-[8px] font-black uppercase text-muted-foreground">ID SISTEMA</span>
-              <span className="text-[10px] font-mono font-bold text-gray-500">{user.id.substring(0, 8).toUpperCase()}</span>
+              <span className="text-[10px] font-mono font-bold text-gray-500">{user.id.substring(0, 10).toUpperCase()}</span>
+              <span className="text-[7px] text-primary font-bold mt-2 uppercase tracking-tighter">Válido para Terminal Institucional</span>
             </div>
-            <div className="w-14 h-14 bg-white p-1 rounded-xl shadow-md border border-gray-200 flex items-center justify-center">
-              <QrCode className="w-10 h-10 text-primary" />
+            <div className="w-24 h-24 bg-white p-2 rounded-2xl shadow-lg border-2 border-primary/10 flex items-center justify-center overflow-hidden">
+               <img 
+                 src={qrUrl} 
+                 alt="Código QR de Validación" 
+                 className="w-full h-full object-contain"
+               />
             </div>
           </div>
         </Card>
