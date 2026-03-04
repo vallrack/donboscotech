@@ -2,6 +2,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Funciones de utilidad para verificación de identidad y roles
     function isSignedIn() { return request.auth != null; }
     function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/roles_admins/$(request.auth.uid)); }
     function isCoordinator() { return isSignedIn() && exists(/databases/$(database)/documents/roles_coordinators/$(request.auth.uid)); }
@@ -9,20 +10,23 @@ service cloud.firestore {
     function isPrivileged() { return isAdmin() || isCoordinator() || isSecretary(); }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
 
+    // Perfiles de usuario: Los administradores y el propio usuario pueden gestionar los datos
     match /userProfiles/{userId} {
-      allow read: if true; // Permite lectura para identificar carnet en terminal pública
+      allow read: if true; // Permite lectura pública para identificación de carnets en terminales
       allow create: if isPrivileged() || isOwner(userId);
       allow update: if isAdmin() || (isCoordinator() && request.resource.data.role != 'admin') || (isOwner(userId) && (request.resource.data.role == resource.data.role || !('role' in request.resource.data)));
       allow delete: if isAdmin();
 
+      // Registros de asistencia individuales
       match /attendanceRecords/{recordId} {
-        // Permite creación desde terminal pública (sin sesión) si es un registro de asistencia válido
+        // Permite creación desde terminal pública (sin sesión) validando el ID
         allow create: if true; 
         allow read, update: if isPrivileged() || isOwner(userId);
         allow delete: if isAdmin();
       }
     }
 
+    // Colecciones de roles (utilizadas para las funciones de seguridad)
     match /roles_admins/{userId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -38,14 +42,16 @@ service cloud.firestore {
       allow write: if isAdmin() || isCoordinator();
     }
 
+    // Historial global de asistencia para reportes administrativos
     match /globalAttendanceRecords/{recordId} {
-      // Permite creación pública para la terminal institucional
+      // Permite creación pública para la terminal institucional (QR)
       allow create: if true;
       allow read: if isPrivileged();
       allow update: if isSignedIn();
       allow delete: if isAdmin();
     }
     
+    // Configuración institucional: Sedes, Programas y Jornadas
     match /campuses/{id} {
       allow read: if true;
       allow write: if isPrivileged();
