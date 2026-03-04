@@ -189,7 +189,6 @@ export default function UserManagementPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Gestión de Personal</h1>
-          {/* Corregido error de hidratación: cambiado de <p> a <div> */}
           <div className="text-muted-foreground font-medium flex items-center gap-2 mt-2">
              <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
                <ShieldCheck className="w-3.5 h-3.5 text-primary" />
@@ -204,86 +203,88 @@ export default function UserManagementPage() {
               <PlusCircle className="w-6 h-6" /> Registrar Nuevo Miembro
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[750px] rounded-[3rem] border-none shadow-2xl overflow-y-auto max-h-[90vh] bg-white p-0 overflow-hidden">
-            <form onSubmit={handleCreateUser}>
-              <div className="bg-primary p-10 text-white relative">
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-                 <DialogTitle className="text-3xl font-black flex items-center gap-3">
-                   Alta de Personal
-                 </DialogTitle>
-                 <DialogDescription className="text-primary-foreground/80 font-bold text-sm mt-2 uppercase tracking-widest">
-                   Registro Institucional Ciudad Don Bosco
-                 </DialogDescription>
-              </div>
-              
-              <div className="p-10 space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
-                    <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="Ej: Juan Bosco" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Cédula / Documento</Label>
-                    <Input value={formData.documentId} onChange={(e) => setFormData({...formData, documentId: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="ID Oficial" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Correo Institucional</Label>
-                    <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="usuario@donbosco.edu" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña Temporal</Label>
-                    <Input type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="Min. 6 caracteres" required />
-                  </div>
+          <DialogContent className="sm:max-w-[750px] rounded-[3rem] border-none shadow-2xl bg-white p-0 overflow-hidden max-h-[95vh] flex flex-col">
+            <div className="overflow-y-auto flex-1">
+              <form onSubmit={handleCreateUser} className="flex flex-col min-h-full">
+                <div className="bg-primary p-10 text-white relative">
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                   <DialogTitle className="text-3xl font-black flex items-center gap-3">
+                     Alta de Personal
+                   </DialogTitle>
+                   <DialogDescription className="text-primary-foreground/80 font-bold text-sm mt-2 uppercase tracking-widest">
+                     Registro Institucional Ciudad Don Bosco
+                   </DialogDescription>
                 </div>
+                
+                <div className="p-10 space-y-8 flex-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
+                      <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="Ej: Juan Bosco" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Cédula / Documento</Label>
+                      <Input value={formData.documentId} onChange={(e) => setFormData({...formData, documentId: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="ID Oficial" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Correo Institucional</Label>
+                      <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="usuario@donbosco.edu" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña Temporal</Label>
+                      <Input type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" placeholder="Min. 6 caracteres" required />
+                    </div>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Principal</Label>
-                    <Select value={formData.campus} onValueChange={(val) => setFormData({...formData, campus: val})}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-100 bg-gray-50/50">
-                        <SelectValue placeholder="Seleccionar Sede" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Principal</Label>
+                      <Select value={formData.campus} onValueChange={(val) => setFormData({...formData, campus: val})}>
+                        <SelectTrigger className="h-12 rounded-xl border-gray-100 bg-gray-50/50">
+                          <SelectValue placeholder="Seleccionar Sede" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
+                      <Select value={formData.program} onValueChange={(val) => setFormData({...formData, program: val})}>
+                        <SelectTrigger className="h-12 rounded-xl border-gray-100 bg-gray-50/50">
+                          <SelectValue placeholder="Seleccionar Programa" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Asignar Nivel de Acceso (Rol)</Label>
+                    <Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}>
+                      <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                        <SelectItem value="docent" className="font-bold py-3">Docente / Profesor</SelectItem>
+                        <SelectItem value="secretary" className="font-bold py-3">Secretaría / Administrativo</SelectItem>
+                        <SelectItem value="coordinator" className="font-bold py-3">Coordinador de Sede</SelectItem>
+                        {currentUser?.role === 'admin' && <SelectItem value="admin" className="font-bold py-3 text-primary">Administrador General</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
-                    <Select value={formData.program} onValueChange={(val) => setFormData({...formData, program: val})}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-100 bg-gray-50/50">
-                        <SelectValue placeholder="Seleccionar Programa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Asignar Nivel de Acceso (Rol)</Label>
-                  <Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}>
-                    <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="docent" className="font-bold py-3">Docente / Profesor</SelectItem>
-                      <SelectItem value="secretary" className="font-bold py-3">Secretaría / Administrativo</SelectItem>
-                      <SelectItem value="coordinator" className="font-bold py-3">Coordinador de Sede</SelectItem>
-                      {currentUser?.role === 'admin' && <SelectItem value="admin" className="font-bold py-3 text-primary">Administrador General</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <DialogFooter className="bg-gray-50 p-8 border-t">
-                <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isCreating}>
-                  {isCreating ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
-                  Confirmar Registro en el Sistema
-                </Button>
-              </DialogFooter>
-            </form>
+                <DialogFooter className="bg-gray-50 p-8 border-t sticky bottom-0">
+                  <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isCreating}>
+                    {isCreating ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
+                    Confirmar Registro en el Sistema
+                  </Button>
+                </DialogFooter>
+              </form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
