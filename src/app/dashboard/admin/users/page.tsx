@@ -63,6 +63,13 @@ export default function UserManagementPage() {
     role: 'docent' as UserRole
   });
 
+  const updateCreateField = useCallback((field: string, value: any) => {
+    setFormData(prev => {
+      if (prev[field as keyof typeof prev] === value) return prev;
+      return { ...prev, [field]: value };
+    });
+  }, []);
+
   const toggleCreateShift = useCallback((id: string) => {
     setFormData(prev => {
       const current = prev.shiftIds || [];
@@ -179,33 +186,33 @@ export default function UserManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
-                      <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Ej: Juan Bosco" required />
+                      <Input value={formData.name} onChange={(e) => updateCreateField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Ej: Juan Bosco" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Documento de Identidad</Label>
-                      <Input value={formData.documentId} onChange={(e) => setFormData({...formData, documentId: e.target.value})} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Cédula" required />
+                      <Input value={formData.documentId} onChange={(e) => updateCreateField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Cédula" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Correo Institucional</Label>
-                      <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="usuario@donbosco.edu" required />
+                      <Input type="email" value={formData.email} onChange={(e) => updateCreateField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="usuario@donbosco.edu" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña Temporal</Label>
-                      <Input type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Min. 6 caracteres" required />
+                      <Input type="password" value={formData.password} onChange={(e) => updateCreateField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Min. 6 caracteres" required />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Asignada</Label>
-                      <Select value={formData.campus || undefined} onValueChange={(val) => setFormData(p => ({...p, campus: val}))}>
+                      <Select value={formData.campus || undefined} onValueChange={(val) => updateCreateField('campus', val)}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
                         <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
-                      <Select value={formData.program || undefined} onValueChange={(val) => setFormData(p => ({...p, program: val}))}>
+                      <Select value={formData.program || undefined} onValueChange={(val) => updateCreateField('program', val)}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                         <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
                       </Select>
@@ -213,7 +220,7 @@ export default function UserManagementPage() {
                   </div>
 
                   <div className="space-y-4">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Laborales (Añadir una o varias)</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Laborales (Asignación Múltiple)</Label>
                     <Select onValueChange={(val) => toggleCreateShift(val)}>
                       <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 border-gray-100 font-bold">
                         <div className="flex items-center gap-2">
@@ -247,7 +254,7 @@ export default function UserManagementPage() {
 
                   <div className="space-y-4 pt-4 border-t">
                     <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Rol Institucional</Label>
-                    <Select value={formData.role} onValueChange={(val: UserRole) => setFormData(p => ({...p, role: val}))}>
+                    <Select value={formData.role} onValueChange={(val: UserRole) => updateCreateField('role', val)}>
                       <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>

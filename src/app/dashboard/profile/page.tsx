@@ -63,7 +63,7 @@ export default function ProfilePage() {
 
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => {
-      if (JSON.stringify(prev[field as keyof typeof prev]) === JSON.stringify(value)) return prev;
+      if (prev[field as keyof typeof prev] === value) return prev;
       return { ...prev, [field]: value };
     });
   }, []);

@@ -11,11 +11,10 @@ Este proyecto es una solución inteligente para la gestión de asistencia y jorn
 ## Comandos para GitHub
 Para subir tus cambios al repositorio oficial:
 
-1. `git init` (si es la primera vez)
-2. `git add .`
-3. `git commit -m "Descripción de tus cambios"`
-4. `git remote add origin https://github.com/vallrack/donboscotech.git`
-5. `git push -u origin main`
+1. `git add .`
+2. `git commit -m "Descripción de tus cambios"`
+3. `git remote add origin https://github.com/vallrack/donboscotech.git`
+4. `git push -u origin main`
 
 ## Despliegue en Vercel
 La aplicación está optimizada para desplegarse en Vercel. Asegúrate de configurar las variables de entorno de Firebase en el panel de Vercel antes de desplegar.
