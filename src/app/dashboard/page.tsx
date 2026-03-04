@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit, where, getCountFromServer } from 'firebase/firestore';
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const db = useFirestore();
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const lastFetchedDate = useRef<string | null>(null);
 
   // Consultas memoizadas para prevenir Quota Exceeded
   const recordsQuery = useMemoFirebase(() => {
@@ -37,13 +38,13 @@ export default function DashboardPage() {
     }
   }, [db, user?.id, user?.role]);
 
-  // Consulta de anuncios simplificada para evitar requisitos de índices complejos
+  // Consulta de anuncios simplificada para evitar requisitos de índices complejos y ahorrar cuota
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(
       collection(db, 'announcements'),
       orderBy('createdAt', 'desc'),
-      limit(20)
+      limit(15)
     );
   }, [db]);
 
@@ -58,12 +59,14 @@ export default function DashboardPage() {
   }, [rawAnnouncements]);
 
   useEffect(() => {
-    if (!db || !user || user.role === 'docent') return;
+    if (!db || !user || user.role === 'docent' || lastFetchedDate.current === todayStr) return;
+    
     const fetchTodayStats = async () => {
       try {
         const q = query(collection(db, 'globalAttendanceRecords'), where('date', '==', todayStr));
         const snapshot = await getCountFromServer(q);
         setTodayCount(snapshot.data().count);
+        lastFetchedDate.current = todayStr;
       } catch (e) {
         setTodayCount(0);
       }

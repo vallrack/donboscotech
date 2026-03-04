@@ -25,8 +25,8 @@ export default function ProfilePage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastSyncedUserId = useRef<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -46,21 +46,9 @@ export default function ProfilePage() {
   const { data: programs } = useCollection<Program>(programsQuery);
   const { data: shifts, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
 
-  // Función estable para actualizar campos individuales y evitar bucles infinitos
-  const updateField = useCallback((field: keyof typeof formData, value: any) => {
-    setFormData(prev => {
-      // Si el valor es idéntico, retornamos el mismo objeto para evitar re-renderizado
-      const isArrayChange = Array.isArray(value) && JSON.stringify(prev[field]) === JSON.stringify(value);
-      const isSimpleChange = !Array.isArray(value) && prev[field] === value;
-      
-      if (isArrayChange || isSimpleChange) return prev;
-      return { ...prev, [field]: value };
-    });
-  }, []);
-
-  // Sincronización inicial estable basada en el ID del usuario
+  // Sincronización inicial única por ID de usuario
   useEffect(() => {
-    if (user && !hasInitialized) {
+    if (user && lastSyncedUserId.current !== user.id) {
       setFormData({
         name: user.name || '',
         documentId: user.documentId || '',
@@ -69,9 +57,16 @@ export default function ProfilePage() {
         shiftIds: user.shiftIds || [],
         avatarUrl: user.avatarUrl || ''
       });
-      setHasInitialized(true);
+      lastSyncedUserId.current = user.id;
     }
-  }, [user?.id, hasInitialized, user]);
+  }, [user]);
+
+  const updateField = useCallback((field: string, value: any) => {
+    setFormData(prev => {
+      if (JSON.stringify(prev[field as keyof typeof prev]) === JSON.stringify(value)) return prev;
+      return { ...prev, [field]: value };
+    });
+  }, []);
 
   const toggleShift = (shiftId: string) => {
     if (saving) return;
@@ -215,15 +210,15 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Sede Principal</Label>
                          <Select 
-                           value={formData.campus || "none"} 
-                           onValueChange={(v) => updateField('campus', v === "none" ? "" : v)}
+                           value={formData.campus || "unselected"} 
+                           onValueChange={(v) => updateField('campus', v === "unselected" ? "" : v)}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Sede" />
                            </SelectTrigger>
                            <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
-                             <SelectItem value="none" className="font-bold py-3">Sin Sede</SelectItem>
+                             <SelectItem value="unselected" className="font-bold py-3">Sin Sede</SelectItem>
                              {campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold py-3">{c.name}</SelectItem>)}
                            </SelectContent>
                          </Select>
@@ -231,15 +226,15 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Programa / Cargo</Label>
                          <Select 
-                           value={formData.program || "none"} 
-                           onValueChange={(v) => updateField('program', v === "none" ? "" : v)}
+                           value={formData.program || "unselected"} 
+                           onValueChange={(v) => updateField('program', v === "unselected" ? "" : v)}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Programa" />
                            </SelectTrigger>
                            <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
-                             <SelectItem value="none" className="font-bold py-3">Sin Programa</SelectItem>
+                             <SelectItem value="unselected" className="font-bold py-3">Sin Programa</SelectItem>
                              {programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold py-3">{p.name}</SelectItem>)}
                            </SelectContent>
                          </Select>
@@ -274,6 +269,11 @@ export default function ProfilePage() {
                               </div>
                             </div>
                           ))}
+                          {shifts?.length === 0 && (
+                            <p className="col-span-full text-center py-6 text-muted-foreground text-xs italic">
+                              No hay jornadas institucionales registradas.
+                            </p>
+                          )}
                         </div>
                       )}
                    </div>
