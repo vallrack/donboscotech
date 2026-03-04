@@ -189,6 +189,7 @@ export default function UserManagementPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Gestión de Personal</h1>
+          {/* Corregido error de hidratación: cambiado de <p> a <div> */}
           <div className="text-muted-foreground font-medium flex items-center gap-2 mt-2">
              <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
                <ShieldCheck className="w-3.5 h-3.5 text-primary" />

@@ -40,7 +40,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Sincronización robusta con el usuario logueado
+  // Sincronización automática de datos del usuario logueado al formulario
   useEffect(() => {
     if (user) {
       setFormData({
