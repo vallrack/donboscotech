@@ -16,15 +16,11 @@ service cloud.firestore {
 
     // Perfiles de usuario y asistencia
     match /userProfiles/{userId} {
-      // Visibilidad pública para que los escáneres puedan validar perfiles
       allow read: if true; 
-      
-      // El propio usuario o personal administrativo pueden gestionar perfiles
       allow create, update: if isSignedIn() && (request.auth.uid == userId || isPrivileged());
       allow delete: if isAdmin() || isCoordinator();
 
       match /attendanceRecords/{recordId} {
-        // Permite a cualquier terminal leer y crear (para smart scanning)
         allow create, read: if true; 
         allow update: if isSignedIn() && (request.auth.uid == userId || isPrivileged());
         allow delete: if isAdmin() || isCoordinator();
@@ -36,6 +32,12 @@ service cloud.firestore {
       allow create: if true; 
       allow read: if isSignedIn() && isPrivileged();
       allow update, delete: if isAdmin() || isCoordinator();
+    }
+    
+    // Anuncios
+    match /announcements/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isPrivileged();
     }
     
     // Colecciones de roles

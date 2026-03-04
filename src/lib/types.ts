@@ -51,3 +51,14 @@ export interface AttendanceRecord {
   };
   createdAt?: any;
 }
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'high' | 'normal';
+  status: 'active' | 'inactive';
+  createdAt: any;
+  createdBy: string;
+  authorName: string;
+}

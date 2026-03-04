@@ -12,7 +12,8 @@ import {
   Users, 
   Settings,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Megaphone
 } from "lucide-react"
 import { useAuth } from "@/components/auth/auth-provider"
 import { usePathname } from "next/navigation"
@@ -54,13 +55,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items: [
           { name: 'Registrar QR', href: '/dashboard/attendance/scan', icon: QrCode, roles: ['docent', 'admin'] },
           { name: 'Marcaje Manual', href: '/dashboard/attendance/manual', icon: ClipboardCheck, roles: ['coordinator', 'admin', 'secretary'] },
-          { name: 'Reportes', href: '/dashboard/reports', icon: BarChart3, roles: ['coordinator', 'admin', 'secretary'] },
+          { name: 'Mis Reportes', href: '/dashboard/reports', icon: BarChart3, roles: ['docent'] },
+          { name: 'Auditoría', href: '/dashboard/reports', icon: BarChart3, roles: ['coordinator', 'admin', 'secretary'] },
         ]
       },
       { 
         group: "Administración",
         items: [
           { name: 'Gestión Personal', href: '/dashboard/admin/users', icon: Users, roles: ['admin', 'coordinator'] },
+          { name: 'Anuncios', href: '/dashboard/admin/announcements', icon: Megaphone, roles: ['admin', 'coordinator', 'secretary'] },
           { name: 'Configuración', href: '/dashboard/admin/settings', icon: Settings, roles: ['admin', 'coordinator'] },
         ]
       }
@@ -103,7 +106,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 {group.items.map((item) => {
                   const isActive = pathname === item.href
                   return (
-                    <SidebarMenuItem key={item.href}>
+                    <SidebarMenuItem key={item.name + item.href}>
                       <SidebarMenuButton 
                         asChild 
                         isActive={isActive}
