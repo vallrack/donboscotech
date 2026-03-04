@@ -6,13 +6,14 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
-import { ShieldCheck, GraduationCap, Mail, Lock, Loader2, UserPlus, Users, QrCode } from 'lucide-react';
+import { ShieldCheck, GraduationCap, Mail, Lock, Loader2, UserPlus, Users, QrCode, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/lib/types';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -79,10 +80,13 @@ export default function LoginPage() {
           : 'Bienvenido al equipo administrativo.',
       });
     } catch (err: any) {
+      const isEmailInUse = err.message?.includes('email-already-in-use');
       toast({
         variant: 'destructive',
-        title: 'Error de registro',
-        description: err.message || 'No se pudo crear la cuenta.',
+        title: isEmailInUse ? 'Correo ya registrado' : 'Error de registro',
+        description: isEmailInUse 
+          ? 'Este correo ya tiene una cuenta. Intenta iniciar sesión o contacta al administrador si no puedes acceder.' 
+          : err.message || 'No se pudo crear la cuenta.',
       });
     } finally {
       setLoading(false);

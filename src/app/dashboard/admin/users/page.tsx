@@ -4,18 +4,17 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth as getFirebaseAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Search, Mail, Loader2, ShieldCheck, 
-  ShieldAlert, UserPlus, BookOpen, MapPin, Shield, Trash2, Users,
-  PlusCircle, RefreshCw
+  UserPlus, BookOpen, MapPin, Trash2, Users,
+  PlusCircle, AlertCircle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -42,12 +41,9 @@ export default function UserManagementPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  // Consultas de datos institucionales
   const { data: campuses } = useCollection<Campus>(db ? collection(db, 'campuses') : null as any);
   const { data: programs } = useCollection<Program>(db ? collection(db, 'programs') : null as any);
-  const { data: shifts } = useCollection<Shift>(db ? collection(db, 'shifts') : null as any);
   
-  // CONSULTA TOTAL: Sin filtros para visibilidad completa del personal
   const { data: users, loading: usersLoading } = useCollection(db ? collection(db, 'userProfiles') : null as any);
 
   const [formData, setFormData] = useState({
@@ -80,13 +76,6 @@ export default function UserManagementPage() {
       u.role.toLowerCase().includes(search)
     );
   }, [users, searchTerm]);
-
-  const toggleShift = (shiftId: string) => {
-    setFormData(prev => {
-      const current = prev.shiftIds || [];
-      return { ...prev, shiftIds: current.includes(shiftId) ? current.filter(id => id !== shiftId) : [...current, shiftId] };
-    });
-  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,7 +121,14 @@ export default function UserManagementPage() {
       setIsCreateDialogOpen(false);
       setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftIds: [], role: 'docent' });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error de Registro", description: error.message });
+      const isEmailInUse = error.message?.includes('email-already-in-use');
+      toast({ 
+        variant: "destructive", 
+        title: isEmailInUse ? "Correo ya registrado" : "Error de Registro", 
+        description: isEmailInUse 
+          ? "Este correo ya existe en el sistema. Busca al usuario en la lista para asignarle un rol o completar sus datos." 
+          : error.message 
+      });
     } finally {
       if (tempApp) await deleteApp(tempApp);
       setIsCreating(false);
