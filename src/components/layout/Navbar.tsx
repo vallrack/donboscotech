@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useAuth } from '@/components/auth/auth-provider';
@@ -24,6 +25,7 @@ export function Navbar() {
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
+    { name: 'Mi Perfil', href: '/dashboard/profile', icon: User, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
     { name: 'Mi Carnet', href: '/dashboard/profile/carnet', icon: CreditCard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
     { name: 'Registrar QR', href: '/dashboard/attendance/scan', icon: QrCode, roles: ['docent', 'admin'] },
     { name: 'Marcaje Manual', href: '/dashboard/attendance/manual', icon: ClipboardCheck, roles: ['coordinator', 'admin', 'secretary'] },
@@ -52,7 +54,6 @@ export function Navbar() {
                 <span className="text-primary font-black text-xl tracking-tighter hidden md:block group-hover:text-primary/80 transition-colors">Track</span>
               </Link>
               
-              {/* Navegación con efecto de despliegue al pasar el mouse */}
               <div className="hidden lg:flex gap-1 h-full items-center">
                 {filteredNavItems.map((item) => {
                   const isActive = pathname === item.href;
@@ -70,7 +71,6 @@ export function Navbar() {
                           <span className="max-w-0 overflow-hidden group-hover:max-w-[200px] transition-all duration-500 ease-in-out ml-0 group-hover:ml-3 opacity-0 group-hover:opacity-100">
                             {item.name}
                           </span>
-                          {isActive && <div className="absolute bottom-[-1.5rem] left-0 right-0 h-1 bg-primary rounded-t-full" />}
                         </Link>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="font-bold text-[10px] bg-primary text-white border-none shadow-lg">
@@ -83,19 +83,23 @@ export function Navbar() {
             </div>
             
             <div className="hidden lg:flex lg:items-center gap-4 flex-shrink-0 ml-6">
-              <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100 hover:border-primary/20 transition-colors group">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
-                  <User className="w-4 h-4 text-primary group-hover:text-white" />
+              <Link href="/dashboard/profile" className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100 hover:border-primary/20 transition-colors group">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-all overflow-hidden">
+                  {user.avatarUrl ? (
+                    <Image src={user.avatarUrl} alt={user.name} width={32} height={32} className="object-cover" />
+                  ) : (
+                    <User className="w-4 h-4 text-primary group-hover:text-white" />
+                  )}
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-gray-800 leading-none truncate max-w-[120px]">
+                  <span className="text-[10px] font-black text-gray-800 leading-none truncate max-w-[100px]">
                      {user.name}
                   </span>
                   <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
                     {user.role}
                   </span>
                 </div>
-              </div>
+              </Link>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" onClick={logout} className="text-gray-400 hover:text-primary hover:bg-primary/5 transition-all rounded-xl h-10 w-10">
@@ -135,10 +139,6 @@ export function Navbar() {
               </Link>
             ))}
             <div className="pt-4 border-t mt-4">
-              <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-gray-50 rounded-xl">
-                <User className="w-5 h-5 text-primary" />
-                <span className="font-bold text-sm truncate">{user.name}</span>
-              </div>
               <Button variant="destructive" className="w-full justify-start h-12 rounded-xl font-bold" onClick={logout}>
                 <LogOut className="w-5 h-5 mr-3" /> Cerrar Sesión
               </Button>
@@ -149,3 +149,4 @@ export function Navbar() {
     </nav>
   );
 }
+
