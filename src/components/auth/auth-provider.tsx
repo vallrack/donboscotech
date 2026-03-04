@@ -34,15 +34,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: coordRole, loading: coordLoading } = useDoc(coordRef);
   const { data: sectRole, loading: sectLoading } = useDoc(sectRef);
 
-  // Consideramos cargando si cualquiera de las fuentes de verdad está en proceso
-  const isLoading = authLoading || profileLoading || adminLoading || coordLoading || sectLoading;
+  // Optimizamos isLoading para que no bloquee la navegación si ya tenemos el perfil básico
+  const isLoading = authLoading || (authUser && profileLoading);
 
   const resolvedUser = useMemo(() => {
-    if (!authUser || isLoading) return null;
+    if (!authUser || authLoading || profileLoading) return null;
 
     let role: UserRole = (userProfile?.role as UserRole) || 'docent';
     
-    // Prioridad a las colecciones de roles de seguridad (Source of Truth para reglas)
+    // Prioridad a las colecciones de roles de seguridad (Source of Truth)
     if (adminRole) role = 'admin';
     else if (coordRole) role = 'coordinator';
     else if (sectRole) role = 'secretary';
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       program: userProfile?.program,
       shiftIds: userProfile?.shiftIds || []
     };
-  }, [authUser, adminRole, coordRole, sectRole, userProfile, isLoading]);
+  }, [authUser, authLoading, profileLoading, adminRole, coordRole, sectRole, userProfile]);
 
   useEffect(() => {
     async function syncProfile() {
@@ -75,11 +75,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             avatarUrl: authUser.photoURL || '',
             createdAt: serverTimestamp()
           });
-        } else {
-          const data = existingSnap.data();
-          if (!data.email && authUser.email) {
-            await updateDoc(pRef, { email: authUser.email });
-          }
         }
       }
     }
@@ -125,7 +120,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     if (!auth) return;
     await signOut(auth);
-    window.location.href = '/';
   };
 
   return (

@@ -4,7 +4,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, doc, setDoc, serverTimestamp, where, getCountFromServer } from 'firebase/firestore';
+import { collection, query, orderBy, limit, where, getCountFromServer } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3, Loader2, MapPin } from 'lucide-react';
@@ -12,16 +12,12 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AttendanceRecord } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const db = useFirestore();
-  const { toast } = useToast();
-  const [claiming, setClaiming] = useState(false);
   const [todayCount, setTodayCount] = useState<number | null>(null);
-  
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -60,7 +56,7 @@ export default function DashboardPage() {
     return [
       { 
         id: 'stat-main',
-        label: isAdminView ? 'Presencia Hoy (Sede)' : 'Mis Registros (Mes)', 
+        label: isAdminView ? 'Presencia Hoy' : 'Mis Registros (Mes)', 
         value: isAdminView ? (todayCount !== null ? todayCount.toString() : '...') : (records?.length || 0).toString(), 
         icon: isAdminView ? Users : Clock, 
         color: 'text-primary' 
@@ -68,7 +64,7 @@ export default function DashboardPage() {
       { 
         id: 'stat-punctuality',
         label: 'Estado del Sistema', 
-        value: 'Activo', 
+        value: 'En Línea', 
         icon: CheckCircle2, 
         color: 'text-green-600' 
       },
@@ -99,18 +95,18 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-3">
           {(user?.role === 'docent' || user?.role === 'admin') && (
-            <Link href="/dashboard/attendance/scan">
-              <Button size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl bg-primary hover:bg-primary/90">
+            <Button asChild size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl bg-primary hover:bg-primary/90">
+              <Link href="/dashboard/attendance/scan">
                 <Clock className="w-5 h-5 mr-2" /> Marcar Asistencia (QR)
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           )}
           {user?.role !== 'docent' && (
-            <Link href="/dashboard/reports">
-              <Button variant="outline" size="lg" className="h-14 px-8 shadow-md font-bold rounded-2xl bg-white border-gray-200">
-                <BarChart3 className="w-5 h-5 mr-2" /> Reportes Administrativos
-              </Button>
-            </Link>
+            <Button asChild variant="outline" size="lg" className="h-14 px-8 shadow-md font-bold rounded-2xl bg-white border-gray-200">
+              <Link href="/dashboard/reports">
+                <BarChart3 className="w-5 h-5 mr-2" /> Reportes
+              </Link>
+            </Button>
           )}
         </div>
       </div>
@@ -127,11 +123,9 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardFooter>
-            <Link href="/dashboard/profile">
-              <Button variant="secondary" className="font-bold rounded-xl h-10">
-                Completar Mi Perfil
-              </Button>
-            </Link>
+            <Button asChild variant="secondary" className="font-bold rounded-xl h-10">
+              <Link href="/dashboard/profile">Completar Mi Perfil</Link>
+            </Button>
           </CardFooter>
         </Card>
       )}
@@ -159,15 +153,11 @@ export default function DashboardPage() {
               </div>
               {user?.role === 'docent' ? 'Mis Últimos Registros' : 'Actividad Global Reciente'}
             </CardTitle>
-            <CardDescription className="text-sm font-bold opacity-70">
-              Sincronizado en tiempo real con la nube institucional.
-            </CardDescription>
           </CardHeader>
           <CardContent className="p-8 pt-6">
             {recordsLoading ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <Loader2 className="w-10 h-10 animate-spin text-primary opacity-20" />
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Conectando...</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -175,7 +165,7 @@ export default function DashboardPage() {
                   <div key={record.id} className="flex items-center justify-between p-5 rounded-[1.5rem] border border-gray-100 bg-gray-50/30 hover:bg-white hover:shadow-lg transition-all group">
                     <div className="flex items-center gap-4">
                       <div className={cn(
-                        "w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-lg transition-transform group-hover:scale-110",
+                        "w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-lg",
                         record.type === 'entry' ? "bg-green-500 shadow-lg shadow-green-200" : "bg-primary shadow-lg shadow-primary/20"
                       )}>
                         {record.type === 'entry' ? 'E' : 'S'}
@@ -195,7 +185,7 @@ export default function DashboardPage() {
                 {records.length === 0 && (
                   <div className="text-center py-20 bg-gray-50/50 rounded-[2rem] border-2 border-dashed border-gray-100">
                     <CalendarDays className="w-12 h-12 mx-auto mb-4 text-gray-200" />
-                    <p className="text-sm font-black text-gray-400 uppercase">Sin actividad registrada</p>
+                    <p className="text-sm font-black text-gray-400 uppercase">Sin actividad</p>
                   </div>
                 )}
               </div>
@@ -209,7 +199,7 @@ export default function DashboardPage() {
               <div className="p-2 bg-primary/10 rounded-xl">
                 <Users className="w-5 h-5 text-primary" />
               </div>
-              Tablón de Anuncios
+              Anuncios
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -217,28 +207,12 @@ export default function DashboardPage() {
               <div className="p-8 hover:bg-gray-50/50 transition-all cursor-pointer group">
                 <div className="flex items-center gap-2 mb-2">
                    <Badge className="bg-primary text-[8px] font-black">IMPORTANTE</Badge>
-                   <span className="text-[10px] text-muted-foreground font-bold">HOY</span>
                 </div>
                 <h4 className="font-black text-base group-hover:text-primary transition-colors">Sistema de Carnetización</h4>
                 <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-                  Recuerda que el carnet digital generado en tu perfil es el único medio autorizado para el registro de asistencia mediante QR en portería.
+                  El carnet digital es el único medio autorizado para el registro de asistencia.
                 </p>
               </div>
-              <div className="p-8 hover:bg-gray-50/50 transition-all cursor-pointer group">
-                <div className="flex items-center gap-2 mb-2">
-                   <Badge variant="outline" className="text-[8px] font-black border-primary text-primary">INFO</Badge>
-                   <span className="text-[10px] text-muted-foreground font-bold">AYER</span>
-                </div>
-                <h4 className="font-black text-base group-hover:text-primary transition-colors">Seguridad de Geolocalización</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-                  La validación GPS ahora es más precisa. Asegúrate de tener activado el GPS al momento de escanear en las sedes oficiales.
-                </p>
-              </div>
-            </div>
-            <div className="bg-primary/5 p-6 text-center border-t border-primary/10">
-              <Link href="#" className="text-sm font-black text-primary flex items-center justify-center gap-2 hover:gap-4 transition-all group">
-                Historial de avisos <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-              </Link>
             </div>
           </CardContent>
         </Card>
