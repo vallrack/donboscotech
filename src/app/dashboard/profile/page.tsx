@@ -36,6 +36,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
+  // Consultas memoizadas con referencia estable
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
   const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
@@ -44,11 +45,12 @@ export default function ProfilePage() {
   const { data: programsRaw } = useCollection<Program>(programsQuery);
   const { data: shiftsRaw, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
 
-  // Estabilizar referencias para evitar remontado de Selects
+  // Estabilizar referencias para los Selects
   const campuses = useMemo(() => campusesRaw, [campusesRaw]);
   const programs = useMemo(() => programsRaw, [programsRaw]);
   const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
 
+  // Sincronización inicial estable - SOLO UNA VEZ POR USUARIO
   useEffect(() => {
     if (user && lastSyncedUserId.current !== user.id) {
       setFormData({
@@ -63,8 +65,10 @@ export default function ProfilePage() {
     }
   }, [user]);
 
+  // Funciones de actualización estables para evitar bucles
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => {
+      // Evitar actualización si el valor es idéntico
       if (JSON.stringify(prev[field as keyof typeof prev]) === JSON.stringify(value)) return prev;
       return { ...prev, [field]: value };
     });
@@ -94,7 +98,10 @@ export default function ProfilePage() {
     if (!db || !user?.id || saving) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'userProfiles', user.id), { ...formData, updatedAt: new Date().toISOString() });
+      await updateDoc(doc(db, 'userProfiles', user.id), {
+        ...formData,
+        updatedAt: new Date().toISOString()
+      });
       toast({ title: "Perfil Sincronizado" });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al guardar" });
@@ -103,7 +110,13 @@ export default function ProfilePage() {
     }
   };
 
-  if (authLoading && !user) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="animate-spin opacity-20" /></div>;
+  if (authLoading && !user) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="animate-spin opacity-20" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 py-4 animate-in fade-in duration-700">
@@ -111,78 +124,150 @@ export default function ProfilePage() {
         <div className="space-y-1">
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
           <p className="text-muted-foreground font-medium flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Gestiona tu identidad laboral.
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Gestión de identidad Don Bosco.
           </p>
         </div>
         <Button asChild size="lg" className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl">
-          <Link href="/dashboard/profile/carnet"><CreditCard className="w-5 h-5" /> Mi Carnet <ArrowRight className="w-4 h-4" /></Link>
+          <Link href="/dashboard/profile/carnet">
+            <CreditCard className="w-5 h-5" /> Mi Carnet <ArrowRight className="w-4 h-4" />
+          </Link>
         </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Avatar Card */}
         <div className="lg:col-span-4">
-          <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-12 text-center flex flex-col items-center">
+          <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-12 text-center flex flex-col items-center h-full">
              <div className="relative group cursor-pointer" onClick={() => !saving && fileInputRef.current?.click()}>
                 <div className="w-48 h-48 rounded-[3.5rem] bg-gray-50 flex items-center justify-center overflow-hidden border-4 border-white shadow-2xl relative transition-transform hover:scale-105">
                   {formData.avatarUrl ? (
                     <Image src={formData.avatarUrl} alt={formData.name} width={200} height={200} className="object-cover w-full h-full" unoptimized />
-                  ) : <UserIcon className="w-20 h-20 text-gray-200" />}
+                  ) : (
+                    <UserIcon className="w-20 h-20 text-gray-200" />
+                  )}
                   <div className="absolute inset-0 bg-primary/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
-                    <Camera className="w-10 h-10" /> <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
+                    <Camera className="w-10 h-10" />
+                    <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
                   </div>
                 </div>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
              </div>
+             
              <div className="mt-10 space-y-3">
                <h3 className="text-2xl font-black text-gray-800 line-clamp-2">{formData.name || 'Cargando...'}</h3>
-               <Badge variant="secondary" className="uppercase font-black text-[10px] px-5 py-2 rounded-xl">{user?.role || 'docent'}</Badge>
+               <Badge variant="secondary" className="uppercase font-black text-[10px] px-5 py-2 rounded-xl">
+                 {user?.role || 'docent'}
+               </Badge>
              </div>
           </Card>
         </div>
 
+        {/* Form Card */}
         <div className="lg:col-span-8">
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white overflow-hidden">
              <form onSubmit={handleSave}>
-                <CardHeader className="border-b bg-gray-50/50 p-10"><CardTitle className="text-xl font-black">Información Institucional</CardTitle></CardHeader>
+                <CardHeader className="border-b bg-gray-50/50 p-10">
+                  <CardTitle className="text-xl font-black">Información Institucional</CardTitle>
+                </CardHeader>
+                
                 <CardContent className="p-10 space-y-8">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Nombre Completo</Label>
-                         <Input value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required disabled={saving} />
+                         <Input 
+                           value={formData.name} 
+                           onChange={(e) => updateField('name', e.target.value)}
+                           className="h-14 rounded-2xl bg-gray-50/50 font-bold" 
+                           required 
+                           disabled={saving}
+                         />
                       </div>
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Documento de Identidad</Label>
-                         <Input value={formData.documentId} onChange={(e) => updateField('documentId', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required disabled={saving} />
+                         <Input 
+                           value={formData.documentId} 
+                           onChange={(e) => updateField('documentId', e.target.value)}
+                           className="h-14 rounded-2xl bg-gray-50/50 font-bold" 
+                           required 
+                           disabled={saving}
+                         />
                       </div>
+                      
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede Principal</Label>
-                         <Select value={formData.campus} onValueChange={(v) => updateField('campus', v)} disabled={saving}>
-                           <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
-                           <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold py-3">{c.name}</SelectItem>)}</SelectContent>
+                         <Select 
+                           value={formData.campus} 
+                           onValueChange={(v) => updateField('campus', v)}
+                           disabled={saving}
+                         >
+                           <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-xs">
+                             <SelectValue placeholder="Seleccionar Sede" />
+                           </SelectTrigger>
+                           <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
+                             {campuses?.map(c => (
+                               <SelectItem key={c.id} value={c.name} className="font-bold py-3">{c.name}</SelectItem>
+                             ))}
+                           </SelectContent>
                          </Select>
                       </div>
+
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Cargo</Label>
-                         <Select value={formData.program} onValueChange={(v) => updateField('program', v)} disabled={saving}>
-                           <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
-                           <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold py-3">{p.name}</SelectItem>)}</SelectContent>
+                         <Select 
+                           value={formData.program} 
+                           onValueChange={(v) => updateField('program', v)}
+                           disabled={saving}
+                         >
+                           <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-xs">
+                             <SelectValue placeholder="Seleccionar Programa" />
+                           </SelectTrigger>
+                           <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
+                             {programs?.map(p => (
+                               <SelectItem key={p.id} value={p.name} className="font-bold py-3">{p.name}</SelectItem>
+                             ))}
+                           </SelectContent>
                          </Select>
                       </div>
                    </div>
+
                    <div className="space-y-4 pt-4">
-                      <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Jornadas Laborales</Label>
+                      <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Asignación de Jornadas Laborales</Label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                        {shifts?.map(s => (
-                          <div key={s.id} onClick={() => toggleShift(s.id)} className={cn("flex items-center space-x-4 p-5 rounded-3xl border-2 transition-all cursor-pointer", formData.shiftIds?.includes(s.id) ? "bg-primary/5 border-primary" : "bg-white border-gray-100")}>
-                            <Checkbox checked={formData.shiftIds?.includes(s.id)} onCheckedChange={() => {}} className="pointer-events-none" />
-                            <div className="flex flex-col"><span className="text-xs font-black uppercase">{s.name}</span><span className="text-[9px] font-bold opacity-70">{s.startTime} - {s.endTime}</span></div>
+                        {shiftsLoading ? (
+                          <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Cargando horarios...</div>
+                        ) : shifts?.map(s => (
+                          <div 
+                            key={s.id} 
+                            onClick={() => toggleShift(s.id)}
+                            className={cn(
+                              "flex items-center space-x-4 p-5 rounded-3xl border-2 transition-all cursor-pointer",
+                              formData.shiftIds?.includes(s.id) ? "bg-primary/5 border-primary shadow-sm" : "bg-white border-gray-100"
+                            )}
+                          >
+                            <Checkbox 
+                              checked={formData.shiftIds?.includes(s.id)} 
+                              onCheckedChange={() => {}} // Manejado por el click del contenedor
+                              className="pointer-events-none"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-black uppercase tracking-tight">{s.name}</span>
+                              <span className="text-[9px] font-bold opacity-60">{s.startTime} - {s.endTime}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
                    </div>
                 </CardContent>
+                
                 <CardFooter className="bg-gray-50/80 p-10 border-t justify-end">
-                   <Button type="submit" className="h-16 px-14 rounded-2xl font-black gap-3 shadow-2xl" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Save />} Sincronizar Mi Perfil</Button>
+                   <Button 
+                     type="submit" 
+                     className="h-16 px-14 rounded-2xl font-black gap-3 shadow-2xl" 
+                     disabled={saving}
+                   >
+                     {saving ? <Loader2 className="animate-spin" /> : <Save className="w-5 h-5" />} 
+                     Sincronizar Mi Perfil
+                   </Button>
                 </CardFooter>
              </form>
           </Card>
