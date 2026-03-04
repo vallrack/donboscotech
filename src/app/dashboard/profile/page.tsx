@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useFirestore, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc, collection, query, orderBy } from 'firebase/firestore';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User as UserIcon, Loader2, Save, Camera, Upload, CreditCard, ArrowRight, ShieldCheck } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, Upload, CreditCard, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -46,7 +46,16 @@ export default function ProfilePage() {
   const { data: programs } = useCollection<Program>(programsQuery);
   const { data: shifts, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
 
-  // Sincronización inicial estable
+  // Función estable para actualizar campos individuales y evitar bucles infinitos
+  const updateField = useCallback((field: keyof typeof formData, value: any) => {
+    setFormData(prev => {
+      // Si el valor es idéntico, retornamos el mismo objeto para evitar re-renderizado
+      if (JSON.stringify(prev[field]) === JSON.stringify(value)) return prev;
+      return { ...prev, [field]: value };
+    });
+  }, []);
+
+  // Sincronización inicial estable basada en el ID del usuario
   useEffect(() => {
     if (user && !hasInitialized) {
       setFormData({
@@ -59,17 +68,15 @@ export default function ProfilePage() {
       });
       setHasInitialized(true);
     }
-  }, [user, hasInitialized]);
+  }, [user?.id, hasInitialized, user]);
 
   const toggleShift = (shiftId: string) => {
     if (saving) return;
-    setFormData(prev => {
-      const current = prev.shiftIds || [];
-      const newShifts = current.includes(shiftId)
-        ? current.filter(id => id !== shiftId)
-        : [...current, shiftId];
-      return { ...prev, shiftIds: newShifts };
-    });
+    const current = formData.shiftIds || [];
+    const newShifts = current.includes(shiftId)
+      ? current.filter(id => id !== shiftId)
+      : [...current, shiftId];
+    updateField('shiftIds', newShifts);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,7 +90,7 @@ export default function ProfilePage() {
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      setFormData(prev => ({ ...prev, avatarUrl: reader.result as string }));
+      updateField('avatarUrl', reader.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -111,7 +118,7 @@ export default function ProfilePage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-12 h-12 animate-spin text-primary opacity-20" />
-        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground animate-pulse">Sincronizando Perfil...</p>
+        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Sincronizando Perfil...</p>
       </div>
     );
   }
@@ -184,7 +191,7 @@ export default function ProfilePage() {
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Nombre Completo</Label>
                          <Input 
                            value={formData.name} 
-                           onChange={(e) => setFormData(p => ({...p, name: e.target.value}))} 
+                           onChange={(e) => updateField('name', e.target.value)} 
                            className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold" 
                            placeholder="Nombre completo" 
                            required
@@ -195,7 +202,7 @@ export default function ProfilePage() {
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Documento de Identidad</Label>
                          <Input 
                            value={formData.documentId} 
-                           onChange={(e) => setFormData(p => ({...p, documentId: e.target.value}))} 
+                           onChange={(e) => updateField('documentId', e.target.value)} 
                            className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold" 
                            placeholder="C.C." 
                            required
@@ -206,7 +213,7 @@ export default function ProfilePage() {
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Sede Principal</Label>
                          <Select 
                            value={formData.campus || "none"} 
-                           onValueChange={(v) => setFormData(p => ({...p, campus: v === "none" ? "" : v}))}
+                           onValueChange={(v) => updateField('campus', v === "none" ? "" : v)}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
@@ -222,7 +229,7 @@ export default function ProfilePage() {
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Programa / Cargo</Label>
                          <Select 
                            value={formData.program || "none"} 
-                           onValueChange={(v) => setFormData(p => ({...p, program: v === "none" ? "" : v}))}
+                           onValueChange={(v) => updateField('program', v === "none" ? "" : v)}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
@@ -282,4 +289,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

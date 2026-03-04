@@ -37,6 +37,7 @@ export default function DashboardPage() {
     }
   }, [db, user?.id, user?.role]);
 
+  // Consulta de anuncios simplificada para evitar requisitos de índices complejos
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(
@@ -49,7 +50,7 @@ export default function DashboardPage() {
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: rawAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
 
-  // Filtrado en el cliente para evitar errores de índice y cuota
+  // Filtrado en el cliente para asegurar visibilidad inmediata sin errores de cuota
   const activeAnnouncements = useMemo(() => {
     return (rawAnnouncements || [])
       .filter(a => a.status === 'active')
