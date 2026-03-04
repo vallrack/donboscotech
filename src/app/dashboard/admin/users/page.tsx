@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, doc, updateDoc, deleteDoc, setDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, setDoc, query, serverTimestamp } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth as getFirebaseAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -13,8 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
-  Search, Mail, Loader2, ShieldCheck, UserCog, 
-  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, MapPin, Shield, Trash2
+  Search, Mail, Loader2, ShieldCheck, 
+  ShieldAlert, UserPlus, BookOpen, MapPin, Shield, Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -42,9 +42,11 @@ export default function UserManagementPage() {
   const [isCreating, setIsCreating] = useState(false);
 
   // Consultas de datos institucionales
-  const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
-  const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
-  const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
+  const { data: campuses } = useCollection<Campus>(db ? collection(db, 'campuses') : null as any);
+  const { data: programs } = useCollection<Program>(db ? collection(db, 'programs') : null as any);
+  const { data: shifts } = useCollection<Shift>(db ? collection(db, 'shifts') : null as any);
+  
+  // Consulta simplificada para asegurar visibilidad de TODOS (sin orderBy en servidor que filtre nulos)
   const { data: users, loading: usersLoading } = useCollection(db ? collection(db, 'userProfiles') : null as any);
 
   const [formData, setFormData] = useState({
@@ -60,16 +62,21 @@ export default function UserManagementPage() {
 
   const filteredUsers = useMemo(() => {
     const search = searchTerm.toLowerCase();
+    // Procesamos y ordenamos en cliente para no perder registros incompletos
     const list = (users || []).map(u => ({
       ...u,
-      name: u.name || 'Sin Nombre',
-      email: u.email || 'Sin Email'
+      name: u.name || 'Personal sin Nombre',
+      email: u.email || 'Sin Email',
+      role: u.role || 'docent'
     }));
-    list.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    
     return list.filter(u => 
       u.name.toLowerCase().includes(search) || 
       u.email.toLowerCase().includes(search) ||
-      u.documentId?.toLowerCase().includes(search)
+      u.documentId?.toLowerCase().includes(search) ||
+      u.role.toLowerCase().includes(search)
     );
   }, [users, searchTerm]);
 
@@ -84,7 +91,6 @@ export default function UserManagementPage() {
     e.preventDefault();
     if (!db || isCreating) return;
     
-    // RESTRICCIÓN: Coordinador no puede crear Administradores
     if (currentUser?.role === 'coordinator' && formData.role === 'admin') {
       toast({
         variant: "destructive",
@@ -117,7 +123,6 @@ export default function UserManagementPage() {
 
       await setDoc(doc(db, 'userProfiles', newUserId), userProfile);
 
-      // Sincronizar con colecciones de roles para Security Rules
       if (formData.role === 'admin') await setDoc(doc(db, 'roles_admins', newUserId), { email: formData.email });
       if (formData.role === 'coordinator') await setDoc(doc(db, 'roles_coordinators', newUserId), { email: formData.email });
       if (formData.role === 'secretary') await setDoc(doc(db, 'roles_secretaries', newUserId), { email: formData.email });
@@ -136,23 +141,13 @@ export default function UserManagementPage() {
   const handleRoleChange = async (userId: string, targetRole: UserRole, userEmail: string, currentRole: string) => {
     if (!db || !userId) return;
 
-    // RESTRICCIÓN: Coordinador no puede modificar a un Administrador
     if (currentUser?.role === 'coordinator' && currentRole === 'admin') {
-      toast({
-        variant: "destructive",
-        title: "Acción bloqueada",
-        description: "Los coordinadores no pueden gestionar cuentas de administrador."
-      });
+      toast({ variant: "destructive", title: "Acción bloqueada", description: "Los coordinadores no pueden gestionar administradores." });
       return;
     }
 
-    // RESTRICCIÓN: Coordinador no puede elevar a nadie a Administrador
     if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
-      toast({
-        variant: "destructive",
-        title: "Acción bloqueada",
-        description: "No tienes permisos para asignar roles de administrador."
-      });
+      toast({ variant: "destructive", title: "Acción bloqueada", description: "No tienes permisos para asignar roles de administrador." });
       return;
     }
 
@@ -167,7 +162,7 @@ export default function UserManagementPage() {
       if (targetRole === 'coordinator') await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail });
       if (targetRole === 'secretary') await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail });
       
-      toast({ title: "Acceso Actualizado", description: `Nuevo rol: ${targetRole}` });
+      toast({ title: "Rol Actualizado", description: `Nuevo rol asignado: ${targetRole}` });
     } catch (error) {
       toast({ title: "Error", variant: "destructive" });
     } finally {
@@ -183,10 +178,14 @@ export default function UserManagementPage() {
       return;
     }
 
-    if (confirm('¿Estás seguro de eliminar este perfil? Esta acción solo borra el perfil en la base de datos, no la cuenta de acceso.')) {
+    if (confirm('¿Estás seguro de eliminar este perfil? Esta acción es irreversible en la base de datos.')) {
       try {
         await deleteDoc(doc(db, 'userProfiles', userId));
-        toast({ title: "Perfil eliminado" });
+        // También limpiar roles de seguridad
+        const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
+        for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
+        
+        toast({ title: "Perfil eliminado correctamente" });
       } catch (e) {
         toast({ variant: "destructive", title: "Error al eliminar" });
       }
@@ -199,7 +198,7 @@ export default function UserManagementPage() {
 
   if (!isPrivileged) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-gray-50 rounded-3xl animate-in fade-in duration-500">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-gray-50 rounded-3xl">
         <ShieldAlert className="w-16 h-16 text-destructive mb-6 opacity-20" />
         <h2 className="text-3xl font-black text-destructive">Acceso Restringido</h2>
         <p className="text-muted-foreground font-bold">Solo personal administrativo puede gestionar usuarios.</p>
@@ -214,18 +213,18 @@ export default function UserManagementPage() {
           <h1 className="text-3xl font-black text-primary">Gestión de Personal</h1>
           <p className="text-muted-foreground flex items-center gap-2 mt-1">
              <ShieldCheck className="w-4 h-4 text-primary" />
-             <span className="text-xs font-bold uppercase tracking-wider">Control de roles y carnets institucionales</span>
+             <span className="text-xs font-bold uppercase tracking-wider">Control total de la nómina y roles institucionales</span>
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="h-12 px-6 rounded-2xl font-black gap-2 shadow-lg shadow-primary/20">
-              <UserPlus className="w-5 h-5" /> Nuevo Miembro
+              <UserPlus className="w-5 h-5" /> Registrar Personal
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[700px] rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
             <form onSubmit={handleCreateUser}>
-              <DialogHeader><DialogTitle className="text-2xl font-black text-primary">Agregar Personal</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-2xl font-black text-primary">Nuevo Miembro</DialogTitle></DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6">
                 <div className="space-y-2"><Label>Nombre</Label><Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="h-12 rounded-xl" required /></div>
                 <div className="space-y-2"><Label>Identificación</Label><Input value={formData.documentId} onChange={(e) => setFormData({...formData, documentId: e.target.value})} className="h-12 rounded-xl" required /></div>
@@ -234,7 +233,7 @@ export default function UserManagementPage() {
                 <div className="space-y-2"><Label>Sede</Label><Select value={formData.campus} onValueChange={(val) => setFormData({...formData, campus: val})}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar" /></SelectTrigger><SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2"><Label>Programa</Label><Select value={formData.program} onValueChange={(val) => setFormData({...formData, program: val})}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar" /></SelectTrigger><SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Jornadas</Label>
+                  <Label>Asignar Jornadas</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 bg-gray-50 p-4 rounded-2xl border border-gray-100">
                     {shifts?.map(s => (
                       <div key={s.id} className="flex items-center space-x-3 bg-white p-3 rounded-xl border">
@@ -245,7 +244,7 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Rol</Label>
+                  <Label>Rol de Usuario</Label>
                   <Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}>
                     <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -257,7 +256,7 @@ export default function UserManagementPage() {
                   </Select>
                 </div>
               </div>
-              <DialogFooter><Button type="submit" className="w-full h-12 rounded-xl font-black" disabled={isCreating}>{isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Registro"}</Button></DialogFooter>
+              <DialogFooter><Button type="submit" className="w-full h-12 rounded-xl font-black" disabled={isCreating}>{isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Alta"}</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
@@ -267,7 +266,7 @@ export default function UserManagementPage() {
         <CardHeader className="bg-gray-50/50 pb-6 border-b p-8">
           <div className="relative max-w-xl">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input placeholder="Buscar por nombre, correo o identificación..." className="pl-12 h-14 border-gray-200 rounded-2xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <Input placeholder="Buscar por nombre, correo, cédula o rol..." className="pl-12 h-14 border-gray-200 rounded-2xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -275,9 +274,9 @@ export default function UserManagementPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/30 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-8 py-6">Personal</th>
-                  <th className="px-8 py-6">Información Institucional</th>
-                  <th className="px-8 py-6">Permisos / Rol</th>
+                  <th className="px-8 py-6">Información de Personal</th>
+                  <th className="px-8 py-6">Datos Institucionales</th>
+                  <th className="px-8 py-6">Gestión de Roles</th>
                   <th className="px-8 py-6 text-center">Acciones</th>
                 </tr>
               </thead>
@@ -319,7 +318,7 @@ export default function UserManagementPage() {
                             <div className="text-[10px] font-black uppercase text-primary">
                               <BookOpen className="w-3 h-3 inline mr-1" /> {u.program || 'Sin Programa'}
                             </div>
-                            <div className="text-[9px] font-bold text-muted-foreground">ID: {u.documentId || '---'}</div>
+                            <div className="text-[9px] font-bold text-muted-foreground">C.C. {u.documentId || '---'}</div>
                           </div>
                         </td>
                         <td className="px-8 py-6">
@@ -362,7 +361,7 @@ export default function UserManagementPage() {
           </div>
           {!usersLoading && filteredUsers.length === 0 && (
             <div className="py-20 text-center text-muted-foreground italic font-medium">
-              No se encontraron miembros del personal registrados.
+              No se encontraron miembros del personal registrados con estos criterios.
             </div>
           )}
         </CardContent>
