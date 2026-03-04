@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User as UserIcon, Loader2, Save, Camera, Upload, CreditCard, ArrowRight } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, Upload, CreditCard, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -39,7 +39,6 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Sincronizar el formulario cuando el usuario del AuthProvider cambie (en tiempo real)
   useEffect(() => {
     if (user) {
       setFormData({
@@ -107,9 +106,9 @@ export default function ProfilePage() {
       };
 
       await updateDoc(userRef, payload);
-      toast({ title: "Perfil Actualizado", description: "Los cambios se guardaron correctamente." });
+      toast({ title: "Perfil Sincronizado", description: "Tus datos han sido actualizados en toda la institución." });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error al guardar", description: "No se pudo conectar con el servidor." });
+      toast({ variant: "destructive", title: "Error al guardar", description: "No se pudo conectar con el servidor central." });
     } finally {
       setSaving(false);
     }
@@ -128,7 +127,7 @@ export default function ProfilePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
-          <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales.</p>
+          <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales en tiempo real.</p>
         </div>
         <Button asChild size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl cursor-pointer">
           <Link href="/dashboard/profile/carnet">
@@ -154,19 +153,20 @@ export default function ProfilePage() {
               <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
            </div>
            <div className="mt-8 text-center">
-             <h3 className="text-xl font-black text-gray-800">{formData.name}</h3>
-             <Badge variant="outline" className="mt-2 uppercase font-black text-[10px] tracking-widest text-primary bg-primary/5 border-primary/20">
+             <h3 className="text-xl font-black text-gray-800">{formData.name || 'Sin nombre asignado'}</h3>
+             <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="mt-2 uppercase font-black text-[10px] tracking-widest px-4 py-1.5 rounded-xl border-none">
+               {user.role === 'admin' && <ShieldCheck className="w-3 h-3 mr-1" />}
                {user.role}
              </Badge>
            </div>
            <Button 
-             variant="outline" 
+             variant="ghost" 
              size="sm" 
-             className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase h-10 px-6" 
+             className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase h-10 px-6 text-primary hover:bg-primary/5" 
              onClick={() => fileInputRef.current?.click()}
              disabled={saving}
            >
-             <Upload className="w-3 h-3" /> Subir desde dispositivo
+             <Upload className="w-3 h-3" /> Subir Nueva Foto
            </Button>
         </Card>
 
@@ -174,72 +174,72 @@ export default function ProfilePage() {
            <form onSubmit={handleSave}>
               <CardHeader className="border-b bg-gray-50/30 p-8">
                  <CardTitle className="text-lg font-black">Información Institucional</CardTitle>
-                 <CardDescription className="text-xs font-bold text-muted-foreground">Datos requeridos para el carnet oficial de Ciudad Don Bosco.</CardDescription>
+                 <CardDescription className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Registros oficiales de Ciudad Don Bosco</CardDescription>
               </CardHeader>
               <CardContent className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Nombre Completo</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nombre Completo</Label>
                     <Input 
                       value={formData.name} 
                       onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                      className="h-12 rounded-xl" 
-                      placeholder="Juan Bosco" 
+                      className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold" 
+                      placeholder="Ingresa tu nombre oficial" 
                       required
                       disabled={saving}
                     />
                  </div>
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Documento de Identidad</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Documento de Identidad</Label>
                     <Input 
                       value={formData.documentId} 
                       onChange={(e) => setFormData({...formData, documentId: e.target.value})} 
-                      className="h-12 rounded-xl" 
-                      placeholder="C.C. 123.456.789" 
+                      className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold" 
+                      placeholder="Número de C.C." 
                       required
                       disabled={saving}
                     />
                  </div>
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sede Asignada</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Sede Principal</Label>
                     <Select 
                       value={formData.campus} 
                       onValueChange={(v) => setFormData({...formData, campus: v})}
                       disabled={saving}
                     >
-                      <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
-                      <SelectContent>
-                        {campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                      <SelectTrigger className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold text-xs"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
+                      <SelectContent className="rounded-2xl border-none shadow-2xl">
+                        {campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold py-3">{c.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                  </div>
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Programa / Carrera</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Programa / Cargo</Label>
                     <Select 
                       value={formData.program} 
                       onValueChange={(v) => setFormData({...formData, program: v})}
                       disabled={saving}
                     >
-                      <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
-                      <SelectContent>
-                        {programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                      <SelectTrigger className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold text-xs"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
+                      <SelectContent className="rounded-2xl border-none shadow-2xl">
+                        {programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold py-3">{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                  </div>
                  <div className="space-y-2 md:col-span-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jornadas Laborales (Varias permitidas)</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 bg-gray-50 p-6 rounded-3xl border border-dashed border-gray-200">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Jornadas de Marcaje</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 bg-gray-50/50 p-6 rounded-3xl border border-dashed border-gray-200">
                       {shifts?.map(s => (
-                        <div key={s.id} className="flex items-center space-x-3 bg-white p-4 rounded-2xl border shadow-sm hover:border-primary/30 transition-colors">
+                        <div key={s.id} className="flex items-center space-x-3 bg-white p-4 rounded-2xl border shadow-sm hover:border-primary/30 transition-all cursor-pointer">
                           <Checkbox 
                             id={`profile-shift-${s.id}`} 
                             checked={formData.shiftIds?.includes(s.id)}
                             onCheckedChange={() => toggleShift(s.id)}
-                            className="w-5 h-5"
+                            className="w-5 h-5 rounded-md"
                             disabled={saving}
                           />
                           <label htmlFor={`profile-shift-${s.id}`} className="text-xs font-black cursor-pointer leading-tight">
                             {s.name} <br/>
-                            <span className="text-[10px] text-muted-foreground font-bold">{s.startTime} - {s.endTime}</span>
+                            <span className="text-[9px] text-muted-foreground font-bold tracking-tighter">{s.startTime} - {s.endTime}</span>
                           </label>
                         </div>
                       ))}
@@ -247,12 +247,13 @@ export default function ProfilePage() {
                  </div>
               </CardContent>
               <CardFooter className="bg-gray-50/50 p-8 border-t flex justify-between items-center">
-                 <p className="text-[10px] font-bold text-muted-foreground max-w-[250px]">
-                   Al guardar, tus cambios se sincronizarán con la terminal institucional.
-                 </p>
-                 <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg cursor-pointer" disabled={saving}>
+                 <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">
+                    <ShieldCheck className="w-4 h-4 text-primary opacity-40" />
+                    Protocolo Seguro Sincronizado
+                 </div>
+                 <Button type="submit" className="h-14 px-12 rounded-2xl font-black gap-2 shadow-2xl hover:scale-105 transition-transform active:scale-95" disabled={saving}>
                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                   Sincronizar Perfil
+                   Guardar y Sincronizar
                  </Button>
               </CardFooter>
            </form>

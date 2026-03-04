@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const uid = authUser.uid;
       const profileRef = doc(db, 'userProfiles', uid);
 
-      // Verificación inicial y creación si no existe
+      // Verificación inicial rápida
       const profileSnap = await getDoc(profileRef);
       if (!profileSnap.exists()) {
         const initialData = {
@@ -55,12 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setDoc(profileRef, initialData);
       }
 
-      // Escucha en tiempo real para el perfil y roles
+      // Escucha en tiempo real para el perfil y roles para asegurar reactividad total
       unsubscribeProfile = onSnapshot(profileRef, async (docSnap) => {
         if (docSnap.exists()) {
           const profileData = docSnap.data();
           
-          // Verificación rápida de roles elevados
+          // Verificación de roles de seguridad (Security Rules sync)
           const [adminSnap, coordSnap, sectSnap] = await Promise.all([
             getDoc(doc(db, 'roles_admins', uid)),
             getDoc(doc(db, 'roles_coordinators', uid)),
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setResolvedUser({
             id: uid,
             name: profileData.name || authUser.displayName || 'Miembro',
-            email: authUser.email || '',
+            email: authUser.email || profileData.email || '',
             role: finalRole,
             avatarUrl: profileData.avatarUrl || authUser.photoURL || undefined,
             documentId: profileData.documentId || '',
