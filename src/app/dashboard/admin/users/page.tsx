@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check, X as CloseIcon, Edit3
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check, X as CloseIcon, Edit3, Save
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,6 @@ export default function UserManagementPage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,7 +65,10 @@ export default function UserManagementPage() {
   });
 
   const updateFormField = useCallback((field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      if (prev[field as keyof typeof prev] === value) return prev;
+      return { ...prev, [field]: value };
+    });
   }, []);
 
   const toggleShift = useCallback((id: string) => {
@@ -135,7 +137,7 @@ export default function UserManagementPage() {
     setFormData({
       name: u.name || '',
       email: u.email || '',
-      password: '', // No editamos password aquí
+      password: '',
       documentId: u.documentId || '',
       campus: u.campus || '',
       program: u.program || '',
@@ -163,7 +165,6 @@ export default function UserManagementPage() {
 
       await updateDoc(doc(db, 'userProfiles', editingUser.id), updateData);
 
-      // Sincronizar colecciones de roles si cambió el rol
       if (formData.role !== editingUser.role) {
         const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
         for (const col of rolesCols) await deleteDoc(doc(db, col, editingUser.id));
@@ -239,7 +240,6 @@ export default function UserManagementPage() {
                       <Input type="password" value={formData.password} onChange={(e) => updateFormField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="Min. 6 caracteres" required />
                     </div>
                   </div>
-                  {/* Reuse common fields logic */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Asignada</Label>
