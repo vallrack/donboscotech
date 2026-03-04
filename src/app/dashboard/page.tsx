@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  // Consultas optimizadas para evitar Quota Exceeded
+  // Consultas memoizadas para prevenir Quota Exceeded
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     if (user.role === 'docent') {
@@ -37,7 +37,6 @@ export default function DashboardPage() {
     }
   }, [db, user?.id, user?.role]);
 
-  // Consulta simplificada para evitar errores de índice compuesto
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(
@@ -50,7 +49,7 @@ export default function DashboardPage() {
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: rawAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
 
-  // Filtrado en el cliente para evitar requisitos de índices complejos en Firestore
+  // Filtrado en el cliente para evitar errores de índice y cuota
   const activeAnnouncements = useMemo(() => {
     return (rawAnnouncements || [])
       .filter(a => a.status === 'active')
@@ -58,7 +57,7 @@ export default function DashboardPage() {
   }, [rawAnnouncements]);
 
   useEffect(() => {
-    if (!db || user?.role === 'docent') return;
+    if (!db || !user || user.role === 'docent') return;
     const fetchTodayStats = async () => {
       try {
         const q = query(collection(db, 'globalAttendanceRecords'), where('date', '==', todayStr));
@@ -69,7 +68,7 @@ export default function DashboardPage() {
       }
     };
     fetchTodayStats();
-  }, [db, user?.role, todayStr]);
+  }, [db, user?.role, todayStr, user?.id]);
 
   const stats = useMemo(() => {
     const isAdminView = user?.role !== 'docent';
