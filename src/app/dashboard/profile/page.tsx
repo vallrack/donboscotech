@@ -18,15 +18,14 @@ import { Campus, Program, Shift } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const db = useFirestore();
   const { toast } = useToast();
-  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasInitialized = useRef(false);
 
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
   const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
@@ -41,9 +40,9 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Sync formData with user object whenever user object updates from AuthProvider
+  // Inicialización única de datos desde el usuario de Auth
   useEffect(() => {
-    if (user && !saving) {
+    if (user && !hasInitialized.current) {
       setFormData({
         name: user.name || '',
         documentId: user.documentId || '',
@@ -52,8 +51,9 @@ export default function ProfilePage() {
         shiftIds: user.shiftIds || [],
         avatarUrl: user.avatarUrl || ''
       });
+      hasInitialized.current = true;
     }
-  }, [user, saving]);
+  }, [user]);
 
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
@@ -113,7 +113,6 @@ export default function ProfilePage() {
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al guardar", description: "No se pudo conectar con el servidor." });
     } finally {
-      // Ensure state is released
       setSaving(false);
     }
   };
@@ -157,7 +156,7 @@ export default function ProfilePage() {
               <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
            </div>
            <div className="mt-8 text-center">
-             <h3 className="text-xl font-black text-gray-800">{formData.name || 'Cargando...'}</h3>
+             <h3 className="text-xl font-black text-gray-800">{formData.name}</h3>
              <Badge variant="outline" className="mt-2 uppercase font-black text-[10px] tracking-widest text-primary bg-primary/5 border-primary/20">
                {user.role}
              </Badge>

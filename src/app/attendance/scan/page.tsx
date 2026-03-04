@@ -31,6 +31,7 @@ export default function PublicAttendanceScanner() {
   const qrRegionId = "public-qr-reader";
   const html5QrCode = useRef<Html5Qrcode | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const isProcessing = useRef(false); // Bloqueo para evitar duplicados
 
   // 1. GPS Validation
   useEffect(() => {
@@ -94,8 +95,8 @@ export default function PublicAttendanceScanner() {
   }, [mode, hasCameraPermission]);
 
   const handleScanSuccess = async (userId: string) => {
-    if (scanning || !db) return;
-
+    if (isProcessing.current || !db) return;
+    
     if (!locationRef.current) {
        toast({
          variant: "destructive",
@@ -104,10 +105,11 @@ export default function PublicAttendanceScanner() {
        });
        return;
     }
-    
+
+    isProcessing.current = true; // Bloqueamos nuevas lecturas
     setScanning(true);
+    
     try {
-      // 1. Verify User exists
       const userRef = doc(db, 'userProfiles', userId);
       const userSnap = await getDoc(userRef);
       
@@ -117,6 +119,7 @@ export default function PublicAttendanceScanner() {
           title: "Carnet no válido",
           description: "El código escaneado no pertenece a un docente registrado."
         });
+        isProcessing.current = false;
         setScanning(false);
         return;
       }
@@ -138,12 +141,14 @@ export default function PublicAttendanceScanner() {
         createdAt: serverTimestamp()
       };
 
-      // 2. Record Attendance
+      // Guardado concurrente en el perfil y en el historial global
       const userRecordRef = doc(db, 'userProfiles', userId, 'attendanceRecords', recordId);
-      await setDoc(userRecordRef, recordData);
-
       const globalRecordRef = doc(db, 'globalAttendanceRecords', recordId);
-      await setDoc(globalRecordRef, recordData);
+      
+      await Promise.all([
+        setDoc(userRecordRef, recordData),
+        setDoc(globalRecordRef, recordData)
+      ]);
 
       setLastScannedUser({ name: userData.name, photo: userData.avatarUrl, time: timeStr });
       
@@ -152,13 +157,15 @@ export default function PublicAttendanceScanner() {
         description: `Bienvenido(a), ${userData.name.split(' ')[0]}.`
       });
 
-      // Reset after 5 seconds to allow next person
+      // Reset después de 5 segundos para permitir la siguiente persona
       setTimeout(() => {
         setLastScannedUser(null);
         setScanning(false);
+        isProcessing.current = false; // Liberamos el bloqueo
       }, 5000);
 
     } catch (err: any) {
+      isProcessing.current = false;
       setScanning(false);
       toast({
         variant: "destructive",
@@ -170,7 +177,7 @@ export default function PublicAttendanceScanner() {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !db) return;
+    if (!file || !db || isProcessing.current) return;
 
     const scanner = new Html5Qrcode(qrRegionId);
     try {
