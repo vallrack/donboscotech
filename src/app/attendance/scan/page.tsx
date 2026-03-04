@@ -9,12 +9,13 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { QrCode, MapPin, CheckCircle2, Loader2, Camera, Image as ImageIcon, AlertCircle, ArrowLeft, User as UserIcon } from 'lucide-react';
+import { QrCode, MapPin, CheckCircle2, Loader2, Camera, Image as ImageIcon, AlertCircle, ArrowLeft, User as UserIcon, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
 import Link from 'next/link';
 import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
 
 export default function PublicAttendanceScanner() {
   const db = useFirestore();
