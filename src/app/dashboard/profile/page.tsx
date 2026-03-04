@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User, Loader2, Save, Camera, Upload, CreditCard, ArrowRight } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, Upload, CreditCard, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -24,7 +24,6 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const hasInitialized = useRef(false);
 
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
   const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
@@ -39,8 +38,9 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
+  // Efecto de inicialización robusto
   useEffect(() => {
-    if (user && !hasInitialized.current) {
+    if (user) {
       setFormData({
         name: user.name || '',
         documentId: user.documentId || '',
@@ -49,9 +49,8 @@ export default function ProfilePage() {
         shiftIds: user.shiftIds || [],
         avatarUrl: user.avatarUrl || ''
       });
-      hasInitialized.current = true;
     }
-  }, [user]);
+  }, [user?.id]); // Solo re-inicializar si cambia el usuario, no con cada pequeño cambio de perfil
 
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
@@ -130,7 +129,7 @@ export default function ProfilePage() {
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
           <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales.</p>
         </div>
-        <Button asChild size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl">
+        <Button asChild size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl cursor-pointer">
           <Link href="/dashboard/profile/carnet">
             <CreditCard className="w-5 h-5" /> Ver Mi Carnet <ArrowRight className="w-4 h-4 ml-2" />
           </Link>
@@ -144,7 +143,7 @@ export default function ProfilePage() {
                 {formData.avatarUrl ? (
                   <Image src={formData.avatarUrl} alt={formData.name} width={160} height={160} className="object-cover w-full h-full" unoptimized />
                 ) : (
-                  <User className="w-16 h-16 text-gray-300" />
+                  <UserIcon className="w-16 h-16 text-gray-300" />
                 )}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
                   <Camera className="w-8 h-8" />
@@ -250,7 +249,7 @@ export default function ProfilePage() {
                  <p className="text-[10px] font-bold text-muted-foreground max-w-[250px]">
                    Al guardar, tus cambios se sincronizarán con la terminal institucional.
                  </p>
-                 <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg" disabled={saving}>
+                 <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg cursor-pointer" disabled={saving}>
                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                    Sincronizar Perfil
                  </Button>

@@ -1,11 +1,10 @@
-
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const db = useFirestore();
   const { user: authUser, loading: authLoading } = useUser();
   const syncAttempted = useRef(false);
+  const [lastResolvedUser, setLastResolvedUser] = useState<User | null>(null);
 
   const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser?.uid, db]);
   const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser?.uid, db]);
@@ -30,24 +30,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sectRef = useMemo(() => authUser && db ? doc(db, 'roles_secretaries', authUser.uid) : null, [authUser?.uid, db]);
 
   const { data: userProfile, loading: profileLoading } = useDoc(profileRef);
-  const { data: adminRole, loading: adminLoading } = useDoc(adminRef);
-  const { data: coordRole, loading: coordLoading } = useDoc(coordRef);
-  const { data: sectRole, loading: sectLoading } = useDoc(sectRef);
+  const { data: adminRole } = useDoc(adminRef);
+  const { data: coordRole } = useDoc(coordRef);
+  const { data: sectRole } = useDoc(sectRef);
 
-  // Optimizamos isLoading para que no bloquee la navegación si ya tenemos el perfil básico
-  const isLoading = authLoading || (authUser && profileLoading);
+  // El estado de carga global solo es TRUE durante el inicio de sesión inicial
+  const isLoading = authLoading || (authUser && !lastResolvedUser && profileLoading);
 
   const resolvedUser = useMemo(() => {
-    if (!authUser || authLoading || profileLoading) return null;
+    if (!authUser || authLoading || profileLoading) return lastResolvedUser;
 
     let role: UserRole = (userProfile?.role as UserRole) || 'docent';
-    
-    // Prioridad a las colecciones de roles de seguridad (Source of Truth)
     if (adminRole) role = 'admin';
     else if (coordRole) role = 'coordinator';
     else if (sectRole) role = 'secretary';
 
-    return {
+    const userData: User = {
       id: authUser.uid,
       name: userProfile?.name || authUser.displayName || 'Usuario',
       email: authUser.email || '',
@@ -58,21 +56,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       program: userProfile?.program,
       shiftIds: userProfile?.shiftIds || []
     };
-  }, [authUser, authLoading, profileLoading, adminRole, coordRole, sectRole, userProfile]);
+    
+    return userData;
+  }, [authUser, authLoading, profileLoading, adminRole, coordRole, sectRole, userProfile, lastResolvedUser]);
+
+  useEffect(() => {
+    if (resolvedUser) {
+      setLastResolvedUser(resolvedUser);
+    }
+  }, [resolvedUser]);
 
   useEffect(() => {
     async function syncProfile() {
       if (authUser && db && !profileLoading && !syncAttempted.current) {
         syncAttempted.current = true;
         const pRef = doc(db, 'userProfiles', authUser.uid);
-        
         const existingSnap = await getDoc(pRef);
         if (!existingSnap.exists()) {
           await setDoc(pRef, {
             name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
             email: authUser.email || '',
             role: 'docent',
-            avatarUrl: authUser.photoURL || '',
             createdAt: serverTimestamp()
           });
         }
@@ -101,7 +105,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       role,
       createdAt: serverTimestamp(),
-      avatarUrl: '',
       documentId: '',
       campus: '',
       program: '',
@@ -119,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     if (!auth) return;
+    setLastResolvedUser(null);
     await signOut(auth);
   };
 

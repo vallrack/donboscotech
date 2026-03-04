@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useAuth } from '@/components/auth/auth-provider';
@@ -21,13 +20,13 @@ function DashboardGuard({ children }: { children: React.ReactNode }) {
     }
   }, [user, isLoading, router, mounted]);
 
-  // Solo mostramos el spinner en la carga inicial real de la aplicación
+  // Evitamos que el spinner completo se muestre si ya tenemos un usuario en sesión
   if (!mounted || (isLoading && !user)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-primary font-black text-[10px] uppercase tracking-widest animate-pulse">
+          <p className="text-primary font-black text-[10px] uppercase tracking-widest">
             Sincronizando Sistema...
           </p>
         </div>
@@ -38,9 +37,9 @@ function DashboardGuard({ children }: { children: React.ReactNode }) {
   if (!user && !isLoading) return null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="flex-1 max-w-7xl mx-auto w-full py-8 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
     </div>

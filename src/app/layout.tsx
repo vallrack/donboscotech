@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase';
 import { AuthProvider } from '@/components/auth/auth-provider';
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export const metadata: Metadata = {
   title: 'Don Bosco Track - Institutional Attendance System',
@@ -24,8 +25,10 @@ export default function RootLayout({
       <body className="font-body antialiased min-h-screen bg-background text-foreground">
         <FirebaseClientProvider>
           <AuthProvider>
-            {children}
-            <Toaster />
+            <TooltipProvider delayDuration={0}>
+              {children}
+              <Toaster />
+            </TooltipProvider>
           </AuthProvider>
         </FirebaseClientProvider>
       </body>
