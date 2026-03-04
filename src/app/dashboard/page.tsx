@@ -36,26 +36,35 @@ export default function DashboardPage() {
     }
   }, [db, user?.id, user?.role]);
 
+  // Consulta simplificada para evitar errores de índice compuesto
   const announcementsQuery = useMemoFirebase(() => {
-    // Solo permitimos la consulta si el usuario está autenticado y cargado
     if (!db || !user) return null;
     return query(
       collection(db, 'announcements'),
-      where('status', '==', 'active'),
       orderBy('createdAt', 'desc'),
-      limit(10)
+      limit(20)
     );
   }, [db, user]);
 
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
-  const { data: announcements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
+  const { data: allAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
+
+  // Filtrado de anuncios activos en el cliente para mayor robustez
+  const activeAnnouncements = useMemo(() => {
+    return (allAnnouncements || []).filter(ann => ann.status === 'active').slice(0, 10);
+  }, [allAnnouncements]);
 
   useEffect(() => {
     if (!db || user?.role === 'docent') return;
     const fetchTodayStats = async () => {
-      const q = query(collection(db, 'globalAttendanceRecords'), where('date', '==', todayStr));
-      const snapshot = await getCountFromServer(q);
-      setTodayCount(snapshot.data().count);
+      try {
+        const q = query(collection(db, 'globalAttendanceRecords'), where('date', '==', todayStr));
+        const snapshot = await getCountFromServer(q);
+        setTodayCount(snapshot.data().count);
+      } catch (e) {
+        console.error("Error fetching stats:", e);
+        setTodayCount(0);
+      }
     };
     fetchTodayStats();
   }, [db, user?.role, todayStr]);
@@ -139,7 +148,7 @@ export default function DashboardPage() {
               <div className="p-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto opacity-10" /></div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {announcements.map((ann) => (
+                {activeAnnouncements.map((ann) => (
                   <div key={ann.id} className="p-8 hover:bg-gray-50/50 transition-all group">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge className={cn("text-[8px] font-black", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>
@@ -153,7 +162,7 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground leading-relaxed mt-2">{ann.content}</p>
                   </div>
                 ))}
-                {announcements.length === 0 && (
+                {activeAnnouncements.length === 0 && (
                   <div className="p-20 text-center text-muted-foreground text-xs font-black uppercase tracking-widest opacity-30">
                     No hay anuncios activos.
                   </div>

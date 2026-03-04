@@ -40,7 +40,6 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Sincronización automática de datos del usuario logueado al formulario
   useEffect(() => {
     if (user) {
       setFormData({
@@ -57,9 +56,11 @@ export default function ProfilePage() {
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
       const current = prev.shiftIds || [];
-      const newShifts = current.includes(shiftId)
+      const isAlreadySelected = current.includes(shiftId);
+      const newShifts = isAlreadySelected
         ? current.filter(id => id !== shiftId)
         : [...current, shiftId];
+      
       return { ...prev, shiftIds: newShifts };
     });
   };
@@ -93,7 +94,7 @@ export default function ProfilePage() {
         documentId: formData.documentId,
         campus: formData.campus,
         program: formData.program,
-        shiftIds: formData.shiftIds,
+        shiftIds: formData.shiftIds || [],
         avatarUrl: formData.avatarUrl,
         updatedAt: new Date().toISOString()
       };
@@ -134,7 +135,6 @@ export default function ProfilePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Columna Izquierda: Foto y Rol */}
         <div className="lg:col-span-4 space-y-8">
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white overflow-hidden flex flex-col items-center p-12 text-center">
              <div className="relative group cursor-pointer" onClick={() => !saving && fileInputRef.current?.click()}>
@@ -176,7 +176,6 @@ export default function ProfilePage() {
           </Card>
         </div>
 
-        {/* Columna Derecha: Formulario */}
         <div className="lg:col-span-8">
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white overflow-hidden">
              <form onSubmit={handleSave}>
@@ -243,7 +242,10 @@ export default function ProfilePage() {
                         {shifts?.map(s => (
                           <div 
                             key={s.id} 
-                            onClick={() => !saving && toggleShift(s.id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (!saving) toggleShift(s.id);
+                            }}
                             className={cn(
                               "flex items-center space-x-4 p-5 rounded-3xl border-2 transition-all cursor-pointer",
                               formData.shiftIds?.includes(s.id) 
@@ -254,7 +256,7 @@ export default function ProfilePage() {
                             <Checkbox 
                               id={`profile-shift-${s.id}`} 
                               checked={formData.shiftIds?.includes(s.id)}
-                              className="w-5 h-5 rounded-md border-primary"
+                              className="w-5 h-5 rounded-md border-primary pointer-events-none"
                               disabled={saving}
                             />
                             <div className="flex flex-col">
