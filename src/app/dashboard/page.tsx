@@ -37,18 +37,25 @@ export default function DashboardPage() {
     }
   }, [db, user?.id, user?.role]);
 
+  // Consulta simplificada para evitar errores de índice compuesto
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(
       collection(db, 'announcements'),
-      where('status', '==', 'active'),
       orderBy('createdAt', 'desc'),
-      limit(10)
+      limit(20)
     );
   }, [db]);
 
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
-  const { data: activeAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
+  const { data: rawAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
+
+  // Filtrado del lado del cliente para asegurar visibilidad inmediata sin índices complejos
+  const activeAnnouncements = useMemo(() => {
+    return (rawAnnouncements || [])
+      .filter(a => a.status === 'active')
+      .slice(0, 10);
+  }, [rawAnnouncements]);
 
   useEffect(() => {
     if (!db || user?.role === 'docent') return;

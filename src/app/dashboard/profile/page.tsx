@@ -34,7 +34,7 @@ export default function ProfilePage() {
 
   const { data: campuses } = useCollection<Campus>(campusesQuery);
   const { data: programs } = useCollection<Program>(programsQuery);
-  const { data: shifts } = useCollection<Shift>(shiftsQuery);
+  const { data: shifts, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -45,15 +45,24 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
+  // Estabilización de la sincronización de datos para evitar bucles infinitos
   useEffect(() => {
     if (user) {
-      setFormData({
-        name: user.name || '',
-        documentId: user.documentId || '',
-        campus: user.campus || '',
-        program: user.program || '',
-        shiftIds: user.shiftIds || [],
-        avatarUrl: user.avatarUrl || ''
+      setFormData(prev => {
+        const newData = {
+          name: user.name || '',
+          documentId: user.documentId || '',
+          campus: user.campus || '',
+          program: user.program || '',
+          shiftIds: user.shiftIds || [],
+          avatarUrl: user.avatarUrl || ''
+        };
+        
+        // Solo actualizar si hay cambios reales en los valores
+        if (JSON.stringify(prev) === JSON.stringify(newData)) {
+          return prev;
+        }
+        return newData;
       });
     }
   }, [user]);
@@ -217,7 +226,9 @@ export default function ProfilePage() {
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Sede Principal</Label>
                          <Select 
                            value={formData.campus} 
-                           onValueChange={(v) => setFormData({...formData, campus: v})}
+                           onValueChange={(v) => {
+                             if (v !== formData.campus) setFormData({...formData, campus: v});
+                           }}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
@@ -230,7 +241,9 @@ export default function ProfilePage() {
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Programa / Cargo</Label>
                          <Select 
                            value={formData.program} 
-                           onValueChange={(v) => setFormData({...formData, program: v})}
+                           onValueChange={(v) => {
+                             if (v !== formData.program) setFormData({...formData, program: v});
+                           }}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
@@ -243,36 +256,46 @@ export default function ProfilePage() {
 
                    <div className="space-y-4 pt-4">
                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Jornadas de Marcaje Asignadas</Label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                        {shifts?.map(s => (
-                          <div 
-                            key={s.id} 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              if (!saving) toggleShift(s.id);
-                            }}
-                            className={cn(
-                              "flex items-center space-x-4 p-5 rounded-3xl border-2 transition-all cursor-pointer",
-                              formData.shiftIds?.includes(s.id) 
-                                ? "bg-primary/5 border-primary shadow-sm" 
-                                : "bg-white border-gray-100 hover:border-gray-200"
-                            )}
-                          >
-                            <Checkbox 
-                              id={`profile-shift-${s.id}`} 
-                              checked={formData.shiftIds?.includes(s.id)}
-                              className="w-5 h-5 rounded-md border-primary pointer-events-none"
-                              disabled={saving}
-                            />
-                            <div className="flex flex-col">
-                              <span className="text-xs font-black text-gray-800">{s.name}</span>
-                              <span className="text-[9px] text-muted-foreground font-black uppercase tracking-tighter opacity-70">
-                                {s.startTime} - {s.endTime}
-                              </span>
+                      {shiftsLoading ? (
+                        <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin opacity-20" /></div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                          {shifts?.map(s => (
+                            <div 
+                              key={s.id} 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (!saving) toggleShift(s.id);
+                              }}
+                              className={cn(
+                                "flex items-center space-x-4 p-5 rounded-3xl border-2 transition-all cursor-pointer",
+                                formData.shiftIds?.includes(s.id) 
+                                  ? "bg-primary/5 border-primary shadow-sm" 
+                                  : "bg-white border-gray-100 hover:border-gray-200"
+                              )}
+                            >
+                              <Checkbox 
+                                id={`profile-shift-${s.id}`} 
+                                checked={formData.shiftIds?.includes(s.id)}
+                                className="w-5 h-5 rounded-md border-primary pointer-events-none"
+                                disabled={saving}
+                              />
+                              <div className="flex flex-col">
+                                <span className="text-xs font-black text-gray-800">{s.name}</span>
+                                <span className="text-[9px] text-muted-foreground font-black uppercase tracking-tighter opacity-70">
+                                  {s.startTime} - {s.endTime}
+                                </span>
+                                <div className="flex gap-1 mt-1">
+                                  {s.days?.map(d => <span key={d} className="text-[7px] bg-gray-100 px-1 rounded">{d}</span>)}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                          {(!shifts || shifts.length === 0) && (
+                            <p className="col-span-2 text-center p-8 text-xs font-bold text-muted-foreground opacity-30 uppercase tracking-widest">No hay jornadas configuradas</p>
+                          )}
+                        </div>
+                      )}
                    </div>
                 </CardContent>
 
