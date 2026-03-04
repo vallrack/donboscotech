@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useRef } from 'react';
@@ -40,7 +39,6 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Inicialización única de datos desde el usuario de Auth
   useEffect(() => {
     if (user && !hasInitialized.current) {
       setFormData({

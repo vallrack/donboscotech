@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect } from 'react';
@@ -7,7 +6,7 @@ import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit, doc, setDoc, serverTimestamp, where, getCountFromServer } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3, Loader2, ShieldAlert, MapPin } from 'lucide-react';
+import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3, Loader2, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -23,7 +22,6 @@ export default function DashboardPage() {
   
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // 1. Query for the main activity list
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     if (user.role === 'docent') {
@@ -43,7 +41,6 @@ export default function DashboardPage() {
 
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
 
-  // 2. Fetch today's count for Admin/Coordinator stats
   useEffect(() => {
     if (!db || user?.role === 'docent') return;
     
@@ -83,37 +80,6 @@ export default function DashboardPage() {
       },
     ];
   }, [user, todayCount, records]);
-
-  const handleClaimAdmin = async () => {
-    if (!db || !user) return;
-    setClaiming(true);
-    try {
-      const adminRef = doc(db, 'roles_admins', user.id);
-      await setDoc(adminRef, { 
-        email: user.email, 
-        grantedAt: serverTimestamp(),
-        grantedBy: 'system_bootstrap'
-      });
-      
-      const profileRef = doc(db, 'userProfiles', user.id);
-      await setDoc(profileRef, { role: 'admin' }, { merge: true });
-      
-      toast({
-        title: "Rol de Administrador Activado",
-        description: "Ahora tienes privilegios administrativos completos.",
-      });
-      
-      window.location.reload();
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error al reclamar rol",
-        description: "Asegúrate de no tener un rol previo o contacta soporte.",
-      });
-    } finally {
-      setClaiming(false);
-    }
-  };
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700">

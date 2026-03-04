@@ -1,15 +1,13 @@
-
 "use client"
 
 import { useAuth } from '@/components/auth/auth-provider';
 import { Navbar } from '@/components/layout/Navbar';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 function DashboardGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -22,6 +20,8 @@ function DashboardGuard({ children }: { children: React.ReactNode }) {
     }
   }, [user, isLoading, router, mounted]);
 
+  // Evitamos errores de hidratación asegurando que el render inicial sea idéntico
+  // tanto en el servidor como en el cliente (mounted = false).
   if (!mounted || (isLoading && !user)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
