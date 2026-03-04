@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User as UserIcon, Loader2, Save, Camera, Upload, CreditCard, ArrowRight } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -36,7 +36,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Consultas memoizadas con referencia estable
+  // Consultas memoizadas con referencia estable para evitar Quota Exceeded
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
   const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
@@ -45,12 +45,12 @@ export default function ProfilePage() {
   const { data: programsRaw } = useCollection<Program>(programsQuery);
   const { data: shiftsRaw, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
 
-  // Estabilizar referencias para los Selects - CLAVE PARA EVITAR BUCLES
+  // Estabilizar referencias — CLAVE para que los Select no se remonten y causen bucles
   const campuses = useMemo(() => campusesRaw, [campusesRaw]);
   const programs = useMemo(() => programsRaw, [programsRaw]);
   const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
 
-  // Sincronización inicial estable - SOLO UNA VEZ POR USUARIO
+  // Sincronización inicial única por usuario
   useEffect(() => {
     if (user && lastSyncedUserId.current !== user.id) {
       setFormData({
@@ -68,7 +68,6 @@ export default function ProfilePage() {
   // Funciones de actualización estables
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => {
-      // Evitar actualización si el valor es idéntico para romper bucles
       if (prev[field as keyof typeof prev] === value) return prev;
       return { ...prev, [field]: value };
     });
@@ -135,7 +134,6 @@ export default function ProfilePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Avatar Card */}
         <div className="lg:col-span-4">
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-12 text-center flex flex-col items-center h-full">
              <div className="relative group cursor-pointer" onClick={() => !saving && fileInputRef.current?.click()}>
@@ -162,7 +160,6 @@ export default function ProfilePage() {
           </Card>
         </div>
 
-        {/* Form Card */}
         <div className="lg:col-span-8">
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white overflow-hidden">
              <form onSubmit={handleSave}>
@@ -246,7 +243,7 @@ export default function ProfilePage() {
                           >
                             <Checkbox 
                               checked={formData.shiftIds?.includes(s.id)} 
-                              onCheckedChange={() => {}} 
+                              onCheckedChange={() => toggleShift(s.id)} 
                               className="pointer-events-none"
                             />
                             <div className="flex flex-col">

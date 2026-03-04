@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  // Consultas memoizadas con referencia estable
+  // Consultas memoizadas con referencia estable para evitar Quota Exceeded
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return user.role === 'docent'
@@ -26,6 +26,7 @@ export default function DashboardPage() {
       : query(collection(db, 'globalAttendanceRecords'), orderBy('createdAt', 'desc'), limit(8));
   }, [db, user?.id, user?.role]);
 
+  // Consulta simplificada para evitar problemas de índices y cuota
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(15));
@@ -34,8 +35,8 @@ export default function DashboardPage() {
   const { data: recordsRaw, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: annRaw, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
 
-  // Estabilizar referencias para evitar bucles en el renderizado
-  const records = useMemo(() => recordsRaw, [recordsRaw]);
+  // Estabilizar referencias y filtrar en el cliente para mayor robustez
+  const records = useMemo(() => recordsRaw || [], [recordsRaw]);
   const activeAnnouncements = useMemo(() => {
     return (annRaw || []).filter(a => a.status === 'active').slice(0, 10);
   }, [annRaw]);

@@ -12,7 +12,8 @@ import { FirestorePermissionError } from '../errors';
 
 /**
  * Hook para suscribirse a una colección o consulta de Firestore en tiempo real.
- * Utiliza un solo objeto de estado para evitar múltiples re-renders.
+ * Utiliza un solo objeto de estado para evitar múltiples re-renders y estabilizar
+ * la referencia inicial del array de datos.
  */
 export function useCollection<T = DocumentData>(query: Query<T> | null) {
   const [state, setState] = useState<{
