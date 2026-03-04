@@ -183,7 +183,7 @@ export default function ReportsPage() {
            <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl text-white font-black text-2xl">DB</div>
            <div>
              <h1 className="text-2xl font-black text-primary uppercase">Ciudad Don Bosco</h1>
-             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Informe Oficial de Auditoría de Asistencia</p>
+             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Informe Oficial de Asistencia - {user?.role === 'docent' ? 'Historial Docente' : 'Auditoría Administrativa'}</p>
            </div>
         </div>
         <div className="text-right space-y-1">
@@ -318,12 +318,18 @@ export default function ReportsPage() {
             {user?.signatureUrl ? (
               <img src={user.signatureUrl} alt="Firma Responsable" className="h-24 mx-auto object-contain mb-2" />
             ) : (
-              <div className="h-24" />
+              <div className="h-24 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-200">
+                 <span className="text-[10px] text-gray-400 font-black">Firma no cargada</span>
+              </div>
             )}
           </div>
           <div>
             <p className="text-sm font-black uppercase text-gray-800">{user?.name}</p>
-            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{user?.role || 'Responsable de Auditoría'}</p>
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+              {user?.role === 'docent' ? 'Firma del Docente' : 
+               user?.role === 'secretary' ? 'Firma de Secretaría' : 
+               'Responsable de Auditoría'}
+            </p>
             <p className="text-[8px] font-bold text-gray-400 mt-1">Sello Digital Ciudad Don Bosco</p>
           </div>
         </div>

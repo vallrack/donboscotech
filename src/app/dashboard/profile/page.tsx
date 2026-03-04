@@ -181,7 +181,7 @@ export default function ProfilePage() {
                 </div>
              </div>
              <input type="file" ref={sigInputRef} onChange={(e) => handleFileChange(e, 'signatureUrl')} className="hidden" accept="image/*" />
-             <p className="text-[9px] text-center text-muted-foreground font-medium italic">Esta firma aparecerá en los reportes de auditoría que generes.</p>
+             <p className="text-[9px] text-center text-muted-foreground font-medium italic">Esta firma aparecerá en los reportes que generes, validando tu asistencia.</p>
           </Card>
         </div>
 
