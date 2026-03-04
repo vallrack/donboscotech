@@ -65,30 +65,28 @@ export async function summarizeAttendanceReport(
 
 /**
  * Defines the prompt for generating an AI summary of attendance reports.
- * The prompt instructs the LLM to analyze structured attendance data
- * and extract key statistics, top absentees, and significant trends.
  */
 const summarizeReportPrompt = ai.definePrompt({
   name: 'summarizeReportPrompt',
   input: {schema: AiReportSummaryInputSchema},
   output: {schema: AiReportSummaryOutputSchema},
-  prompt: `You are an intelligent assistant tasked with summarizing attendance reports for an educational institution.
-Your goal is to generate a concise summary, highlighting the following key statistics and insights from the provided attendance data:
+  prompt: `Eres un asistente inteligente encargado de resumir informes de asistencia para una institución educativa (Ciudad Don Bosco).
+Tu objetivo es generar un resumen conciso en ESPAÑOL, destacando las siguientes estadísticas e ideas clave de los datos de asistencia proporcionados:
 
-1.  **Overall Punctuality**: Analyze the entry times and attendance statuses to describe the general punctuality of docents during the {{reportingPeriod}}. Include metrics like the total number or percentage of late arrivals, on-time arrivals, etc.
-2.  **Top Absentees**: Identify and list the docents who have the highest number of absences or were absent for the longest duration during the {{reportingPeriod}}.
-3.  **Significant Trends**: Look for any notable patterns or trends in the attendance data. This could include days of the week with consistently high lateness, improvements or deteriorations in punctuality over the period, or any other relevant observations.
+1.  **Puntualidad General**: Analiza las horas de entrada y los estados de asistencia para describir la puntualidad general de los docentes durante el periodo {{reportingPeriod}}. Incluye métricas como el número total o porcentaje de llegadas tarde, llegadas a tiempo, etc.
+2.  **Principales Ausencias**: Identifica y enumera a los docentes que tienen el mayor número de ausencias o que estuvieron ausentes durante la mayor duración durante el periodo {{reportingPeriod}}.
+3.  **Tendencias Significativas**: Busca patrones o tendencias notables en los datos de asistencia. Esto podría incluir días de la semana con tardanzas consistentemente altas, mejoras o deterioros en la puntualidad a lo largo del periodo, o cualquier otra observación relevante.
 
-The attendance report data for the {{reportingPeriod}} is provided below as a JSON array. Each object in the array represents a single attendance record for a docent. Ensure the summary is clear, concise, and actionable.
+Los datos del informe de asistencia para el periodo {{reportingPeriod}} se proporcionan a continuación como un arreglo JSON. Cada objeto en el arreglo representa un único registro de asistencia para un docente. Asegúrate de que el resumen sea claro, conciso y útil.
 
-Attendance Data:
+IMPORTANTE: El resumen debe estar escrito totalmente en ESPAÑOL. No utilices inglés bajo ninguna circunstancia.
+
+Datos de asistencia:
 {{{json reportData}}}`,
 });
 
 /**
  * Defines the Genkit flow for generating an AI-powered summary of attendance reports.
- * It takes structured attendance data and a reporting period as input,
- * and returns an AI-generated summary.
  */
 const aiReportSummaryFlow = ai.defineFlow(
   {

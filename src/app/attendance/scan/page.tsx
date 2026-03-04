@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useRef } from 'react';
@@ -126,23 +125,22 @@ export default function PublicAttendanceScanner() {
       const now = new Date();
       const dateStr = now.toISOString().split('T')[0];
       
-      // LÓGICA DE DETECCIÓN INTELIGENTE (ENTRADA/SALIDA)
-      // Se utiliza una consulta simple por orden de creación para evitar la necesidad de índices compuestos
-      const q = query(
-        collection(db, 'userProfiles', userId, 'attendanceRecords'),
-        orderBy('createdAt', 'desc'),
-        limit(1)
-      );
+      // Lógica de detección inteligente simplificada para evitar errores de conexión/índice
+      const recordsCol = collection(db, 'userProfiles', userId, 'attendanceRecords');
+      const q = query(recordsCol, orderBy('createdAt', 'desc'), limit(1));
       
-      const querySnap = await getDocs(q);
       let recordType: 'entry' | 'exit' = 'entry';
       
-      if (!querySnap.empty) {
-        const lastRecord = querySnap.docs[0].data();
-        // Si el último registro fue hoy, alternamos. Si fue otro día, empezamos con entrada.
-        if (lastRecord.date === dateStr) {
-          recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+      try {
+        const querySnap = await getDocs(q);
+        if (!querySnap.empty) {
+          const lastRecord = querySnap.docs[0].data();
+          if (lastRecord.date === dateStr) {
+            recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+          }
         }
+      } catch (e) {
+        console.warn("No se pudo recuperar el último registro, asumiendo ingreso por defecto.");
       }
 
       const recordId = `${userId}_${now.getTime()}_public`;
@@ -199,8 +197,8 @@ export default function PublicAttendanceScanner() {
       } else {
         toast({
           variant: "destructive",
-          title: "Fallo en la terminal",
-          description: "No se pudo sincronizar el registro. Verifique su conexión."
+          title: "Error de Sincronización",
+          description: "No se pudo registrar la asistencia. Verifique su conexión."
         });
       }
     }
