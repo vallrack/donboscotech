@@ -24,7 +24,6 @@ export default function ProfilePage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [initialized, setInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
@@ -40,9 +39,9 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Sync initial state from user object once
+  // Sync state from user object whenever it changes
   useEffect(() => {
-    if (user && !initialized) {
+    if (user) {
       setFormData({
         name: user.name || '',
         documentId: user.documentId || '',
@@ -51,9 +50,8 @@ export default function ProfilePage() {
         shiftIds: user.shiftIds || [],
         avatarUrl: user.avatarUrl || ''
       });
-      setInitialized(true);
     }
-  }, [user, initialized]);
+  }, [user]);
 
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
@@ -74,13 +72,12 @@ export default function ProfilePage() {
       return;
     }
 
-    // Firestore has a 1MB limit for the whole document. 
-    // We limit the image to 600KB to leave space for other metadata.
-    if (file.size > 600 * 1024) {
+    // Limitar a 500KB para evitar exceder el límite de documento de Firestore
+    if (file.size > 500 * 1024) {
       toast({ 
         variant: "destructive", 
         title: "Imagen muy grande", 
-        description: "El límite es 600KB para asegurar el correcto guardado del carnet." 
+        description: "El límite es 500KB para asegurar el correcto guardado del carnet." 
       });
       return;
     }
@@ -123,11 +120,11 @@ export default function ProfilePage() {
       toast({ 
         variant: "destructive", 
         title: "Error al guardar", 
-        description: "Hubo un problema al conectar con el servidor. Intenta de nuevo." 
+        description: "Hubo un problema al conectar con el servidor." 
       });
     } finally {
-      // Small delay to ensure Firestore has updated the local cache
-      setTimeout(() => setSaving(false), 500);
+      // Liberar el estado de carga después de un breve delay
+      setTimeout(() => setSaving(false), 800);
     }
   };
 
@@ -195,7 +192,7 @@ export default function ProfilePage() {
            <form onSubmit={handleSave}>
               <CardHeader className="border-b bg-gray-50/30 p-8">
                  <CardTitle className="text-lg font-black">Información Institucional</CardTitle>
-                 <CardDescription className="text-xs font-bold text-muted-foreground">Datos requeridos para el carnet oficial y auditoría de asistencia.</CardDescription>
+                 <CardDescription className="text-xs font-bold text-muted-foreground">Datos requeridos para el carnet oficial.</CardDescription>
               </CardHeader>
               <CardContent className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
@@ -269,7 +266,7 @@ export default function ProfilePage() {
               </CardContent>
               <CardFooter className="bg-gray-50/50 p-8 border-t flex justify-between items-center">
                  <p className="text-[10px] font-bold text-muted-foreground max-w-[250px]">
-                   Al guardar, tu carnet institucional se actualizará automáticamente con la nueva foto e información.
+                   Al guardar, tu carnet se actualizará automáticamente.
                  </p>
                  <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg" disabled={saving}>
                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
