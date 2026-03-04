@@ -21,16 +21,33 @@ import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { AttendanceRecord, User, Campus, Program, Shift } from '@/lib/types';
 
-function calculateHours(start: string | null, end: string | null): number {
+/**
+ * Calcula las horas trabajadas entre dos marcas de tiempo (HH:mm).
+ * Devuelve un número decimal para cálculos internos.
+ */
+function calculateHoursDecimal(start: string | null, end: string | null): number {
   if (!start || !end) return 0;
   try {
     const [h1, m1] = start.split(':').map(Number);
     const [h2, m2] = end.split(':').map(Number);
     const totalMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
-    return Math.max(0, parseFloat((totalMinutes / 60).toFixed(2)));
+    return Math.max(0, totalMinutes / 60);
   } catch (e) {
     return 0;
   }
+}
+
+/**
+ * Formatea una duración decimal en una cadena legible (Xh Ym o Z min).
+ */
+function formatDuration(decimalHours: number): string {
+  const totalMinutes = Math.round(decimalHours * 60);
+  if (totalMinutes === 0) return '--';
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 export default function ReportsPage() {
@@ -81,7 +98,6 @@ export default function ReportsPage() {
   const { data: programsRaw } = useCollection<Program>(programsQuery);
   const { data: allShiftsRaw } = useCollection<Shift>(shiftsQuery);
 
-  // Estabilización de datos para los Selectores
   const records = useMemo(() => recordsRaw || [], [recordsRaw]);
   const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
   const campuses = useMemo(() => campusesRaw || [], [campusesRaw]);
@@ -117,7 +133,7 @@ export default function ReportsPage() {
       else { if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; }
     });
 
-    const list = Array.from(grouped.values()).map(d => ({ ...d, hours: calculateHours(d.entry, d.exit) }));
+    const list = Array.from(grouped.values()).map(d => ({ ...d, hours: calculateHoursDecimal(d.entry, d.exit) }));
     const now = new Date();
     return list.filter(r => {
       const recordDate = new Date(r.date + 'T00:00:00');
@@ -136,7 +152,7 @@ export default function ReportsPage() {
       const dName = days[date.getDay() === 0 ? 6 : date.getDay() - 1];
       if (counts[dName] !== undefined) counts[dName] += r.hours;
     });
-    return Object.entries(counts).map(([name, count]) => ({ name, horas: parseFloat(count.toFixed(1)) }));
+    return Object.entries(counts).map(([name, count]) => ({ name, horas: parseFloat(count.toFixed(2)) }));
   }, [dailyReports]);
 
   const handleGenerateAiSummary = async () => {
@@ -144,7 +160,14 @@ export default function ReportsPage() {
     setGeneratingAi(true);
     try {
       const result = await summarizeAttendanceReport({
-        reportData: dailyReports.map(r => ({ userId: r.userId, userName: r.userName, date: r.date, entryTime: r.entry || undefined, exitTime: r.exit || undefined, totalHours: r.hours })),
+        reportData: dailyReports.map(r => ({ 
+          userId: r.userId, 
+          userName: r.userName, 
+          date: r.date, 
+          entryTime: r.entry || undefined, 
+          exitTime: r.exit || undefined, 
+          totalHours: r.hours 
+        })),
         reportingPeriod: period
       });
       setAiSummary(result);
@@ -163,7 +186,7 @@ export default function ReportsPage() {
           <Button variant="outline" className="rounded-xl font-black gap-2" onClick={() => {
             const BOM = "\uFEFF";
             const headers = ["Personal", "Fecha", "Jornada", "Entrada", "Salida", "Horas"];
-            const csv = BOM + "sep=;\n" + headers.join(";") + "\n" + dailyReports.map(r => `"${r.userName}";"${r.date}";"${r.shiftName}";"${r.entry || "--"}";"${r.exit || "--"}";"${r.hours}"`).join("\n");
+            const csv = BOM + "sep=;\n" + headers.join(";") + "\n" + dailyReports.map(r => `"${r.userName}";"${r.date}";"${r.shiftName}";"${r.entry || "--"}";"${r.exit || "--"}";"${formatDuration(r.hours)}"`).join("\n");
             const link = document.createElement("a");
             link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
             link.download = "Reporte_DonBosco.csv";
@@ -254,7 +277,7 @@ export default function ReportsPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/20 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-8 py-6">Personal</th><th className="px-8 py-6">Fecha</th><th className="px-8 py-6">Jornada</th><th className="px-8 py-6">Entrada/Salida</th><th className="px-8 py-6 text-center">Horas</th>
+                  <th className="px-8 py-6">Personal</th><th className="px-8 py-6">Fecha</th><th className="px-8 py-6">Jornada</th><th className="px-8 py-6">Entrada/Salida</th><th className="px-8 py-6 text-center">Duración</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -264,7 +287,7 @@ export default function ReportsPage() {
                     <td className="px-8 py-6 font-bold text-xs">{r.date}</td>
                     <td className="px-8 py-6"><Badge variant="outline" className="text-[9px] font-black uppercase">{r.shiftName}</Badge></td>
                     <td className="px-8 py-6 text-xs font-bold text-gray-600">{r.entry || '--:--'} → {r.exit || '--:--'}</td>
-                    <td className="px-8 py-6 text-center"><Badge className="font-black bg-green-500">{r.hours}h</Badge></td>
+                    <td className="px-8 py-6 text-center"><Badge className="font-black bg-green-500">{formatDuration(r.hours)}</Badge></td>
                   </tr>
                 ))}
               </tbody>
