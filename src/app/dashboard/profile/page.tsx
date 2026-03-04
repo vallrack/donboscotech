@@ -45,7 +45,7 @@ export default function ProfilePage() {
   const { data: programsRaw } = useCollection<Program>(programsQuery);
   const { data: shiftsRaw, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
 
-  // Estabilizar referencias para los Selects
+  // Estabilizar referencias para los Selects - CLAVE PARA EVITAR BUCLES
   const campuses = useMemo(() => campusesRaw, [campusesRaw]);
   const programs = useMemo(() => programsRaw, [programsRaw]);
   const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
@@ -65,11 +65,11 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  // Funciones de actualización estables para evitar bucles
+  // Funciones de actualización estables
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => {
-      // Evitar actualización si el valor es idéntico
-      if (JSON.stringify(prev[field as keyof typeof prev]) === JSON.stringify(value)) return prev;
+      // Evitar actualización si el valor es idéntico para romper bucles
+      if (prev[field as keyof typeof prev] === value) return prev;
       return { ...prev, [field]: value };
     });
   }, []);
@@ -246,7 +246,7 @@ export default function ProfilePage() {
                           >
                             <Checkbox 
                               checked={formData.shiftIds?.includes(s.id)} 
-                              onCheckedChange={() => {}} // Manejado por el click del contenedor
+                              onCheckedChange={() => {}} 
                               className="pointer-events-none"
                             />
                             <div className="flex flex-col">
