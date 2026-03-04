@@ -191,9 +191,8 @@ export default function ReportsPage() {
       return;
     }
 
-    // Configuración para Excel Profesional: UTF-8 BOM + Separador explícito
-    const BOM = "\uFEFF"; // Byte Order Mark para UTF-8 (corrige acentos y eñes en Excel)
-    const excelSeparator = "sep=;\n"; // Indica a Excel que el separador es punto y coma
+    const BOM = "\uFEFF";
+    const excelSeparator = "sep=;\n";
     const headers = ["Docente", "Fecha", "Entrada", "Salida", "Horas Totales", "Sede", "Programa"];
     
     const csvRows = dailyReports.map(r => [
@@ -241,8 +240,8 @@ export default function ReportsPage() {
             <Button variant="outline" className="rounded-xl font-black h-10 gap-2 shadow-sm" onClick={handleExportExcel}>
               <Download className="w-4 h-4 text-green-600" /> Excel
             </Button>
-            <Button variant="outline" className="rounded-xl font-black h-10 gap-2 shadow-sm" onClick={handlePrint}>
-              <Printer className="w-4 h-4 text-primary" /> PDF / Imprimir
+            <Button variant="default" className="rounded-xl font-black h-10 gap-2 shadow-sm" onClick={handlePrint}>
+              <Printer className="w-4 h-4" /> PDF / Imprimir
             </Button>
             {!isDocent && (
               <Button variant="ghost" className="text-muted-foreground font-black text-[10px] uppercase tracking-widest gap-2" onClick={() => { setPeriod('Mes Actual'); setSelectedDocent('all'); setSelectedCampus('all'); setSelectedProgram('all'); setSelectedShift('all'); setAiSummary(null); }}>
@@ -398,9 +397,10 @@ export default function ReportsPage() {
           .no-print { display: none !important; }
           body { background: white !important; }
           .print-card { box-shadow: none !important; border: 1px solid #eee !important; }
-          .sidebar { display: none !important; }
+          .sidebar, header, nav, footer { display: none !important; }
           main { padding: 0 !important; }
           .max-w-7xl { max-width: 100% !important; }
+          .Card { border: 1px solid #ddd !important; }
         }
       `}</style>
     </div>
