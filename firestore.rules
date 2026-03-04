@@ -9,7 +9,13 @@ service cloud.firestore {
     function isSecretary() { return isSignedIn() && exists(/databases/$(database)/documents/roles_secretaries/$(request.auth.uid)); }
     function isPrivileged() { return isAdmin() || isCoordinator() || isSecretary(); }
 
-    // ACCESO SIN RESTRICCIONES PARA ADMIN Y COORDINADOR
+    // Anuncios: Lectura permitida para todos los autenticados, escritura solo privilegiados
+    match /announcements/{id} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+
+    // ACCESO SIN RESTRICCIONES PARA ADMIN Y COORDINADOR (Excepto donde se especifique lo contrario)
     match /{document=**} {
       allow read, write: if isAdmin() || isCoordinator();
     }
@@ -30,14 +36,8 @@ service cloud.firestore {
     // Historial global de asistencia
     match /globalAttendanceRecords/{recordId} {
       allow create: if true; 
-      allow read: if isSignedIn() && isPrivileged();
+      allow read: if isSignedIn() && (isPrivileged() || exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid)));
       allow update, delete: if isAdmin() || isCoordinator();
-    }
-    
-    // Anuncios
-    match /announcements/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isPrivileged();
     }
     
     // Colecciones de roles

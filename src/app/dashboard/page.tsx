@@ -37,14 +37,15 @@ export default function DashboardPage() {
   }, [db, user?.id, user?.role]);
 
   const announcementsQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    // Solo permitimos la consulta si el usuario está autenticado y cargado
+    if (!db || !user) return null;
     return query(
       collection(db, 'announcements'),
       where('status', '==', 'active'),
       orderBy('createdAt', 'desc'),
       limit(10)
     );
-  }, [db]);
+  }, [db, user]);
 
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: announcements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
@@ -134,7 +135,9 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {annLoading ? <div className="p-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto opacity-10" /></div> : (
+            {annLoading ? (
+              <div className="p-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto opacity-10" /></div>
+            ) : (
               <div className="divide-y divide-gray-50">
                 {announcements.map((ann) => (
                   <div key={ann.id} className="p-8 hover:bg-gray-50/50 transition-all group">
