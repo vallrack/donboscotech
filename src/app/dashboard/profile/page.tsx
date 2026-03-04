@@ -14,6 +14,7 @@ import { User, Mail, Shield, BookOpen, Building2, Clock, Contact, Loader2, Save,
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 
 export default function ProfilePage() {
@@ -184,4 +185,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
