@@ -22,6 +22,7 @@ export default function AttendanceScanPage() {
   
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const locationRef = useRef<{ lat: number, lng: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -57,7 +58,7 @@ export default function AttendanceScanPage() {
       html5QrCode.current.start(
         { facingMode: "environment" }, 
         config,
-        (decodedText) => handleScanSuccess(decodedText),
+        (decodedText) => registerAttendance(decodedText),
         () => {}
       ).catch(() => {});
 
@@ -71,9 +72,11 @@ export default function AttendanceScanPage() {
 
   useEffect(() => {
     if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
+      const watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocation(coords);
+          locationRef.current = coords;
           setLocationLoading(false);
         },
         (err) => {
@@ -86,35 +89,14 @@ export default function AttendanceScanPage() {
         },
         { enableHighAccuracy: true }
       );
+      return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [toast]);
 
-  const handleScanSuccess = (decodedText: string) => {
-    if (success || scanning) return;
-    registerAttendance(decodedText);
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !db) return;
-
-    const scanner = new Html5Qrcode(qrRegionId);
-    try {
-      const decodedText = await scanner.scanFile(file, true);
-      handleScanSuccess(decodedText);
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "QR no detectado",
-        description: "No se encontró un código QR válido en la imagen.",
-      });
-    }
-  };
-
   const registerAttendance = (token: string) => {
-    if (!db || !user) return;
+    if (!db || !user || success || scanning) return;
 
-    if (!location) {
+    if (!locationRef.current) {
        toast({
          variant: "destructive",
          title: "Esperando GPS",
@@ -137,7 +119,7 @@ export default function AttendanceScanPage() {
       type: 'entry',
       method: 'QR',
       tokenScanned: token,
-      location: { lat: location.lat, lng: location.lng, address: 'Sede Ciudad Don Bosco' },
+      location: { lat: locationRef.current.lat, lng: locationRef.current.lng, address: 'Sede Ciudad Don Bosco' },
       createdAt: serverTimestamp()
     };
 
@@ -167,13 +149,32 @@ export default function AttendanceScanPage() {
       });
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !db) return;
+
+    const scanner = new Html5Qrcode(qrRegionId);
+    try {
+      const decodedText = await scanner.scanFile(file, true);
+      registerAttendance(decodedText);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "QR no detectado",
+        description: "No se encontró un código QR válido en la imagen.",
+      });
+    }
+  };
+
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] animate-in zoom-in duration-500">
-        <CheckCircle2 className="w-24 h-24 text-green-500 mb-6" />
-        <h2 className="text-3xl font-bold">¡Asistencia Registrada!</h2>
-        <p className="text-muted-foreground mt-2">Tu jornada ha sido sincronizada correctamente.</p>
-        <Button className="mt-8 h-12 rounded-xl font-bold" onClick={() => window.location.href = '/dashboard'}>
+        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-6 shadow-lg">
+          <CheckCircle2 className="w-16 h-16 text-green-500" />
+        </div>
+        <h2 className="text-3xl font-black">¡Asistencia Registrada!</h2>
+        <p className="text-muted-foreground mt-2 font-bold">Tu jornada ha sido sincronizada correctamente.</p>
+        <Button className="mt-8 h-12 rounded-xl font-bold px-8 shadow-lg" onClick={() => window.location.href = '/dashboard'}>
           Volver al Dashboard
         </Button>
       </div>
@@ -183,25 +184,26 @@ export default function AttendanceScanPage() {
   return (
     <div className="max-w-xl mx-auto py-4 animate-in fade-in duration-500">
       <Card className="border-none shadow-2xl overflow-hidden rounded-[2.5rem] bg-white">
-        <CardHeader className="bg-primary text-white text-center py-10 relative">
+        <CardHeader className="bg-primary text-white text-center py-10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
           <CardTitle className="text-3xl font-black">Registro Institucional</CardTitle>
-          <CardDescription className="text-primary-foreground/80 font-medium">
+          <CardDescription className="text-primary-foreground/80 font-bold mt-2">
             Escanea el código de la sede o sube una imagen
           </CardDescription>
         </CardHeader>
         
         <CardContent className="p-8 space-y-8">
-          <div className="flex p-1 bg-gray-100 rounded-2xl">
+          <div className="flex p-1.5 bg-gray-100 rounded-2xl">
             <Button 
               variant={mode === 'camera' ? 'default' : 'ghost'} 
-              className={cn("flex-1 rounded-xl font-bold transition-all", mode === 'camera' && "shadow-md")}
+              className={cn("flex-1 rounded-xl font-black transition-all h-11", mode === 'camera' && "shadow-md")}
               onClick={() => setMode('camera')}
             >
               <Camera className="w-4 h-4 mr-2" /> Cámara
             </Button>
             <Button 
               variant={mode === 'file' ? 'default' : 'ghost'} 
-              className={cn("flex-1 rounded-xl font-bold transition-all", mode === 'file' && "shadow-md")}
+              className={cn("flex-1 rounded-xl font-black transition-all h-11", mode === 'file' && "shadow-md")}
               onClick={() => setMode('file')}
             >
               <ImageIcon className="w-4 h-4 mr-2" /> Imagen
@@ -212,7 +214,7 @@ export default function AttendanceScanPage() {
             <div 
               id={qrRegionId} 
               className={cn(
-                "w-full aspect-square bg-gray-50 rounded-[2rem] overflow-hidden border-4 border-dashed border-gray-200 transition-all",
+                "w-full aspect-square bg-gray-50 rounded-[2rem] overflow-hidden border-4 border-dashed border-gray-200 transition-all shadow-inner",
                 mode === 'file' && "hidden"
               )}
             />
@@ -220,39 +222,49 @@ export default function AttendanceScanPage() {
             {mode === 'camera' && !hasCameraPermission && hasCameraPermission !== null && (
               <Alert variant="destructive" className="mt-4 rounded-2xl">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Acceso a Cámara Requerido</AlertTitle>
-                <AlertDescription>Habilite los permisos de cámara en su navegador.</AlertDescription>
+                <AlertTitle className="font-black">ACCESO A CÁMARA REQUERIDO</AlertTitle>
+                <AlertDescription className="font-bold">Habilite los permisos de cámara en su navegador para registrarse.</AlertDescription>
               </Alert>
             )}
 
             {mode === 'file' && (
-              <div className="w-full aspect-square bg-gray-50 rounded-[2rem] flex flex-col items-center justify-center border-4 border-dashed border-gray-200 p-8 text-center space-y-4">
-                <ImageIcon className="w-10 h-10 text-primary opacity-20" />
-                <p className="font-bold text-gray-800">Sube una foto del QR</p>
+              <div className="w-full aspect-square bg-gray-50 rounded-[2rem] flex flex-col items-center justify-center border-4 border-dashed border-gray-200 p-8 text-center space-y-4 shadow-inner">
+                <div className="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center text-primary/30">
+                  <ImageIcon className="w-10 h-10" />
+                </div>
+                <div>
+                  <p className="font-black text-gray-800">Sube una foto del QR</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Formatos: JPG, PNG</p>
+                </div>
                 <Input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" id="qr-upload" />
-                <Button asChild className="rounded-xl font-bold h-12 px-8">
-                  <label htmlFor="qr-upload" className="cursor-pointer">Seleccionar Archivo</label>
+                <Button asChild className="rounded-xl font-black h-12 px-10 shadow-lg shadow-primary/10">
+                  <label htmlFor="qr-upload" className="cursor-pointer">SELECCIONAR ARCHIVO</label>
                 </Button>
               </div>
             )}
           </div>
 
           <div className="grid grid-cols-1 gap-3">
-             <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-4">
-                <div className={cn("p-2 rounded-xl", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>
+             <div className="p-5 bg-gray-50 rounded-3xl border border-gray-100 flex items-center gap-5">
+                <div className={cn("p-3 rounded-2xl shadow-sm", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>
                    {locationLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
                 </div>
                 <div>
                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Geolocalización</p>
-                   <p className="text-xs font-bold text-gray-700">{location ? "GPS Activo - Zona Validada" : "Esperando señal GPS..."}</p>
+                   <p className="text-xs font-black text-gray-700">{location ? "GPS Activo - Zona Validada" : "Esperando señal GPS..."}</p>
                 </div>
+                {scanning && <Loader2 className="w-5 h-5 animate-spin text-primary ml-auto" />}
              </div>
           </div>
         </CardContent>
 
-        <CardFooter className="bg-gray-50/50 p-8">
-           <p className="text-[10px] text-center w-full text-muted-foreground leading-relaxed font-medium">
-             Su ubicación se valida automáticamente para el registro laboral institucional.
+        <CardFooter className="bg-gray-50/50 p-8 border-t">
+           <div className="flex items-center justify-center gap-3 text-primary/40 mb-2 w-full">
+             <ShieldCheck className="w-4 h-4" />
+             <span className="text-[9px] font-black uppercase tracking-widest">Protocolo de Seguridad Don Bosco</span>
+           </div>
+           <p className="text-[10px] text-center w-full text-muted-foreground leading-relaxed font-bold opacity-60">
+             Su ubicación se valida automáticamente para el registro laboral institucional. Todos los datos están cifrados.
            </p>
         </CardFooter>
       </Card>

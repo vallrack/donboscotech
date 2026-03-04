@@ -98,7 +98,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name,
       email,
       role,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      avatarUrl: '',
+      documentId: '',
+      campus: '',
+      program: '',
+      shiftIds: []
     });
 
     if (role !== 'docent') {

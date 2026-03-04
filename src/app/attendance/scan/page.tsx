@@ -23,6 +23,7 @@ export default function PublicAttendanceScanner() {
   
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const locationRef = useRef<{ lat: number, lng: number } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [lastScannedUser, setLastScannedUser] = useState<any>(null);
   const [mode, setMode] = useState<'camera' | 'file'>('camera');
@@ -34,14 +35,20 @@ export default function PublicAttendanceScanner() {
   // 1. GPS Validation
   useEffect(() => {
     if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocation(coords);
+          locationRef.current = coords;
+        },
         (err) => toast({ 
           title: "GPS Requerido", 
           description: "La terminal institucional requiere acceso al GPS para validar la ubicación de la sede.",
           variant: "destructive" 
-        })
+        }),
+        { enableHighAccuracy: true }
       );
+      return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [toast]);
 
@@ -88,6 +95,15 @@ export default function PublicAttendanceScanner() {
 
   const handleScanSuccess = async (userId: string) => {
     if (scanning || !db) return;
+
+    if (!locationRef.current) {
+       toast({
+         variant: "destructive",
+         title: "GPS Requerido",
+         description: "Esperando validación de ubicación de la sede."
+       });
+       return;
+    }
     
     setScanning(true);
     try {
@@ -118,7 +134,7 @@ export default function PublicAttendanceScanner() {
         time: timeStr,
         type: 'entry',
         method: 'QR Terminal',
-        location: location || { lat: 0, lng: 0, address: 'Sede Ciudad Don Bosco' },
+        location: locationRef.current,
         createdAt: serverTimestamp()
       };
 
@@ -190,7 +206,7 @@ export default function PublicAttendanceScanner() {
               <div className="flex flex-col items-center justify-center py-10 animate-in zoom-in duration-300">
                 <div className="w-32 h-32 rounded-[2.5rem] bg-green-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl mb-6">
                    {lastScannedUser.photo ? (
-                     <Image src={lastScannedUser.photo} alt={lastScannedUser.name} width={128} height={128} className="object-cover" />
+                     <Image src={lastScannedUser.photo} alt={lastScannedUser.name} width={128} height={128} className="object-cover" unoptimized />
                    ) : (
                      <UserIcon className="w-16 h-16 text-green-600" />
                    )}
@@ -250,7 +266,7 @@ export default function PublicAttendanceScanner() {
                         <p className="font-black text-xl text-gray-800">Sube tu carnet digital</p>
                         <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">CAPTURA DE PANTALLA O FOTO</p>
                       </div>
-                      <Input 
+                      <input 
                         type="file" 
                         accept="image/*" 
                         onChange={handleFileUpload}

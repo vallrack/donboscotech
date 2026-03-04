@@ -41,6 +41,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
+  // Sync formData with user object whenever user object updates from AuthProvider
   useEffect(() => {
     if (user && !saving) {
       setFormData({
@@ -112,8 +113,8 @@ export default function ProfilePage() {
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al guardar", description: "No se pudo conectar con el servidor." });
     } finally {
-      // Usamos un timeout pequeño para asegurar que el estado se libere tras el proceso de Firebase
-      setTimeout(() => setSaving(false), 500);
+      // Ensure state is released
+      setSaving(false);
     }
   };
 
