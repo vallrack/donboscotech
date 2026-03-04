@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Search, Mail, Loader2, ShieldCheck, UserCog, 
-  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, MapPin 
+  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, MapPin, Shield
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +82,17 @@ export default function UserManagementPage() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || isCreating) return;
+    
+    // Restricción: Coordinador no puede crear Administradores
+    if (currentUser?.role === 'coordinator' && formData.role === 'admin') {
+      toast({
+        variant: "destructive",
+        title: "Permiso denegado",
+        description: "Como coordinador, no puedes registrar nuevos administradores."
+      });
+      return;
+    }
+
     setIsCreating(true);
     let tempApp;
     try {
@@ -118,16 +129,39 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleRoleChange = async (userId: string, targetRole: UserRole, userEmail: string) => {
+  const handleRoleChange = async (userId: string, targetRole: UserRole, userEmail: string, currentRole: string) => {
     if (!db || !userId) return;
+
+    // RESTRICCIÓN CRÍTICA: Coordinador no puede modificar a un Administrador
+    if (currentUser?.role === 'coordinator' && currentRole === 'admin') {
+      toast({
+        variant: "destructive",
+        title: "Acción bloqueada",
+        description: "Los coordinadores no tienen permisos para gestionar cuentas de administrador."
+      });
+      return;
+    }
+
+    // RESTRICCIÓN: Coordinador no puede elevar a alguien a Administrador
+    if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
+      toast({
+        variant: "destructive",
+        title: "Acción bloqueada",
+        description: "No tienes permisos para asignar roles de administrador."
+      });
+      return;
+    }
+
     setUpdatingId(userId);
     try {
       await updateDoc(doc(db, 'userProfiles', userId), { role: targetRole });
       const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
       for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
+      
       if (targetRole === 'admin') await setDoc(doc(db, 'roles_admins', userId), { email: userEmail });
       if (targetRole === 'coordinator') await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail });
       if (targetRole === 'secretary') await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail });
+      
       toast({ title: "Acceso Actualizado" });
     } catch (error) {
       toast({ title: "Error", variant: "destructive" });
@@ -136,7 +170,6 @@ export default function UserManagementPage() {
     }
   };
 
-  // Si el sistema de autenticación aún está cargando, no mostramos nada para evitar el flash de "Acceso Restringido"
   if (authLoading) return null;
 
   const isPrivileged = currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
@@ -188,7 +221,18 @@ export default function UserManagementPage() {
                     ))}
                   </div>
                 </div>
-                <div className="space-y-2 md:col-span-2"><Label>Rol</Label><Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}><SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="docent">Docente</SelectItem><SelectItem value="secretary">Secretaría</SelectItem><SelectItem value="coordinator">Coordinador</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Rol</Label>
+                  <Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}>
+                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="docent">Docente</SelectItem>
+                      <SelectItem value="secretary">Secretaría</SelectItem>
+                      <SelectItem value="coordinator">Coordinador</SelectItem>
+                      {currentUser?.role === 'admin' && <SelectItem value="admin">Administrador</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <DialogFooter><Button type="submit" className="w-full h-12 rounded-xl font-black" disabled={isCreating}>{isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Registro"}</Button></DialogFooter>
             </form>
@@ -203,18 +247,54 @@ export default function UserManagementPage() {
               <thead><tr className="bg-gray-50/30 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground"><th className="px-8 py-6">Personal</th><th className="px-8 py-6">Info</th><th className="px-8 py-6">Permisos</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
                 {usersLoading ? (<tr><td colSpan={3} className="py-24 text-center"><Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" /></td></tr>) : (
-                  filteredUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-gray-50/50 transition-all">
-                      <td className="px-8 py-6"><div className="flex items-center gap-5"><div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black">{u.name?.charAt(0)}</div><div><div className="font-black text-base">{u.name}</div><div className="text-xs text-muted-foreground">{u.email}</div></div></div></td>
-                      <td className="px-8 py-6"><div className="space-y-1"><div className="text-[10px] font-black uppercase"><MapPin className="w-3 h-3 inline mr-1" /> {u.campus || 'Sin Sede'}</div><div className="text-[10px] font-black uppercase text-primary"><BookOpen className="w-3 h-3 inline mr-1" /> {u.program || 'Sin Programa'}</div></div></td>
-                      <td className="px-8 py-6">
-                        <Select disabled={updatingId === u.id || currentUser?.id === u.id} onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.email)} value={u.role || 'docent'}>
-                          <SelectTrigger className="w-48 h-10 rounded-xl text-xs font-black">{updatingId === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <SelectValue />}</SelectTrigger>
-                          <SelectContent><SelectItem value="docent">Docente</SelectItem><SelectItem value="secretary">Secretaría</SelectItem><SelectItem value="coordinator">Coordinador</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent>
-                        </Select>
-                      </td>
-                    </tr>
-                  ))
+                  filteredUsers.map((u) => {
+                    const isProtectedAdmin = u.role === 'admin' && currentUser?.role === 'coordinator';
+                    const isSelf = currentUser?.id === u.id;
+                    const isDisabled = updatingId === u.id || isSelf || isProtectedAdmin;
+
+                    return (
+                      <tr key={u.id} className="hover:bg-gray-50/50 transition-all">
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-5">
+                            <div className={cn(
+                              "w-12 h-12 rounded-2xl flex items-center justify-center font-black",
+                              u.role === 'admin' ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                            )}>
+                              {u.role === 'admin' ? <Shield className="w-6 h-6" /> : u.name?.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="font-black text-base flex items-center gap-2">
+                                {u.name}
+                                {isProtectedAdmin && <Badge variant="secondary" className="text-[8px]">PROTEGIDO</Badge>}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{u.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6"><div className="space-y-1"><div className="text-[10px] font-black uppercase"><MapPin className="w-3 h-3 inline mr-1" /> {u.campus || 'Sin Sede'}</div><div className="text-[10px] font-black uppercase text-primary"><BookOpen className="w-3 h-3 inline mr-1" /> {u.program || 'Sin Programa'}</div></div></td>
+                        <td className="px-8 py-6">
+                          <Select 
+                            disabled={isDisabled} 
+                            onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.email, u.role)} 
+                            value={u.role || 'docent'}
+                          >
+                            <SelectTrigger className={cn(
+                              "w-48 h-10 rounded-xl text-xs font-black",
+                              isProtectedAdmin && "opacity-50 border-dashed"
+                            )}>
+                              {updatingId === u.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <SelectValue />}
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="docent">Docente</SelectItem>
+                              <SelectItem value="secretary">Secretaría</SelectItem>
+                              <SelectItem value="coordinator">Coordinador</SelectItem>
+                              {currentUser?.role === 'admin' && <SelectItem value="admin">Administrador</SelectItem>}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>

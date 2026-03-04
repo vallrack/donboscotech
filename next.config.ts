@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -36,6 +37,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Optimización para Vercel
+  reactStrictMode: true,
+  poweredByHeader: false,
 };
 
 export default nextConfig;
