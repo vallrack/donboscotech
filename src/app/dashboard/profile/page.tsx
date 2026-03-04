@@ -61,21 +61,26 @@ export default function ProfilePage() {
     }
   }, [user]);
 
+  // Función de actualización estable con verificación de igualdad profunda
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => {
-      if (JSON.stringify(prev[field as keyof typeof prev]) === JSON.stringify(value)) return prev;
+      const currentValue = prev[field as keyof typeof prev];
+      if (JSON.stringify(currentValue) === JSON.stringify(value)) return prev;
       return { ...prev, [field]: value };
     });
   }, []);
 
-  const toggleShift = (shiftId: string) => {
+  // Toggle de jornada estable usando actualización funcional
+  const toggleShift = useCallback((shiftId: string) => {
     if (saving) return;
-    const current = formData.shiftIds || [];
-    const newShifts = current.includes(shiftId)
-      ? current.filter(id => id !== shiftId)
-      : [...current, shiftId];
-    updateField('shiftIds', newShifts);
-  };
+    setFormData(prev => {
+      const current = prev.shiftIds || [];
+      const newShifts = current.includes(shiftId)
+        ? current.filter(id => id !== shiftId)
+        : [...current, shiftId];
+      return { ...prev, shiftIds: newShifts };
+    });
+  }, [saving]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -210,15 +215,14 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Sede Principal</Label>
                          <Select 
-                           value={formData.campus || "unselected"} 
-                           onValueChange={(v) => updateField('campus', v === "unselected" ? "" : v)}
+                           value={formData.campus} 
+                           onValueChange={(v) => updateField('campus', v)}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Sede" />
                            </SelectTrigger>
                            <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
-                             <SelectItem value="unselected" className="font-bold py-3">Sin Sede</SelectItem>
                              {campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold py-3">{c.name}</SelectItem>)}
                            </SelectContent>
                          </Select>
@@ -226,15 +230,14 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Programa / Cargo</Label>
                          <Select 
-                           value={formData.program || "unselected"} 
-                           onValueChange={(v) => updateField('program', v === "unselected" ? "" : v)}
+                           value={formData.program} 
+                           onValueChange={(v) => updateField('program', v)}
                            disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Programa" />
                            </SelectTrigger>
                            <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
-                             <SelectItem value="unselected" className="font-bold py-3">Sin Programa</SelectItem>
                              {programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold py-3">{p.name}</SelectItem>)}
                            </SelectContent>
                          </Select>
@@ -269,7 +272,7 @@ export default function ProfilePage() {
                               </div>
                             </div>
                           ))}
-                          {shifts?.length === 0 && (
+                          {!shiftsLoading && shifts?.length === 0 && (
                             <p className="col-span-full text-center py-6 text-muted-foreground text-xs italic">
                               No hay jornadas institucionales registradas.
                             </p>

@@ -38,7 +38,7 @@ export default function DashboardPage() {
     }
   }, [db, user?.id, user?.role]);
 
-  // Consulta de anuncios simplificada para evitar requisitos de índices complejos y ahorrar cuota
+  // Consulta simplificada para evitar errores de índices y proteger cuota
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(
