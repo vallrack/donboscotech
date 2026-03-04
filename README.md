@@ -14,7 +14,7 @@ Para subir tus cambios al repositorio oficial:
 1. `git init` (si es la primera vez)
 2. `git add .`
 3. `git commit -m "Descripción de tus cambios"`
-4. `git remote add origin https://github.com/TU_USUARIO/TU_REPOSITORIO.git`
+4. `git remote add origin https://github.com/vallrack/donboscotech.git`
 5. `git push -u origin main`
 
 ## Despliegue en Vercel
