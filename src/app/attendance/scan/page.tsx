@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useFirestore } from '@/firebase';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { QrCode, MapPin, CheckCircle2, Loader2, Camera, Image as ImageIcon, AlertCircle, ArrowLeft, User as UserIcon, ShieldCheck } from 'lucide-react';
+import { QrCode, MapPin, CheckCircle2, Loader2, Camera, Image as ImageIcon, AlertCircle, ArrowLeft, User as UserIcon, ShieldCheck, LogOut, LogIn } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
@@ -128,8 +128,24 @@ export default function PublicAttendanceScanner() {
 
       const userData = userSnap.data();
       const now = new Date();
-      const recordId = `${userId}_${now.getTime()}_public`;
       const dateStr = now.toISOString().split('T')[0];
+      
+      // LOGIC TO DETERMINE ENTRY OR EXIT
+      const q = query(
+        collection(db, 'globalAttendanceRecords'),
+        where('userId', '==', userId),
+        where('date', '==', dateStr),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+      const querySnap = await getDocs(q);
+      let recordType: 'entry' | 'exit' = 'entry';
+      if (!querySnap.empty) {
+        const lastRecord = querySnap.docs[0].data();
+        recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+      }
+
+      const recordId = `${userId}_${now.getTime()}_public`;
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       
       const recordData = {
@@ -137,7 +153,7 @@ export default function PublicAttendanceScanner() {
         userName: userData.name,
         date: dateStr,
         time: timeStr,
-        type: 'entry',
+        type: recordType,
         method: 'QR Terminal',
         location: locationRef.current,
         createdAt: serverTimestamp()
@@ -151,11 +167,16 @@ export default function PublicAttendanceScanner() {
         setDoc(globalRecordRef, recordData)
       ]);
 
-      setLastScannedUser({ name: userData.name, photo: userData.avatarUrl, time: timeStr });
+      setLastScannedUser({ 
+        name: userData.name, 
+        photo: userData.avatarUrl, 
+        time: timeStr, 
+        type: recordType 
+      });
       
       toast({
-        title: "¡Asistencia Registrada!",
-        description: `Bienvenido(a), ${userData.name.split(' ')[0]}.`
+        title: recordType === 'entry' ? "¡Ingreso Registrado!" : "¡Salida Registrada!",
+        description: `Buen turno, ${userData.name.split(' ')[0]}.`
       });
 
       setTimeout(() => {
@@ -210,19 +231,33 @@ export default function PublicAttendanceScanner() {
           
           <CardContent className="p-10 space-y-8">
             {lastScannedUser ? (
-              <div className="flex flex-col items-center justify-center py-10 animate-in zoom-in duration-300">
-                <div className="w-32 h-32 rounded-[2.5rem] bg-green-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl mb-6">
+              <div className="flex flex-col items-center justify-center py-10 animate-in zoom-in duration-300 text-center">
+                <div className={cn(
+                  "w-32 h-32 rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-white shadow-xl mb-6 relative",
+                  lastScannedUser.type === 'entry' ? "bg-green-100" : "bg-blue-100"
+                )}>
                    {lastScannedUser.photo ? (
                      <Image src={lastScannedUser.photo} alt={lastScannedUser.name} width={128} height={128} className="object-cover" unoptimized />
                    ) : (
-                     <UserIcon className="w-16 h-16 text-green-600" />
+                     <UserIcon className={cn("w-16 h-16", lastScannedUser.type === 'entry' ? "text-green-600" : "text-blue-600")} />
                    )}
+                   <div className={cn(
+                     "absolute bottom-2 right-2 p-1.5 rounded-lg shadow-lg",
+                     lastScannedUser.type === 'entry' ? "bg-green-500 text-white" : "bg-blue-500 text-white"
+                   )}>
+                     {lastScannedUser.type === 'entry' ? <LogIn className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
+                   </div>
                 </div>
-                <div className="text-center">
-                  <Badge className="bg-green-500 text-white font-black mb-2 px-4 py-1.5 rounded-xl">REGISTRO EXITOSO</Badge>
+                <div>
+                  <Badge className={cn(
+                    "text-white font-black mb-2 px-4 py-1.5 rounded-xl uppercase tracking-widest",
+                    lastScannedUser.type === 'entry' ? "bg-green-500" : "bg-blue-500"
+                  )}>
+                    {lastScannedUser.type === 'entry' ? "INGRESO EXITOSO" : "SALIDA EXITOSA"}
+                  </Badge>
                   <h3 className="text-3xl font-black text-gray-800">{lastScannedUser.name}</h3>
                   <p className="text-muted-foreground font-bold mt-1 flex items-center justify-center gap-2">
-                    Ingreso registrado a las {lastScannedUser.time}
+                    Registrado a las {lastScannedUser.time}
                   </p>
                 </div>
               </div>

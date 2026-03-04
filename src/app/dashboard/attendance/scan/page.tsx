@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
@@ -25,7 +25,7 @@ export default function AttendanceScanPage() {
   const locationRef = useRef<{ lat: number, lng: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<any>(null);
   const [mode, setMode] = useState<'camera' | 'file'>('camera');
   
   const qrRegionId = "qr-reader";
@@ -93,7 +93,7 @@ export default function AttendanceScanPage() {
     }
   }, [toast]);
 
-  const registerAttendance = (token: string) => {
+  const registerAttendance = async (token: string) => {
     if (!db || !user || success || scanning) return;
 
     if (!locationRef.current) {
@@ -107,46 +107,62 @@ export default function AttendanceScanPage() {
 
     setScanning(true);
     const now = new Date();
-    const recordId = `${user.id}_${now.getTime()}`;
     const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     
-    const recordData = {
-      userId: user.id,
-      userName: user.name,
-      date: dateStr,
-      time: timeStr,
-      type: 'entry',
-      method: 'QR',
-      tokenScanned: token,
-      location: { lat: locationRef.current.lat, lng: locationRef.current.lng, address: 'Sede Ciudad Don Bosco' },
-      createdAt: serverTimestamp()
-    };
+    try {
+      // DETERMINE IF IT IS ENTRY OR EXIT
+      const q = query(
+        collection(db, 'globalAttendanceRecords'),
+        where('userId', '==', user.id),
+        where('date', '==', dateStr),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+      const querySnap = await getDocs(q);
+      let recordType: 'entry' | 'exit' = 'entry';
+      if (!querySnap.empty) {
+        const lastRecord = querySnap.docs[0].data();
+        recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+      }
 
-    const userRecordRef = doc(db, 'userProfiles', user.id, 'attendanceRecords', recordId);
-    setDoc(userRecordRef, recordData).catch((err) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userRecordRef.path,
-        operation: 'create',
-        requestResourceData: recordData
-      }));
-    });
+      const recordId = `${user.id}_${now.getTime()}`;
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      
+      const recordData = {
+        userId: user.id,
+        userName: user.name,
+        date: dateStr,
+        time: timeStr,
+        type: recordType,
+        method: 'QR',
+        tokenScanned: token,
+        location: { lat: locationRef.current.lat, lng: locationRef.current.lng, address: 'Sede Ciudad Don Bosco' },
+        createdAt: serverTimestamp()
+      };
 
-    const globalRecordRef = doc(db, 'globalAttendanceRecords', recordId);
-    setDoc(globalRecordRef, recordData)
-      .then(() => {
-        setScanning(false);
-        setSuccess(true);
-        toast({ title: "Asistencia Registrada", description: "¡Buen trabajo!" });
-      })
-      .catch((err) => {
-        setScanning(false);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: globalRecordRef.path,
-          operation: 'create',
-          requestResourceData: recordData
-        }));
+      const userRecordRef = doc(db, 'userProfiles', user.id, 'attendanceRecords', recordId);
+      const globalRecordRef = doc(db, 'globalAttendanceRecords', recordId);
+
+      await Promise.all([
+        setDoc(userRecordRef, recordData),
+        setDoc(globalRecordRef, recordData)
+      ]);
+
+      setScanning(false);
+      setSuccess({ type: recordType, time: timeStr });
+      toast({ 
+        title: recordType === 'entry' ? "Ingreso Registrado" : "Salida Registrada", 
+        description: "¡Buen trabajo!" 
       });
+
+    } catch (err: any) {
+      setScanning(false);
+      toast({
+        variant: "destructive",
+        title: "Error de registro",
+        description: "No se pudo sincronizar la asistencia."
+      });
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,11 +185,18 @@ export default function AttendanceScanPage() {
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] animate-in zoom-in duration-500">
-        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-6 shadow-lg">
-          <CheckCircle2 className="w-16 h-16 text-green-500" />
+        <div className={cn(
+          "w-24 h-24 rounded-full flex items-center justify-center mb-6 shadow-lg",
+          success.type === 'entry' ? "bg-green-100" : "bg-blue-100"
+        )}>
+          <CheckCircle2 className={cn("w-16 h-16", success.type === 'entry' ? "text-green-500" : "text-blue-500")} />
         </div>
-        <h2 className="text-3xl font-black">¡Asistencia Registrada!</h2>
-        <p className="text-muted-foreground mt-2 font-bold">Tu jornada ha sido sincronizada correctamente.</p>
+        <h2 className="text-3xl font-black">
+          {success.type === 'entry' ? "¡Ingreso Registrado!" : "¡Salida Registrada!"}
+        </h2>
+        <p className="text-muted-foreground mt-2 font-bold">
+          Sincronizado correctamente a las {success.time}.
+        </p>
         <Button className="mt-8 h-12 rounded-xl font-bold px-8 shadow-lg" onClick={() => window.location.href = '/dashboard'}>
           Volver al Dashboard
         </Button>
