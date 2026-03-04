@@ -8,9 +8,8 @@ import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -36,7 +35,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Consultas memoizadas con referencia estable para evitar Quota Exceeded
+  // Consultas memoizadas para prevenir Quota Exceeded
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
   const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
@@ -45,12 +44,12 @@ export default function ProfilePage() {
   const { data: programsRaw } = useCollection<Program>(programsQuery);
   const { data: shiftsRaw, loading: shiftsLoading } = useCollection<Shift>(shiftsQuery);
 
-  // Estabilizar referencias — CLAVE para que los Select no se remonten y causen bucles
+  // Estabilizar referencias para evitar bucles en componentes controlados
   const campuses = useMemo(() => campusesRaw, [campusesRaw]);
   const programs = useMemo(() => programsRaw, [programsRaw]);
   const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
 
-  // Sincronización inicial única por usuario
+  // Sincronización inicial única por usuario para evitar bucles infinitos
   useEffect(() => {
     if (user && lastSyncedUserId.current !== user.id) {
       setFormData({
@@ -65,24 +64,13 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  // Funciones de actualización estables
+  // Funciones de actualización estables con validación de igualdad
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => {
-      if (prev[field as keyof typeof prev] === value) return prev;
+      if (JSON.stringify(prev[field as keyof typeof prev]) === JSON.stringify(value)) return prev;
       return { ...prev, [field]: value };
     });
   }, []);
-
-  const toggleShift = useCallback((shiftId: string) => {
-    if (saving) return;
-    setFormData(prev => {
-      const current = prev.shiftIds || [];
-      const newShifts = current.includes(shiftId)
-        ? current.filter(id => id !== shiftId)
-        : [...current, shiftId];
-      return { ...prev, shiftIds: newShifts };
-    });
-  }, [saving]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -193,7 +181,7 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede Principal</Label>
                          <Select 
-                           value={formData.campus} 
+                           value={formData.campus || ""} 
                            onValueChange={(v) => updateField('campus', v)}
                            disabled={saving}
                          >
@@ -211,7 +199,7 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Cargo</Label>
                          <Select 
-                           value={formData.program} 
+                           value={formData.program || ""} 
                            onValueChange={(v) => updateField('program', v)}
                            disabled={saving}
                          >
@@ -228,30 +216,37 @@ export default function ProfilePage() {
                    </div>
 
                    <div className="space-y-4 pt-4">
-                      <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Asignación de Jornadas Laborales</Label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                      <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Asignación de Jornada Laboral</Label>
+                      <div className="mt-2">
                         {shiftsLoading ? (
                           <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Cargando horarios...</div>
-                        ) : shifts?.map(s => (
-                          <div 
-                            key={s.id} 
-                            onClick={() => toggleShift(s.id)}
-                            className={cn(
-                              "flex items-center space-x-4 p-5 rounded-3xl border-2 transition-all cursor-pointer",
-                              formData.shiftIds?.includes(s.id) ? "bg-primary/5 border-primary shadow-sm" : "bg-white border-gray-100"
-                            )}
+                        ) : (
+                          <Select 
+                            value={formData.shiftIds?.[0] || ""} 
+                            onValueChange={(v) => updateField('shiftIds', [v])}
+                            disabled={saving}
                           >
-                            <Checkbox 
-                              checked={formData.shiftIds?.includes(s.id)} 
-                              onCheckedChange={() => toggleShift(s.id)} 
-                              className="pointer-events-none"
-                            />
-                            <div className="flex flex-col">
-                              <span className="text-xs font-black uppercase tracking-tight">{s.name}</span>
-                              <span className="text-[9px] font-bold opacity-60">{s.startTime} - {s.endTime}</span>
-                            </div>
-                          </div>
-                        ))}
+                            <SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-sm text-primary">
+                              <div className="flex items-center gap-3">
+                                <Clock className="w-5 h-5" />
+                                <SelectValue placeholder="Elegir Jornada de Trabajo" />
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent className="rounded-[2rem] border-none shadow-2xl p-4">
+                              {shifts?.map(s => (
+                                <SelectItem key={s.id} value={s.id} className="font-black py-4 border-b last:border-0 border-gray-100">
+                                  <div className="flex flex-col">
+                                    <span className="uppercase tracking-tight">{s.name}</span>
+                                    <span className="text-[10px] font-bold text-muted-foreground opacity-60">{s.startTime} - {s.endTime} • {s.days?.join(', ')}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <p className="text-[10px] font-bold text-muted-foreground mt-3 italic px-2">
+                          * La jornada seleccionada determinará el cálculo automático de puntualidad en tus reportes.
+                        </p>
                       </div>
                    </div>
                 </CardContent>

@@ -26,7 +26,7 @@ export default function DashboardPage() {
       : query(collection(db, 'globalAttendanceRecords'), orderBy('createdAt', 'desc'), limit(8));
   }, [db, user?.id, user?.role]);
 
-  // Consulta simplificada para evitar problemas de índices y cuota
+  // Consulta robusta para anuncios
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(15));
@@ -69,9 +69,11 @@ export default function DashboardPage() {
           <h1 className="text-4xl font-black text-primary tracking-tighter">Hola, {user?.name.split(' ')[0]}</h1>
           <p className="text-muted-foreground mt-2 text-lg font-medium italic">Panel institucional - Ciudad Don Bosco.</p>
         </div>
-        <Button asChild size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl">
-          <Link href="/dashboard/attendance/scan"><Clock className="w-5 h-5 mr-2" /> Marcar Asistencia</Link>
-        </Button>
+        <div className="flex gap-3">
+          <Button asChild size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl">
+            <Link href="/dashboard/attendance/scan"><Clock className="w-5 h-5 mr-2" /> Marcar Asistencia</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

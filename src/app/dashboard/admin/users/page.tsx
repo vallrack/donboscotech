@@ -1,7 +1,6 @@
-
 "use client"
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -14,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Users
+  PlusCircle, MapPin, BookOpen, Trash2, Users, Clock
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -45,10 +44,16 @@ export default function UserManagementPage() {
   const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
   const usersQuery = useMemoFirebase(() => db ? query(collection(db, 'userProfiles'), orderBy('name')) : null, [db]);
 
-  const { data: campuses } = useCollection<Campus>(campusesQuery);
-  const { data: programs } = useCollection<Program>(programsQuery);
-  const { data: shifts } = useCollection<Shift>(shiftsQuery);
-  const { data: users, loading: usersLoading } = useCollection(usersQuery);
+  const { data: campusesRaw } = useCollection<Campus>(campusesQuery);
+  const { data: programsRaw } = useCollection<Program>(programsQuery);
+  const { data: shiftsRaw } = useCollection<Shift>(shiftsQuery);
+  const { data: usersRaw, loading: usersLoading } = useCollection(usersQuery);
+
+  // Estabilizar referencias
+  const campuses = useMemo(() => campusesRaw, [campusesRaw]);
+  const programs = useMemo(() => programsRaw, [programsRaw]);
+  const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
+  const users = useMemo(() => usersRaw, [usersRaw]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -69,15 +74,6 @@ export default function UserManagementPage() {
       u.documentId?.toLowerCase().includes(search)
     );
   }, [users, searchTerm]);
-
-  const toggleShift = (shiftId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      shiftIds: prev.shiftIds.includes(shiftId)
-        ? prev.shiftIds.filter(id => id !== shiftId)
-        : [...prev.shiftIds, shiftId]
-    }));
-  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,14 +193,14 @@ export default function UserManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Asignada</Label>
-                      <Select value={formData.campus} onValueChange={(val) => setFormData({...formData, campus: val})}>
+                      <Select value={formData.campus || ""} onValueChange={(val) => setFormData({...formData, campus: val})}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
                         <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
-                      <Select value={formData.program} onValueChange={(val) => setFormData({...formData, program: val})}>
+                      <Select value={formData.program || ""} onValueChange={(val) => setFormData({...formData, program: val})}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                         <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
                       </Select>
@@ -212,21 +208,25 @@ export default function UserManagementPage() {
                   </div>
 
                   <div className="space-y-4">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Laborales (Obligatorio)</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {shifts?.map(s => (
-                        <div key={s.id} onClick={() => toggleShift(s.id)} className={cn(
-                          "flex items-center space-x-3 p-4 rounded-2xl border-2 transition-all cursor-pointer",
-                          formData.shiftIds.includes(s.id) ? "bg-primary/5 border-primary shadow-sm" : "bg-white border-gray-100"
-                        )}>
-                          <Checkbox checked={formData.shiftIds.includes(s.id)} onCheckedChange={() => toggleShift(s.id)} className="pointer-events-none" />
-                          <div className="flex flex-col">
-                            <span className="text-xs font-black text-gray-800 uppercase">{s.name}</span>
-                            <span className="text-[9px] font-bold text-muted-foreground opacity-60">{s.startTime} - {s.endTime}</span>
-                          </div>
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornada Laboral (Obligatorio)</Label>
+                    <Select 
+                      value={formData.shiftIds?.[0] || ""} 
+                      onValueChange={(val) => setFormData({...formData, shiftIds: [val]})}
+                    >
+                      <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 border-gray-100 font-bold">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-primary" />
+                          <SelectValue placeholder="Elegir Horario" />
                         </div>
-                      ))}
-                    </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {shifts?.map(s => (
+                          <SelectItem key={s.id} value={s.id} className="font-bold py-3">
+                            {s.name} ({s.startTime} - {s.endTime})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-4 pt-4 border-t">
