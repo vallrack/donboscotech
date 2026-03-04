@@ -33,7 +33,7 @@ import {
 import { Label } from '@/components/ui/label';
 
 export default function UserManagementPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, isLoading: authLoading } = useAuth();
   const db = useFirestore();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +44,7 @@ export default function UserManagementPage() {
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
   const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
   const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
-  const { data: users, loading } = useCollection(db ? collection(db, 'userProfiles') : null as any);
+  const { data: users, loading: usersLoading } = useCollection(db ? collection(db, 'userProfiles') : null as any);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -136,6 +136,9 @@ export default function UserManagementPage() {
     }
   };
 
+  // Si el sistema de autenticación aún está cargando, no mostramos nada para evitar el flash de "Acceso Restringido"
+  if (authLoading) return null;
+
   const isPrivileged = currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
 
   if (!isPrivileged) {
@@ -199,7 +202,7 @@ export default function UserManagementPage() {
             <table className="w-full text-left">
               <thead><tr className="bg-gray-50/30 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground"><th className="px-8 py-6">Personal</th><th className="px-8 py-6">Info</th><th className="px-8 py-6">Permisos</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {loading ? (<tr><td colSpan={3} className="py-24 text-center"><Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" /></td></tr>) : (
+                {usersLoading ? (<tr><td colSpan={3} className="py-24 text-center"><Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" /></td></tr>) : (
                   filteredUsers.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50/50 transition-all">
                       <td className="px-8 py-6"><div className="flex items-center gap-5"><div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black">{u.name?.charAt(0)}</div><div><div className="font-black text-base">{u.name}</div><div className="text-xs text-muted-foreground">{u.email}</div></div></div></td>

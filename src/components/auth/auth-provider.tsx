@@ -30,17 +30,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sectRef = useMemo(() => authUser && db ? doc(db, 'roles_secretaries', authUser.uid) : null, [authUser?.uid, db]);
 
   const { data: userProfile, loading: profileLoading } = useDoc(profileRef);
-  const { data: adminRole } = useDoc(adminRef);
-  const { data: coordRole } = useDoc(coordRef);
-  const { data: sectRole } = useDoc(sectRef);
+  const { data: adminRole, loading: adminLoading } = useDoc(adminRef);
+  const { data: coordRole, loading: coordLoading } = useDoc(coordRef);
+  const { data: sectRole, loading: sectLoading } = useDoc(sectRef);
 
-  const isLoading = authLoading || profileLoading;
+  // Consideramos cargando si cualquiera de las fuentes de verdad está en proceso
+  const isLoading = authLoading || profileLoading || adminLoading || coordLoading || sectLoading;
 
   const resolvedUser = useMemo(() => {
-    if (!authUser) return null;
+    if (!authUser || isLoading) return null;
 
     let role: UserRole = (userProfile?.role as UserRole) || 'docent';
     
+    // Prioridad a las colecciones de roles de seguridad (Source of Truth para reglas)
     if (adminRole) role = 'admin';
     else if (coordRole) role = 'coordinator';
     else if (sectRole) role = 'secretary';
@@ -56,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       program: userProfile?.program,
       shiftIds: userProfile?.shiftIds || []
     };
-  }, [authUser, adminRole, coordRole, sectRole, userProfile]);
+  }, [authUser, adminRole, coordRole, sectRole, userProfile, isLoading]);
 
   useEffect(() => {
     async function syncProfile() {
@@ -74,7 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             createdAt: serverTimestamp()
           });
         } else {
-          // Asegurarse de que el email esté sincronizado si falta
           const data = existingSnap.data();
           if (!data.email && authUser.email) {
             await updateDoc(pRef, { email: authUser.email });
