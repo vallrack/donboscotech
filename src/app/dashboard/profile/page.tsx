@@ -40,6 +40,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
+  // Sync initial state from user object once
   useEffect(() => {
     if (user && !initialized) {
       setFormData({
@@ -73,8 +74,14 @@ export default function ProfilePage() {
       return;
     }
 
-    if (file.size > 800 * 1024) {
-      toast({ variant: "destructive", title: "Imagen muy grande", description: "El límite es 800KB para el carnet." });
+    // Firestore has a 1MB limit for the whole document. 
+    // We limit the image to 600KB to leave space for other metadata.
+    if (file.size > 600 * 1024) {
+      toast({ 
+        variant: "destructive", 
+        title: "Imagen muy grande", 
+        description: "El límite es 600KB para asegurar el correcto guardado del carnet." 
+      });
       return;
     }
 
@@ -106,16 +113,31 @@ export default function ProfilePage() {
 
       await updateDoc(userRef, payload);
       
-      toast({ title: "Perfil Actualizado", description: "La información se guardó correctamente." });
+      toast({ 
+        title: "Perfil Actualizado", 
+        description: "Tus datos institucionales se han sincronizado correctamente." 
+      });
+      
     } catch (error: any) {
       console.error("Error saving profile:", error);
-      toast({ variant: "destructive", title: "Error al guardar", description: error.message || "No se pudieron persistir los cambios." });
+      toast({ 
+        variant: "destructive", 
+        title: "Error al guardar", 
+        description: "Hubo un problema al conectar con el servidor. Intenta de nuevo." 
+      });
     } finally {
-      setSaving(false);
+      // Small delay to ensure Firestore has updated the local cache
+      setTimeout(() => setSaving(false), 500);
     }
   };
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary opacity-20" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 py-4 animate-in fade-in duration-500">
@@ -142,8 +164,9 @@ export default function ProfilePage() {
                 )}
                 <button 
                   type="button" 
+                  disabled={saving}
                   onClick={() => fileInputRef.current?.click()} 
-                  className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2"
+                  className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 disabled:group-hover:opacity-0 transition-opacity flex flex-col items-center justify-center text-white gap-2"
                 >
                   <Camera className="w-8 h-8" />
                   <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
@@ -152,7 +175,7 @@ export default function ProfilePage() {
               <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
            </div>
            <div className="mt-8 text-center">
-             <h3 className="text-xl font-black text-gray-800">{formData.name}</h3>
+             <h3 className="text-xl font-black text-gray-800">{formData.name || 'Usuario'}</h3>
              <Badge variant="outline" className="mt-2 uppercase font-black text-[10px] tracking-widest text-primary bg-primary/5 border-primary/20">
                {user.role}
              </Badge>
