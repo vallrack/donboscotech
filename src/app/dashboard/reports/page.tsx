@@ -191,19 +191,22 @@ export default function ReportsPage() {
       return;
     }
 
+    // Configuración para Excel Profesional: UTF-8 BOM + Separador explícito
+    const BOM = "\uFEFF"; // Byte Order Mark para UTF-8 (corrige acentos y eñes en Excel)
+    const excelSeparator = "sep=;\n"; // Indica a Excel que el separador es punto y coma
     const headers = ["Docente", "Fecha", "Entrada", "Salida", "Horas Totales", "Sede", "Programa"];
-    const csvContent = [
-      headers.join(","),
-      ...dailyReports.map(r => [
-        `"${r.userName}"`,
-        r.date,
-        r.entry || "--",
-        r.exit || "--",
-        r.hours,
-        `"${r.campus}"`,
-        `"${r.program}"`
-      ].join(","))
-    ].join("\n");
+    
+    const csvRows = dailyReports.map(r => [
+      `"${r.userName}"`,
+      `"${r.date}"`,
+      `"${r.entry || "--"}"`,
+      `"${r.exit || "--"}"`,
+      `"${r.hours}"`,
+      `"${r.campus}"`,
+      `"${r.program}"`
+    ].join(";"));
+
+    const csvContent = BOM + excelSeparator + headers.join(";") + "\n" + csvRows.join("\n");
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -215,7 +218,7 @@ export default function ReportsPage() {
     link.click();
     document.body.removeChild(link);
     
-    toast({ title: "Excel Generado", description: "El reporte se ha descargado correctamente." });
+    toast({ title: "Excel Generado", description: "El reporte se ha descargado con formato profesional para Excel." });
   };
 
   const handlePrint = () => window.print();
