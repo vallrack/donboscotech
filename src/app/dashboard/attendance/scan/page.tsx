@@ -4,13 +4,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { QrCode, MapPin, CheckCircle2, RefreshCw, Loader2, ShieldCheck, Camera, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { QrCode, MapPin, CheckCircle2, Loader2, ShieldCheck, Camera, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
@@ -110,19 +110,22 @@ export default function AttendanceScanPage() {
     const dateStr = now.toISOString().split('T')[0];
     
     try {
-      // DETERMINE IF IT IS ENTRY OR EXIT
+      // LÓGICA DE DETECCIÓN INTELIGENTE (ENTRADA/SALIDA)
+      // Se utiliza una consulta simple en la subcolección del usuario
       const q = query(
-        collection(db, 'globalAttendanceRecords'),
-        where('userId', '==', user.id),
-        where('date', '==', dateStr),
+        collection(db, 'userProfiles', user.id, 'attendanceRecords'),
         orderBy('createdAt', 'desc'),
         limit(1)
       );
+      
       const querySnap = await getDocs(q);
       let recordType: 'entry' | 'exit' = 'entry';
+      
       if (!querySnap.empty) {
         const lastRecord = querySnap.docs[0].data();
-        recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+        if (lastRecord.date === dateStr) {
+          recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+        }
       }
 
       const recordId = `${user.id}_${now.getTime()}`;
@@ -157,6 +160,7 @@ export default function AttendanceScanPage() {
 
     } catch (err: any) {
       setScanning(false);
+      console.error("Error de registro:", err);
       toast({
         variant: "destructive",
         title: "Error de registro",

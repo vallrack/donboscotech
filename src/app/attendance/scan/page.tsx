@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useFirestore } from '@/firebase';
-import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { QrCode, MapPin, CheckCircle2, Loader2, Camera, Image as ImageIcon, AlertCircle, ArrowLeft, User as UserIcon, ShieldCheck, LogOut, LogIn } from 'lucide-react';
+import { QrCode, MapPin, Loader2, Camera, Image as ImageIcon, AlertCircle, ArrowLeft, User as UserIcon, ShieldCheck, LogOut, LogIn } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
@@ -126,19 +126,23 @@ export default function PublicAttendanceScanner() {
       const now = new Date();
       const dateStr = now.toISOString().split('T')[0];
       
-      // LOGIC TO DETERMINE ENTRY OR EXIT - Querying the private subcollection instead of global
+      // LÓGICA DE DETECCIÓN INTELIGENTE (ENTRADA/SALIDA)
+      // Se utiliza una consulta simple por orden de creación para evitar la necesidad de índices compuestos
       const q = query(
         collection(db, 'userProfiles', userId, 'attendanceRecords'),
-        where('date', '==', dateStr),
         orderBy('createdAt', 'desc'),
         limit(1)
       );
       
       const querySnap = await getDocs(q);
       let recordType: 'entry' | 'exit' = 'entry';
+      
       if (!querySnap.empty) {
         const lastRecord = querySnap.docs[0].data();
-        recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+        // Si el último registro fue hoy, alternamos. Si fue otro día, empezamos con entrada.
+        if (lastRecord.date === dateStr) {
+          recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
+        }
       }
 
       const recordId = `${userId}_${now.getTime()}_public`;
@@ -185,16 +189,18 @@ export default function PublicAttendanceScanner() {
       setScanning(false);
       isProcessing.current = false;
       
+      console.error("Error detallado de escaneo:", err);
+
       if (err.code === 'permission-denied') {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: `userProfiles/${userId}/attendanceRecords`,
-          operation: 'list'
+          operation: 'write'
         }));
       } else {
         toast({
           variant: "destructive",
-          title: "Error de sincronización",
-          description: "No se pudo conectar con el servidor central."
+          title: "Fallo en la terminal",
+          description: "No se pudo sincronizar el registro. Verifique su conexión."
         });
       }
     }
