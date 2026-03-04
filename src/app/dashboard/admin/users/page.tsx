@@ -11,9 +11,10 @@ import { firebaseConfig } from '@/firebase/config';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Search, Mail, Loader2, ShieldCheck, UserCog, 
-  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, Contact 
+  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, MapPin 
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -54,7 +55,7 @@ export default function UserManagementPage() {
     documentId: '',
     campus: '',
     program: '',
-    shiftId: '',
+    shiftIds: [] as string[],
     role: 'docent' as UserRole
   });
 
@@ -64,6 +65,17 @@ export default function UserManagementPage() {
       u.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [users, searchTerm]);
+
+  const toggleShift = (shiftId: string) => {
+    setFormData(prev => {
+      const current = prev.shiftIds || [];
+      if (current.includes(shiftId)) {
+        return { ...prev, shiftIds: current.filter(id => id !== shiftId) };
+      } else {
+        return { ...prev, shiftIds: [...current, shiftId] };
+      }
+    });
+  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +98,7 @@ export default function UserManagementPage() {
         documentId: formData.documentId,
         campus: formData.campus,
         program: formData.program,
-        shiftId: formData.shiftId,
+        shiftIds: formData.shiftIds,
         createdAt: serverTimestamp(),
         createdBy: currentUser?.id
       });
@@ -98,7 +110,7 @@ export default function UserManagementPage() {
 
       toast({ title: "Usuario Creado", description: `Se ha registrado a ${formData.name}.` });
       setIsCreateDialogOpen(false);
-      setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftId: '', role: 'docent' });
+      setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftIds: [], role: 'docent' });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -151,7 +163,7 @@ export default function UserManagementPage() {
               <UserPlus className="w-5 h-5" /> Nuevo Miembro
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
+          <DialogContent className="sm:max-w-[700px] rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
             <form onSubmit={handleCreateUser}>
               <DialogHeader>
                 <DialogTitle className="text-2xl font-black text-primary">Agregar Personal</DialogTitle>
@@ -188,14 +200,24 @@ export default function UserManagementPage() {
                     <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Jornada</Label>
-                  <Select value={formData.shiftId} onValueChange={(val) => setFormData({...formData, shiftId: val})}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Jornada" /></SelectTrigger>
-                    <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id}>{s.name} ({s.startTime}-{s.endTime})</SelectItem>)}</SelectContent>
-                  </Select>
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Jornadas (Selecciona una o varias)</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    {shifts?.map(s => (
+                      <div key={s.id} className="flex items-center space-x-3 bg-white p-3 rounded-xl border shadow-sm">
+                        <Checkbox 
+                          id={`shift-${s.id}`} 
+                          checked={formData.shiftIds.includes(s.id)}
+                          onCheckedChange={() => toggleShift(s.id)}
+                        />
+                        <label htmlFor={`shift-${s.id}`} className="text-xs font-bold cursor-pointer select-none">
+                          {s.name} <span className="text-muted-foreground font-medium">({s.startTime}-{s.endTime})</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Rol</Label>
                   <Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}>
                     <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
@@ -259,6 +281,12 @@ export default function UserManagementPage() {
                           <div className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" /> {u.campus || 'Sin Sede'}</div>
                           <div className="text-[10px] font-black uppercase text-primary flex items-center gap-1"><BookOpen className="w-3 h-3" /> {u.program || 'Sin Programa'}</div>
                           <div className="text-[10px] font-bold text-gray-500">ID: {u.documentId || 'N/A'}</div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {u.shiftIds?.map((sid: string) => {
+                              const s = shifts?.find(shift => shift.id === sid);
+                              return s ? <Badge key={sid} variant="secondary" className="text-[8px] px-1 py-0">{s.name}</Badge> : null;
+                            })}
+                          </div>
                         </div>
                       </td>
                       <td className="px-8 py-6">

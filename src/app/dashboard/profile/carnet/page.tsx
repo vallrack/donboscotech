@@ -2,13 +2,19 @@
 "use client"
 
 import { useAuth } from '@/components/auth/auth-provider';
+import { useCollection, useFirestore } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, Printer, User, QrCode, ShieldCheck, Mail, Building2, MapPin } from 'lucide-react';
+import { Printer, User, QrCode, ShieldCheck, Mail, Building2, Clock } from 'lucide-react';
+import { Shift } from '@/lib/types';
 import Image from 'next/image';
 
 export default function CarnetPage() {
   const { user } = useAuth();
+  const db = useFirestore();
+
+  const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
 
   const handlePrint = () => {
     window.print();
@@ -31,7 +37,7 @@ export default function CarnetPage() {
       </div>
 
       <div className="flex justify-center items-center py-10 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-200">
-        <Card className="w-[350px] h-[550px] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card">
+        <Card className="w-[350px] min-h-[550px] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card pb-16">
           {/* Header */}
           <div className="bg-primary h-32 relative flex flex-col items-center justify-center p-6 text-white text-center">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -68,7 +74,7 @@ export default function CarnetPage() {
                 <ShieldCheck className="w-4 h-4 text-primary" />
                 <div>
                   <p className="text-[8px] font-black uppercase text-muted-foreground leading-none">Documento</p>
-                  <p className="text-xs font-bold text-gray-700">{user.documentId || 'C.C. 123.456.789'}</p>
+                  <p className="text-xs font-bold text-gray-700">{user.documentId || 'C.C. NO ASIGNADA'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -78,11 +84,16 @@ export default function CarnetPage() {
                   <p className="text-xs font-bold text-gray-700">{user.program || 'N/A'} • {user.campus || 'Sede Principal'}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Mail className="w-4 h-4 text-primary" />
+              <div className="flex items-start gap-3">
+                <Clock className="w-4 h-4 text-primary mt-1" />
                 <div>
-                  <p className="text-[8px] font-black uppercase text-muted-foreground leading-none">Contacto</p>
-                  <p className="text-xs font-bold text-gray-700 truncate max-w-[180px]">{user.email}</p>
+                  <p className="text-[8px] font-black uppercase text-muted-foreground leading-none">Jornadas</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {user.shiftIds?.length ? user.shiftIds.map(sid => {
+                      const s = shifts?.find(sh => sh.id === sid);
+                      return s ? <span key={sid} className="text-[9px] font-bold bg-white px-2 py-0.5 rounded-lg border">{s.name}</span> : null;
+                    }) : <span className="text-[9px] text-gray-400 italic">No asignadas</span>}
+                  </div>
                 </div>
               </div>
             </div>

@@ -12,7 +12,11 @@
         "documentId": { "type": "string", "description": "Documento de identidad" },
         "campus": { "type": "string", "description": "Sede asignada" },
         "program": { "type": "string", "description": "Programa o carrera que enseña/coordina" },
-        "shiftId": { "type": "string", "description": "ID de la jornada asignada" },
+        "shiftIds": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "IDs de las jornadas asignadas" 
+        },
         "avatarUrl": { "type": "string" },
         "status": { "type": "string", "enum": ["active", "inactive"] }
       },

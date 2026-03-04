@@ -10,7 +10,7 @@ export interface User {
   documentId?: string;
   campus?: string;
   program?: string;
-  shiftId?: string;
+  shiftIds?: string[];
 }
 
 export interface Campus {

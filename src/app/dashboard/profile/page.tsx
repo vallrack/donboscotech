@@ -9,6 +9,7 @@ import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User, Mail, Shield, BookOpen, Building2, Clock, Contact, Loader2, Save, Image as ImageIcon, Camera, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -34,7 +35,7 @@ export default function ProfilePage() {
     documentId: '',
     campus: '',
     program: '',
-    shiftId: '',
+    shiftIds: [] as string[],
     avatarUrl: ''
   });
 
@@ -45,43 +46,40 @@ export default function ProfilePage() {
         documentId: user.documentId || '',
         campus: user.campus || '',
         program: user.program || '',
-        shiftId: user.shiftId || '',
+        shiftIds: user.shiftIds || [],
         avatarUrl: user.avatarUrl || ''
       });
     }
   }, [user]);
 
+  const toggleShift = (shiftId: string) => {
+    setFormData(prev => {
+      const current = prev.shiftIds || [];
+      if (current.includes(shiftId)) {
+        return { ...prev, shiftIds: current.filter(id => id !== shiftId) };
+      } else {
+        return { ...prev, shiftIds: [...current, shiftId] };
+      }
+    });
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast({
-        variant: "destructive",
-        title: "Archivo no válido",
-        description: "Por favor selecciona una imagen (JPG, PNG)."
-      });
+      toast({ variant: "destructive", title: "Archivo no válido" });
       return;
     }
 
-    // Validate size (limit to 1MB for Firestore field optimization)
     if (file.size > 1024 * 1024) {
-      toast({
-        variant: "destructive",
-        title: "Imagen muy grande",
-        description: "El tamaño máximo permitido es de 1MB."
-      });
+      toast({ variant: "destructive", title: "Imagen muy grande" });
       return;
     }
 
     const reader = new FileReader();
     reader.onloadend = () => {
       setFormData(prev => ({ ...prev, avatarUrl: reader.result as string }));
-      toast({
-        title: "Foto cargada",
-        description: "Recuerda guardar los cambios para actualizar tu carnet."
-      });
     };
     reader.readAsDataURL(file);
   };
@@ -93,9 +91,9 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       await updateDoc(doc(db, 'userProfiles', user.id), formData);
-      toast({ title: "Perfil Actualizado", description: "Tu información institucional ha sido guardada." });
+      toast({ title: "Perfil Actualizado" });
     } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudieron guardar los cambios." });
+      toast({ variant: "destructive", title: "Error al guardar" });
     } finally {
       setSaving(false);
     }
@@ -108,12 +106,11 @@ export default function ProfilePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
-          <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales dentro de Ciudad Don Bosco.</p>
+          <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Avatar Card */}
         <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden flex flex-col items-center p-10 h-fit">
            <div className="relative group">
               <div className="w-40 h-40 rounded-[2.5rem] bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl relative">
@@ -122,123 +119,69 @@ export default function ProfilePage() {
                 ) : (
                   <User className="w-16 h-16 text-gray-300" />
                 )}
-                
-                <button 
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2 cursor-pointer"
-                >
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
                   <Camera className="w-8 h-8" />
-                  <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
                 </button>
               </div>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                className="hidden" 
-                accept="image/*"
-              />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
            </div>
            <div className="mt-8 text-center">
              <h3 className="text-xl font-black text-gray-800">{formData.name}</h3>
-             <Badge variant="outline" className="mt-2 uppercase font-black text-[10px] tracking-widest text-primary bg-primary/5 border-primary/20">
+             <Badge variant="outline" className="mt-2 uppercase font-black text-[10px] tracking-widest text-primary">
                {user.role}
              </Badge>
-             <div className="mt-4 flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-               <span className="flex items-center justify-center gap-2"><Mail className="w-3 h-3" /> {user.email}</span>
-               <span className="flex items-center justify-center gap-2"><Contact className="w-3 h-3" /> ID: {formData.documentId || 'No asignado'}</span>
-             </div>
            </div>
-           
-           <Button 
-            variant="outline" 
-            size="sm" 
-            className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase"
-            onClick={() => fileInputRef.current?.click()}
-           >
-             <Upload className="w-3 h-3" /> Subir desde dispositivo
+           <Button variant="outline" size="sm" className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase" onClick={() => fileInputRef.current?.click()}>
+             <Upload className="w-3 h-3" /> Subir Foto
            </Button>
         </Card>
 
-        {/* Form Card */}
         <Card className="md:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
            <form onSubmit={handleSave}>
               <CardHeader className="border-b bg-gray-50/30 p-8">
                  <CardTitle className="text-lg font-black">Información del Sistema</CardTitle>
-                 <CardDescription>Estos datos aparecerán en tu carnet institucional.</CardDescription>
               </CardHeader>
               <CardContent className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Documento de Identidad</Label>
-                    <div className="relative">
-                      <Shield className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                        value={formData.documentId} 
-                        onChange={(e) => setFormData({...formData, documentId: e.target.value})}
-                        className="pl-10 h-12 rounded-xl border-gray-100"
-                        placeholder="C.C. 123.456.789"
-                      />
-                    </div>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Documento</Label>
+                    <Input value={formData.documentId} onChange={(e) => setFormData({...formData, documentId: e.target.value})} className="h-12 rounded-xl" placeholder="C.C. 123.456.789" />
                  </div>
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">URL de Foto (Opcional)</Label>
-                    <div className="relative">
-                      <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                        value={formData.avatarUrl.startsWith('data:') ? 'Imagen cargada desde archivo' : formData.avatarUrl} 
-                        onChange={(e) => setFormData({...formData, avatarUrl: e.target.value})}
-                        className="pl-10 h-12 rounded-xl border-gray-100"
-                        placeholder="https://ejemplo.com/foto.jpg"
-                        disabled={formData.avatarUrl.startsWith('data:')}
-                      />
-                    </div>
-                 </div>
-                 <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Sede Asignada</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sede</Label>
                     <Select value={formData.campus} onValueChange={(v) => setFormData({...formData, campus: v})}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-100">
-                        <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Seleccionar Sede" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                      </SelectContent>
+                      <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                     </Select>
                  </div>
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Programa / Carrera</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Programa</Label>
                     <Select value={formData.program} onValueChange={(v) => setFormData({...formData, program: v})}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-100">
-                        <BookOpen className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Seleccionar Programa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                      </SelectContent>
+                      <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
                  </div>
                  <div className="space-y-2 md:col-span-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Jornada Laboral</Label>
-                    <Select value={formData.shiftId} onValueChange={(v) => setFormData({...formData, shiftId: v})}>
-                      <SelectTrigger className="h-12 rounded-xl border-gray-100">
-                        <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
-                        <SelectValue placeholder="Seleccionar Jornada" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {shifts?.map(s => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name} ({s.startTime} - {s.endTime})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jornadas Institucionales (Puedes tener varias)</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 bg-gray-50 p-4 rounded-3xl border">
+                      {shifts?.map(s => (
+                        <div key={s.id} className="flex items-center space-x-3 bg-white p-3 rounded-2xl border shadow-sm">
+                          <Checkbox 
+                            id={`profile-shift-${s.id}`} 
+                            checked={formData.shiftIds?.includes(s.id)}
+                            onCheckedChange={() => toggleShift(s.id)}
+                          />
+                          <label htmlFor={`profile-shift-${s.id}`} className="text-xs font-bold cursor-pointer">
+                            {s.name} <span className="text-muted-foreground font-medium">({s.startTime}-{s.endTime})</span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                  </div>
               </CardContent>
               <CardFooter className="bg-gray-50/50 p-8 border-t flex justify-end">
-                 <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg shadow-primary/20" disabled={saving}>
+                 <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg" disabled={saving}>
                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                   Guardar Información
+                   Guardar Perfil
                  </Button>
               </CardFooter>
            </form>
