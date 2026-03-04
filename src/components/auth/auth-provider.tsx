@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
@@ -34,18 +35,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: coordRole } = useDoc(coordRef);
   const { data: sectRole } = useDoc(sectRef);
 
-  // El estado de carga global solo es TRUE durante el inicio de sesión inicial
-  const isLoading = authLoading || (authUser && !lastResolvedUser && profileLoading);
-
+  // Memoize basic data to avoid infinite loops
   const resolvedUser = useMemo(() => {
-    if (!authUser || authLoading || profileLoading) return lastResolvedUser;
+    if (!authUser || authLoading || profileLoading) return null;
 
     let role: UserRole = (userProfile?.role as UserRole) || 'docent';
     if (adminRole) role = 'admin';
     else if (coordRole) role = 'coordinator';
     else if (sectRole) role = 'secretary';
 
-    const userData: User = {
+    return {
       id: authUser.uid,
       name: userProfile?.name || authUser.displayName || 'Usuario',
       email: authUser.email || '',
@@ -55,17 +54,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       campus: userProfile?.campus,
       program: userProfile?.program,
       shiftIds: userProfile?.shiftIds || []
-    };
-    
-    return userData;
-  }, [authUser, authLoading, profileLoading, adminRole, coordRole, sectRole, userProfile, lastResolvedUser]);
+    } as User;
+  }, [authUser, authLoading, profileLoading, adminRole, coordRole, sectRole, userProfile]);
 
+  // Handle the persistent user state without loop
   useEffect(() => {
     if (resolvedUser) {
       setLastResolvedUser(resolvedUser);
     }
   }, [resolvedUser]);
 
+  // Sync profile if it doesn't exist
   useEffect(() => {
     async function syncProfile() {
       if (authUser && db && !profileLoading && !syncAttempted.current) {
@@ -126,8 +125,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   };
 
+  // We are loading if auth hasn't determined the user yet,
+  // or if we HAVE a user but haven't resolved their institutional profile yet.
+  const loading = authLoading || (!!authUser && !resolvedUser && !lastResolvedUser);
+
   return (
-    <AuthContext.Provider value={{ user: resolvedUser, login, loginWithEmail, signUpWithEmail, logout, isLoading }}>
+    <AuthContext.Provider value={{ 
+      user: resolvedUser || lastResolvedUser, 
+      login, 
+      loginWithEmail, 
+      signUpWithEmail, 
+      logout, 
+      isLoading: loading 
+    }}>
       {children}
     </AuthContext.Provider>
   );
