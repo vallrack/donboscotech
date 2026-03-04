@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useMemo, useState, useEffect, useRef } from 'react';
@@ -18,58 +17,35 @@ export default function DashboardPage() {
   const db = useFirestore();
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const lastFetchedDate = useRef<string | null>(null);
 
-  // Consultas memoizadas para prevenir Quota Exceeded
+  // Consultas memoizadas con referencia estable
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
-    if (user.role === 'docent') {
-      return query(
-        collection(db, 'userProfiles', user.id, 'attendanceRecords'),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      );
-    } else {
-      return query(
-        collection(db, 'globalAttendanceRecords'),
-        orderBy('createdAt', 'desc'),
-        limit(8)
-      );
-    }
+    return user.role === 'docent'
+      ? query(collection(db, 'userProfiles', user.id, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(5))
+      : query(collection(db, 'globalAttendanceRecords'), orderBy('createdAt', 'desc'), limit(8));
   }, [db, user?.id, user?.role]);
 
-  // Consulta simplificada para evitar errores de índices y proteger cuota
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
-    return query(
-      collection(db, 'announcements'),
-      orderBy('createdAt', 'desc'),
-      limit(15)
-    );
+    return query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(15));
   }, [db]);
 
-  const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
-  const { data: rawAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
+  const { data: recordsRaw, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
+  const { data: annRaw, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
 
-  // Filtrado en el cliente para asegurar visibilidad inmediata sin errores de cuota o índices
-  const activeAnnouncements = useMemo(() => {
-    return (rawAnnouncements || [])
-      .filter(a => a.status === 'active')
-      .slice(0, 10);
-  }, [rawAnnouncements]);
+  // Estabilizar datos para el renderizado
+  const records = useMemo(() => recordsRaw, [recordsRaw]);
+  const activeAnnouncements = useMemo(() => annRaw.filter(a => a.status === 'active').slice(0, 10), [annRaw]);
 
   useEffect(() => {
-    if (!db || !user || user.role === 'docent' || lastFetchedDate.current === todayStr) return;
-    
+    if (!db || !user || user.role === 'docent') return;
     const fetchTodayStats = async () => {
       try {
         const q = query(collection(db, 'globalAttendanceRecords'), where('date', '==', todayStr));
         const snapshot = await getCountFromServer(q);
         setTodayCount(snapshot.data().count);
-        lastFetchedDate.current = todayStr;
-      } catch (e) {
-        setTodayCount(0);
-      }
+      } catch (e) { setTodayCount(0); }
     };
     fetchTodayStats();
   }, [db, user?.role, todayStr, user?.id]);
@@ -78,8 +54,8 @@ export default function DashboardPage() {
     const isAdminView = user?.role !== 'docent';
     return [
       { id: 'stat-main', label: isAdminView ? 'Presencia Hoy' : 'Mis Registros', value: isAdminView ? (todayCount !== null ? todayCount.toString() : '...') : (records?.length || 0).toString(), icon: isAdminView ? Users : Clock, color: 'text-primary' },
-      { id: 'stat-punctuality', label: 'Estado', value: 'Sincronizado', icon: CheckCircle2, color: 'text-green-600' },
-      { id: 'stat-location', label: 'Sede Principal', value: user?.campus || 'Medellín', icon: MapPin, color: 'text-blue-600' },
+      { id: 'stat-status', label: 'Estado', value: 'Sincronizado', icon: CheckCircle2, color: 'text-green-600' },
+      { id: 'stat-loc', label: 'Sede Principal', value: user?.campus || 'Medellín', icon: MapPin, color: 'text-blue-600' },
     ];
   }, [user, todayCount, records]);
 
@@ -87,14 +63,12 @@ export default function DashboardPage() {
     <div className="space-y-10 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-primary">Hola, {user?.name.split(' ')[0]}</h1>
+          <h1 className="text-4xl font-black text-primary">Hola, {user?.name.split(' ')[0]}</h1>
           <p className="text-muted-foreground mt-2 text-lg font-medium">Panel institucional - Ciudad Don Bosco.</p>
         </div>
-        <div className="flex gap-3">
-          <Button asChild size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl">
-            <Link href="/dashboard/attendance/scan"><Clock className="w-5 h-5 mr-2" /> Marcar Asistencia</Link>
-          </Button>
-        </div>
+        <Button asChild size="lg" className="h-14 px-8 shadow-xl font-bold rounded-2xl">
+          <Link href="/dashboard/attendance/scan"><Clock className="w-5 h-5 mr-2" /> Marcar Asistencia</Link>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -113,65 +87,37 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <Card className="shadow-2xl border-none bg-white rounded-[2.5rem] overflow-hidden">
           <CardHeader className="border-b bg-gray-50/50 p-8">
-            <CardTitle className="flex items-center gap-3 text-xl font-black">
-              <div className="p-2 bg-primary/10 rounded-xl"><CalendarDays className="w-5 h-5 text-primary" /></div>
-              {user?.role === 'docent' ? 'Mis Últimos Registros' : 'Actividad Reciente'}
-            </CardTitle>
+            <CardTitle className="flex items-center gap-3 text-xl font-black"><CalendarDays className="w-5 h-5 text-primary" /> {user?.role === 'docent' ? 'Mis Últimos Registros' : 'Actividad Reciente'}</CardTitle>
           </CardHeader>
-          <CardContent className="p-8 pt-6">
-            {recordsLoading ? <Loader2 className="w-10 h-10 animate-spin mx-auto opacity-20" /> : (
+          <CardContent className="p-8">
+            {recordsLoading ? <Loader2 className="animate-spin mx-auto opacity-20" /> : (
               <div className="space-y-4">
-                {records.map((record) => (
-                  <div key={record.id} className="flex items-center justify-between p-5 rounded-[1.5rem] border border-gray-100 bg-gray-50/30 hover:bg-white hover:shadow-lg transition-all">
+                {records.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between p-5 rounded-[1.5rem] bg-gray-50/30 border border-gray-100">
                     <div className="flex items-center gap-4">
-                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-xs", record.type === 'entry' ? "bg-green-500" : "bg-primary")}>
-                        {record.type === 'entry' ? 'E' : 'S'}
-                      </div>
-                      <div>
-                        <p className="font-black text-sm">{record.userName}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-black">{record.date} • {record.time}</p>
-                      </div>
+                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-xs", r.type === 'entry' ? "bg-green-500" : "bg-primary")}>{r.type === 'entry' ? 'E' : 'S'}</div>
+                      <div><p className="font-black text-sm">{r.userName}</p><p className="text-[10px] text-muted-foreground font-black">{r.date} • {r.time}</p></div>
                     </div>
-                    <Badge variant="outline" className="text-[9px] font-black uppercase">{record.method} • {record.shiftName || 'S/J'}</Badge>
+                    <Badge variant="outline" className="text-[9px] uppercase">{r.method}</Badge>
                   </div>
                 ))}
-                {records.length === 0 && <p className="text-center py-10 text-muted-foreground text-xs font-black uppercase tracking-widest">Sin registros recientes</p>}
               </div>
             )}
           </CardContent>
         </Card>
 
         <Card className="shadow-2xl border-none bg-white rounded-[2.5rem] overflow-hidden">
-          <CardHeader className="border-b bg-gray-50/50 p-8">
-            <CardTitle className="flex items-center gap-3 text-xl font-black">
-              <div className="p-2 bg-primary/10 rounded-xl"><Megaphone className="w-5 h-5 text-primary" /></div>
-              Muro de Anuncios
-            </CardTitle>
-          </CardHeader>
+          <CardHeader className="border-b bg-gray-50/50 p-8"><CardTitle className="flex items-center gap-3 text-xl font-black"><Megaphone className="w-5 h-5 text-primary" /> Muro de Anuncios</CardTitle></CardHeader>
           <CardContent className="p-0">
-            {annLoading ? (
-              <div className="p-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto opacity-10" /></div>
-            ) : (
+            {annLoading ? <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto opacity-10" /></div> : (
               <div className="divide-y divide-gray-50">
                 {activeAnnouncements.map((ann) => (
                   <div key={ann.id} className="p-8 hover:bg-gray-50/50 transition-all group">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge className={cn("text-[8px] font-black", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>
-                        {ann.priority === 'high' ? 'IMPORTANTE' : 'ANUNCIO'}
-                      </Badge>
-                      <span className="text-[10px] font-black text-muted-foreground opacity-40 uppercase tracking-tighter">
-                        Por {ann.authorName}
-                      </span>
-                    </div>
-                    <h4 className="font-black text-base group-hover:text-primary transition-colors">{ann.title}</h4>
+                    <Badge className={cn("text-[8px] font-black mb-2", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>{ann.priority === 'high' ? 'IMPORTANTE' : 'ANUNCIO'}</Badge>
+                    <h4 className="font-black text-base group-hover:text-primary">{ann.title}</h4>
                     <p className="text-sm text-muted-foreground leading-relaxed mt-2">{ann.content}</p>
                   </div>
                 ))}
-                {activeAnnouncements.length === 0 && (
-                  <div className="p-20 text-center text-muted-foreground text-xs font-black uppercase tracking-widest opacity-30">
-                    No hay anuncios activos.
-                  </div>
-                )}
               </div>
             )}
           </CardContent>
