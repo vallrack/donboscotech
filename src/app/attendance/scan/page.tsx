@@ -31,7 +31,7 @@ export default function PublicAttendanceScanner() {
   const qrRegionId = "public-qr-reader";
   const html5QrCode = useRef<Html5Qrcode | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const isProcessing = useRef(false); // Bloqueo para evitar duplicados
+  const isProcessing = useRef(false);
 
   // 1. GPS Validation
   useEffect(() => {
@@ -106,7 +106,7 @@ export default function PublicAttendanceScanner() {
        return;
     }
 
-    isProcessing.current = true; // Bloqueamos nuevas lecturas
+    isProcessing.current = true;
     setScanning(true);
     
     try {
@@ -119,8 +119,10 @@ export default function PublicAttendanceScanner() {
           title: "Carnet no válido",
           description: "El código escaneado no pertenece a un docente registrado."
         });
-        isProcessing.current = false;
-        setScanning(false);
+        setTimeout(() => {
+          isProcessing.current = false;
+          setScanning(false);
+        }, 3000);
         return;
       }
 
@@ -141,7 +143,6 @@ export default function PublicAttendanceScanner() {
         createdAt: serverTimestamp()
       };
 
-      // Guardado concurrente en el perfil y en el historial global
       const userRecordRef = doc(db, 'userProfiles', userId, 'attendanceRecords', recordId);
       const globalRecordRef = doc(db, 'globalAttendanceRecords', recordId);
       
@@ -157,16 +158,15 @@ export default function PublicAttendanceScanner() {
         description: `Bienvenido(a), ${userData.name.split(' ')[0]}.`
       });
 
-      // Reset después de 5 segundos para permitir la siguiente persona
       setTimeout(() => {
         setLastScannedUser(null);
         setScanning(false);
-        isProcessing.current = false; // Liberamos el bloqueo
+        isProcessing.current = false;
       }, 5000);
 
     } catch (err: any) {
-      isProcessing.current = false;
       setScanning(false);
+      isProcessing.current = false;
       toast({
         variant: "destructive",
         title: "Error de sincronización",

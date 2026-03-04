@@ -49,4 +49,5 @@ export interface AttendanceRecord {
     lng: number;
     address?: string;
   };
+  createdAt?: any;
 }

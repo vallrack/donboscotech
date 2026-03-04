@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from 'react';
@@ -27,13 +28,13 @@ export default function DashboardPage() {
     if (user.role === 'docent') {
       return query(
         collection(db, 'userProfiles', user.id, 'attendanceRecords'),
-        orderBy('date', 'desc'),
+        orderBy('createdAt', 'desc'),
         limit(5)
       );
     } else {
       return query(
         collection(db, 'globalAttendanceRecords'),
-        orderBy('date', 'desc'),
+        orderBy('createdAt', 'desc'),
         limit(8)
       );
     }
