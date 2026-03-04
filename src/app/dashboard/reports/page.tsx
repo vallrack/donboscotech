@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useMemo } from 'react';
@@ -18,6 +19,17 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { AttendanceRecord, User, Campus, Program, Shift } from '@/lib/types';
+
+/**
+ * Utility to calculate hours between two time strings (HH:mm)
+ */
+function calculateHours(start: string, end: string): number {
+  if (!start || !end) return 0;
+  const [h1, m1] = start.split(':').map(Number);
+  const [h2, m2] = end.split(':').map(Number);
+  const totalMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
+  return Math.max(0, parseFloat((totalMinutes / 60).toFixed(2)));
+}
 
 export default function ReportsPage() {
   const { toast } = useToast();
@@ -64,39 +76,69 @@ export default function ReportsPage() {
   const { data: programs } = useCollection<Program>(programsQuery as any);
   const { data: shifts } = useCollection<Shift>(shiftsQuery as any);
 
-  const filteredRecords = useMemo(() => {
+  // Group records by User and Date to calculate daily hours
+  const dailyReports = useMemo(() => {
     if (!records || !profiles) return [];
     
     const userMap = new Map(profiles.map(p => [p.id, p]));
+    const grouped = new Map<string, any>();
 
-    return records.filter(r => {
+    records.forEach(r => {
       const user = userMap.get(r.userId);
-      if (!user) return false;
+      if (!user) return;
 
-      if (selectedDocent !== 'all' && r.userId !== selectedDocent) return false;
-      if (selectedCampus !== 'all' && user.campus !== selectedCampus) return false;
-      if (selectedProgram !== 'all' && user.program !== selectedProgram) return false;
-      if (selectedShift !== 'all' && !user.shiftIds?.includes(selectedShift)) return false;
+      // Apply initial filters
+      if (selectedDocent !== 'all' && r.userId !== selectedDocent) return;
+      if (selectedCampus !== 'all' && user.campus !== selectedCampus) return;
+      if (selectedProgram !== 'all' && user.program !== selectedProgram) return;
+      if (selectedShift !== 'all' && !user.shiftIds?.includes(selectedShift)) return;
 
-      const now = new Date();
-      const recordDate = new Date(r.date + 'T00:00:00');
-      
-      if (period === 'Semana Actual') {
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        if (recordDate < weekAgo) return false;
-      } else if (period === 'Mes Actual') {
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        if (recordDate < monthStart) return false;
+      const key = `${r.userId}_${r.date}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          userId: r.userId,
+          userName: r.userName,
+          date: r.date,
+          entry: null,
+          exit: null,
+          campus: user.campus || 'N/A',
+          program: user.program || 'N/A',
+          role: user.role
+        });
       }
 
-      return true;
+      const dayData = grouped.get(key);
+      if (r.type === 'entry') {
+        if (!dayData.entry || r.time < dayData.entry) dayData.entry = r.time;
+      } else {
+        if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time;
+      }
     });
+
+    const list = Array.from(grouped.values()).map(d => ({
+      ...d,
+      hours: calculateHours(d.entry, d.exit)
+    }));
+
+    // Period filter
+    const now = new Date();
+    return list.filter(r => {
+      const recordDate = new Date(r.date + 'T00:00:00');
+      if (period === 'Semana Actual') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return recordDate >= weekAgo;
+      } else if (period === 'Mes Actual') {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        return recordDate >= monthStart;
+      }
+      return true;
+    }).sort((a, b) => b.date.localeCompare(a.date));
   }, [records, profiles, selectedDocent, selectedCampus, selectedProgram, selectedShift, period]);
 
   const chartData = useMemo(() => {
-    if (!filteredRecords.length) {
+    if (!dailyReports.length) {
       const emptyDays = viewType === 'monthly' ? ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] : ['Lun', 'Mar', 'Mie', 'Jue', 'Vie'];
-      return emptyDays.map(name => ({ name, asistencia: 0 }));
+      return emptyDays.map(name => ({ name: name, horas: 0 }));
     }
 
     if (viewType === 'weekly') {
@@ -104,44 +146,45 @@ export default function ReportsPage() {
       const counts: Record<string, number> = {};
       days.forEach(d => counts[d] = 0);
 
-      filteredRecords.forEach(r => {
+      dailyReports.forEach(r => {
         const date = new Date(r.date + 'T00:00:00');
         const dayName = days[date.getDay() === 0 ? 6 : date.getDay() - 1];
-        if (counts[dayName] !== undefined) counts[dayName]++;
+        if (counts[dayName] !== undefined) counts[dayName] += r.hours;
       });
 
-      return Object.entries(counts).map(([name, count]) => ({ name, asistencia: count }));
+      return Object.entries(counts).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
     } else {
       const weeks: Record<string, number> = { 'Sem 1': 0, 'Sem 2': 0, 'Sem 3': 0, 'Sem 4': 0, 'Sem 5': 0 };
       
-      filteredRecords.forEach(r => {
+      dailyReports.forEach(r => {
         const date = new Date(r.date + 'T00:00:00');
         const dayOfMonth = date.getDate();
         const weekNum = Math.ceil(dayOfMonth / 7);
         const weekLabel = `Sem ${weekNum > 5 ? 5 : weekNum}`;
-        weeks[weekLabel]++;
+        weeks[weekLabel] += r.hours;
       });
 
-      return Object.entries(weeks).map(([name, count]) => ({ name, asistencia: count }));
+      return Object.entries(weeks).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
     }
-  }, [viewType, filteredRecords]);
+  }, [viewType, dailyReports]);
 
   const handleGenerateAiSummary = async () => {
-    if (filteredRecords.length === 0) {
+    if (dailyReports.length === 0) {
       toast({ title: "Sin datos", description: "No hay registros reales para analizar.", variant: "destructive" });
       return;
     }
     
     setGeneratingAi(true);
     try {
-      const reportData = filteredRecords.slice(0, 50).map(r => ({
+      const reportData = dailyReports.slice(0, 50).map(r => ({
         userId: r.userId,
         userName: r.userName,
         date: r.date,
-        entryTime: r.time,
-        isLate: r.time > '07:15',
-        totalHours: 8,
-        isAbsent: false,
+        entryTime: r.entry,
+        exitTime: r.exit,
+        totalHours: r.hours,
+        isLate: r.entry && r.entry > '07:15',
+        isAbsent: !r.entry && !r.exit,
       }));
 
       const context = [
@@ -174,26 +217,23 @@ export default function ReportsPage() {
   };
 
   const exportToExcel = () => {
-    if (filteredRecords.length === 0) {
+    if (dailyReports.length === 0) {
       toast({ title: "Error", description: "No hay datos para exportar.", variant: "destructive" });
       return;
     }
     
-    const userMap = new Map(profiles?.map(p => [p.id, p]));
-    const headers = ['Docente', 'Email', 'Sede', 'Programa', 'Fecha', 'Hora', 'Tipo', 'Metodo'];
+    const headers = ['Docente', 'Sede', 'Programa', 'Fecha', 'Ingreso', 'Salida', 'Horas Totales'];
     const csvContent = [
       headers.join(','),
-      ...filteredRecords.map(r => {
-        const user = userMap.get(r.userId);
+      ...dailyReports.map(r => {
         return [
           `"${r.userName}"`,
-          `"${user?.email || ''}"`,
-          `"${user?.campus || 'Sede Principal'}"`,
-          `"${user?.program || 'N/A'}"`,
+          `"${r.campus}"`,
+          `"${r.program}"`,
           r.date,
-          r.time,
-          r.type,
-          r.method
+          r.entry || 'N/A',
+          r.exit || 'N/A',
+          r.hours
         ].join(',');
       })
     ].join('\n');
@@ -202,7 +242,7 @@ export default function ReportsPage() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `Reporte_Asistencia_DonBosco.csv`);
+    link.setAttribute('download', `Auditoria_Asistencia_DonBosco.csv`);
     link.click();
     toast({ title: "Reporte Exportado", description: "El archivo Excel ha sido generado con éxito." });
   };
@@ -212,8 +252,8 @@ export default function ReportsPage() {
       <div className="flex flex-col gap-6 no-print">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría de Datos Reales</h1>
-            <p className="text-muted-foreground font-medium">Visualización de asistencia basada exclusivamente en registros de Firestore.</p>
+            <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría de Jornadas</h1>
+            <p className="text-muted-foreground font-medium">Control de horas laboradas basado en ingresos y salidas reales.</p>
           </div>
           <Button variant="ghost" className="text-muted-foreground hover:text-primary font-black text-xs uppercase tracking-widest gap-2" onClick={clearFilters}>
             <FilterX className="w-4 h-4" /> Limpiar Filtros
@@ -317,9 +357,9 @@ export default function ReportsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xl font-black text-gray-800 flex items-center gap-3">
-                   <TrendingUp className="w-6 h-6 text-primary" /> Frecuencia de Asistencia Real
+                   <TrendingUp className="w-6 h-6 text-primary" /> Volumen de Horas Laboradas
                 </CardTitle>
-                <CardDescription className="font-bold">Total de marcajes registrados por unidad de tiempo.</CardDescription>
+                <CardDescription className="font-bold">Total de horas acumuladas por el personal filtrado.</CardDescription>
               </div>
               <Tabs value={viewType} onValueChange={(v: any) => setViewType(v)} className="no-print">
                 <TabsList className="bg-gray-100 rounded-xl h-10 p-1">
@@ -334,24 +374,24 @@ export default function ReportsPage() {
                <div className="flex items-center justify-center h-full">
                  <Loader2 className="w-10 h-10 animate-spin text-primary opacity-20" />
                </div>
-            ) : filteredRecords.length === 0 ? (
+            ) : dailyReports.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                 <div className="p-4 bg-gray-50 rounded-full border-2 border-dashed">
                   <BarChart3 className="w-10 h-10 text-gray-300" />
                 </div>
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">No hay registros reales en este periodo</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Sin jornadas registradas</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} unit="h" />
                   <RechartsTooltip 
                     cursor={{ fill: '#f8fafc' }}
                     contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 900 }}
                   />
-                  <Bar dataKey="asistencia" fill="hsl(var(--primary))" radius={[12, 12, 0, 0]} barSize={40} />
+                  <Bar dataKey="horas" fill="hsl(var(--primary))" radius={[12, 12, 0, 0]} barSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -362,9 +402,9 @@ export default function ReportsPage() {
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
           <CardHeader className="p-8">
             <CardTitle className="text-2xl font-black flex items-center gap-3">
-              <Sparkles className="w-6 h-6" /> Auditoría IA Real
+              <Sparkles className="w-6 h-6" /> Auditoría IA
             </CardTitle>
-            <CardDescription className="text-primary-foreground/70 font-bold uppercase tracking-widest text-[10px]">Análisis de datos registrados en Firestore</CardDescription>
+            <CardDescription className="text-primary-foreground/70 font-bold uppercase tracking-widest text-[10px]">Análisis de cumplimiento y horas laboradas</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 p-8 pt-0 flex flex-col gap-6">
             {aiSummary ? (
@@ -374,21 +414,21 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-10 space-y-6">
                 <div className="w-20 h-20 bg-white/10 rounded-[2rem] flex items-center justify-center mx-auto shadow-inner">
-                  <TrendingUp className="w-10 h-10 opacity-40" />
+                  <Clock className="w-10 h-10 opacity-40" />
                 </div>
                 <p className="text-xs opacity-80 font-bold uppercase tracking-widest px-4 leading-loose">
-                  {filteredRecords.length > 0 
-                    ? `Lista para analizar ${filteredRecords.length} registros reales encontrados.` 
-                    : "Esperando registros reales para iniciar el análisis inteligente."}
+                  {dailyReports.length > 0 
+                    ? `Lista para analizar ${dailyReports.length} jornadas reales.` 
+                    : "Esperando registros para iniciar la auditoría de horas."}
                 </p>
                 <Button 
                   onClick={handleGenerateAiSummary} 
-                  disabled={generatingAi || filteredRecords.length === 0} 
+                  disabled={generatingAi || dailyReports.length === 0} 
                   variant="secondary" 
                   className="w-full h-14 rounded-2xl font-black text-primary shadow-xl hover:scale-105 transition-all"
                 >
                   {generatingAi ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />}
-                  Generar Auditoría IA
+                  Analizar Jornadas IA
                 </Button>
               </div>
             )}
@@ -400,11 +440,11 @@ export default function ReportsPage() {
         <CardHeader className="border-b bg-gray-50/50 p-8">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-xl font-black">Historial de Auditoría</CardTitle>
-              <CardDescription className="font-bold">Listado detallado de registros sincronizados.</CardDescription>
+              <CardTitle className="text-xl font-black">Historial Consolidado por Día</CardTitle>
+              <CardDescription className="font-bold">Cálculo automático de tiempo laborado (Primer Ingreso - Última Salida).</CardDescription>
             </div>
             <Badge className="bg-primary/10 text-primary font-black px-4 py-1.5 rounded-xl border-none">
-              {filteredRecords.length} REGISTROS TOTALES
+              {dailyReports.length} JORNADAS TOTALES
             </Badge>
           </div>
         </CardHeader>
@@ -414,60 +454,68 @@ export default function ReportsPage() {
               <thead>
                 <tr className="bg-gray-50/20 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                   <th className="px-8 py-6">Personal</th>
-                  <th className="px-8 py-6">Detalle Institucional</th>
-                  <th className="px-8 py-6">Fecha / Hora</th>
-                  <th className="px-8 py-6">Ubicación / Sede</th>
-                  <th className="px-8 py-6 text-center">Estado</th>
+                  <th className="px-8 py-6">Sede / Programa</th>
+                  <th className="px-8 py-6">Fecha</th>
+                  <th className="px-8 py-6">Ingreso / Salida</th>
+                  <th className="px-8 py-6 text-center">Horas Totales</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
                   <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary/20" /></td></tr>
                 ) : (
-                  filteredRecords.map((r) => {
-                    const user = profiles?.find(p => p.id === r.userId);
+                  dailyReports.map((r, idx) => {
                     return (
-                      <tr key={r.id} className="hover:bg-gray-50/50 transition-all group">
+                      <tr key={`${r.userId}_${r.date}_${idx}`} className="hover:bg-gray-50/50 transition-all group">
                         <td className="px-8 py-6">
                           <div className="flex flex-col">
                             <span className="font-black text-gray-800">{r.userName}</span>
-                            <span className="text-[9px] font-bold text-muted-foreground uppercase">{user?.role || 'Docente'}</span>
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase">{r.role}</span>
                           </div>
                         </td>
                         <td className="px-8 py-6">
                            <div className="space-y-1">
                              <div className="flex items-center gap-2 text-[9px] font-black text-primary uppercase">
-                               <MapPin className="w-3 h-3 opacity-40" /> {user?.campus || 'Sede Principal'}
+                               <MapPin className="w-3 h-3 opacity-40" /> {r.campus}
                              </div>
                              <div className="flex items-center gap-2 text-[9px] font-black text-gray-500 uppercase">
-                               <BookOpen className="w-3 h-3 opacity-40" /> {user?.program || 'Sin Programa'}
+                               <BookOpen className="w-3 h-3 opacity-40" /> {r.program}
                              </div>
                            </div>
                         </td>
                         <td className="px-8 py-6">
                           <div className="flex flex-col">
                             <span className="font-bold text-sm text-gray-800">{r.date}</span>
-                            <span className="text-[10px] font-black text-muted-foreground uppercase">{r.time}</span>
                           </div>
                         </td>
                         <td className="px-8 py-6">
-                           <div className="text-xs font-bold text-gray-500 max-w-[200px] truncate">
-                             {r.location?.address || 'Terminal Oficial'}
+                           <div className="flex items-center gap-4">
+                             <div className="text-center">
+                               <p className="text-[8px] font-black text-muted-foreground uppercase">Entrada</p>
+                               <p className="text-xs font-bold text-gray-800">{r.entry || '--:--'}</p>
+                             </div>
+                             <div className="w-px h-6 bg-gray-200" />
+                             <div className="text-center">
+                               <p className="text-[8px] font-black text-muted-foreground uppercase">Salida</p>
+                               <p className="text-xs font-bold text-gray-800">{r.exit || '--:--'}</p>
+                             </div>
                            </div>
-                           <Badge variant="outline" className="text-[8px] font-black px-2 mt-1 uppercase">{r.method}</Badge>
                         </td>
                         <td className="px-8 py-6 text-center">
-                          <div className={cn(
-                            "w-2.5 h-2.5 rounded-full mx-auto shadow-sm",
-                            r.time <= '07:15' ? "bg-green-500" : "bg-yellow-500"
-                          )} />
+                          <Badge className={cn(
+                            "font-black text-sm px-4 py-1.5 rounded-xl border-none",
+                            r.hours >= 8 ? "bg-green-500 text-white" : 
+                            r.hours > 0 ? "bg-yellow-500 text-white" : "bg-red-100 text-red-500"
+                          )}>
+                            {r.hours}h
+                          </Badge>
                         </td>
                       </tr>
                     );
                   })
                 )}
-                {!recordsLoading && filteredRecords.length === 0 && (
-                  <tr><td colSpan={5} className="py-40 text-center font-black text-gray-300 uppercase tracking-widest">No se encontraron registros reales</td></tr>
+                {!recordsLoading && dailyReports.length === 0 && (
+                  <tr><td colSpan={5} className="py-40 text-center font-black text-gray-300 uppercase tracking-widest">No hay jornadas reales para consolidar</td></tr>
                 )}
               </tbody>
             </table>
