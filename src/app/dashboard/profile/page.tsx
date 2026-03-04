@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useFirestore } from '@/firebase';
 import { doc, updateDoc, collection, query, orderBy } from 'firebase/firestore';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User, Mail, Shield, BookOpen, Building2, Clock, Contact, Loader2, Save, Image as ImageIcon } from 'lucide-react';
+import { User, Mail, Shield, BookOpen, Building2, Clock, Contact, Loader2, Save, Image as ImageIcon, Camera, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Selector data
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
@@ -49,6 +50,41 @@ export default function ProfilePage() {
       });
     }
   }, [user]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        variant: "destructive",
+        title: "Archivo no válido",
+        description: "Por favor selecciona una imagen (JPG, PNG)."
+      });
+      return;
+    }
+
+    // Validate size (limit to 1MB for Firestore field optimization)
+    if (file.size > 1024 * 1024) {
+      toast({
+        variant: "destructive",
+        title: "Imagen muy grande",
+        description: "El tamaño máximo permitido es de 1MB."
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData(prev => ({ ...prev, avatarUrl: reader.result as string }));
+      toast({
+        title: "Foto cargada",
+        description: "Recuerda guardar los cambios para actualizar tu carnet."
+      });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,13 +116,29 @@ export default function ProfilePage() {
         {/* Avatar Card */}
         <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden flex flex-col items-center p-10 h-fit">
            <div className="relative group">
-              <div className="w-40 h-40 rounded-[2.5rem] bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl">
+              <div className="w-40 h-40 rounded-[2.5rem] bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl relative">
                 {formData.avatarUrl ? (
                   <Image src={formData.avatarUrl} alt={formData.name} width={160} height={160} className="object-cover" />
                 ) : (
                   <User className="w-16 h-16 text-gray-300" />
                 )}
+                
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2 cursor-pointer"
+                >
+                  <Camera className="w-8 h-8" />
+                  <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
+                </button>
               </div>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                className="hidden" 
+                accept="image/*"
+              />
            </div>
            <div className="mt-8 text-center">
              <h3 className="text-xl font-black text-gray-800">{formData.name}</h3>
@@ -98,6 +150,15 @@ export default function ProfilePage() {
                <span className="flex items-center justify-center gap-2"><Contact className="w-3 h-3" /> ID: {formData.documentId || 'No asignado'}</span>
              </div>
            </div>
+           
+           <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase"
+            onClick={() => fileInputRef.current?.click()}
+           >
+             <Upload className="w-3 h-3" /> Subir desde dispositivo
+           </Button>
         </Card>
 
         {/* Form Card */}
@@ -121,14 +182,15 @@ export default function ProfilePage() {
                     </div>
                  </div>
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">URL de Foto (Avatar)</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">URL de Foto (Opcional)</Label>
                     <div className="relative">
                       <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input 
-                        value={formData.avatarUrl} 
+                        value={formData.avatarUrl.startsWith('data:') ? 'Imagen cargada desde archivo' : formData.avatarUrl} 
                         onChange={(e) => setFormData({...formData, avatarUrl: e.target.value})}
                         className="pl-10 h-12 rounded-xl border-gray-100"
                         placeholder="https://ejemplo.com/foto.jpg"
+                        disabled={formData.avatarUrl.startsWith('data:')}
                       />
                     </div>
                  </div>
