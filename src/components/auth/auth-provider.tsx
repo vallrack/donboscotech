@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const uid = authUser.uid;
       const profileRef = doc(db, 'userProfiles', uid);
 
-      // Verificación inicial rápida
+      // Verificación inicial y creación si no existe
       const profileSnap = await getDoc(profileRef);
       if (!profileSnap.exists()) {
         const initialData = {
@@ -50,17 +50,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           documentId: '',
           campus: '',
           program: '',
-          shiftIds: []
+          shiftIds: [],
+          status: 'active'
         };
         await setDoc(profileRef, initialData);
       }
 
-      // Escucha en tiempo real para el perfil y roles para asegurar reactividad total
+      // Escucha en tiempo real para el perfil y roles
       unsubscribeProfile = onSnapshot(profileRef, async (docSnap) => {
         if (docSnap.exists()) {
           const profileData = docSnap.data();
           
-          // Verificación de roles de seguridad (Security Rules sync)
+          // Verificación de roles de seguridad concurrentemente
           const [adminSnap, coordSnap, sectSnap] = await Promise.all([
             getDoc(doc(db, 'roles_admins', uid)),
             getDoc(doc(db, 'roles_coordinators', uid)),
@@ -74,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           setResolvedUser({
             id: uid,
-            name: profileData.name || authUser.displayName || 'Miembro',
+            name: profileData.name || authUser.displayName || 'Miembro Institucional',
             email: authUser.email || profileData.email || '',
             role: finalRole,
             avatarUrl: profileData.avatarUrl || authUser.photoURL || undefined,
@@ -85,6 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } as User);
           setResolving(false);
         }
+      }, (error) => {
+        console.error("Auth Profile Sync Error:", error);
+        setResolving(false);
       });
     }
 
@@ -119,7 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       documentId: '',
       campus: '',
       program: '',
-      shiftIds: []
+      shiftIds: [],
+      status: 'active'
     });
 
     if (role !== 'docent') {
@@ -137,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   };
 
-  const loading = authLoading || (!!authUser && resolving && !resolvedUser);
+  const loading = authLoading || resolving;
 
   return (
     <AuthContext.Provider value={{ 
