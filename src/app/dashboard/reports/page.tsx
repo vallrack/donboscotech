@@ -6,7 +6,6 @@ import { useAuth } from '@/components/auth/auth-provider';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Sparkles, Loader2, Calendar, TrendingUp, 
   Users, BarChart3, Printer, 
@@ -45,10 +44,10 @@ export default function ReportsPage() {
   const [selectedCampus, setSelectedCampus] = useState('all');
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedShift, setSelectedShift] = useState('all');
-  const [viewType, setViewType] = useState<'weekly' | 'monthly'>('weekly');
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
+  // Consultas Memorizadas para evitar bucles infinitos
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return isDocent 
@@ -56,22 +55,45 @@ export default function ReportsPage() {
       : query(collection(db, 'globalAttendanceRecords'), orderBy('date', 'desc'));
   }, [db, user?.id, user?.role, isDocent]);
 
-  const profilesQuery = useMemo(() => db && !isDocent ? query(collection(db, 'userProfiles'), orderBy('name')) : null, [db, isDocent]);
-  const shiftsQuery = useMemo(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
+  const profilesQuery = useMemoFirebase(() => {
+    if (!db || isDocent) return null;
+    return query(collection(db, 'userProfiles'), orderBy('name'));
+  }, [db, isDocent]);
 
-  const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery as any);
-  const { data: profiles } = useCollection<User>(profilesQuery as any);
-  const { data: campuses } = useCollection<Campus>(db && !isDocent ? collection(db, 'campuses') : null as any);
-  const { data: programs } = useCollection<Program>(db && !isDocent ? collection(db, 'programs') : null as any);
-  const { data: allShifts } = useCollection<Shift>(shiftsQuery as any);
+  const shiftsQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return query(collection(db, 'shifts'), orderBy('name'));
+  }, [db]);
+
+  const campusesQuery = useMemoFirebase(() => {
+    if (!db || isDocent) return null;
+    return query(collection(db, 'campuses'), orderBy('name'));
+  }, [db, isDocent]);
+
+  const programsQuery = useMemoFirebase(() => {
+    if (!db || isDocent) return null;
+    return query(collection(db, 'programs'), orderBy('name'));
+  }, [db, isDocent]);
+
+  const { data: recordsRaw } = useCollection<AttendanceRecord>(recordsQuery);
+  const { data: profilesRaw } = useCollection<User>(profilesQuery);
+  const { data: campusesRaw } = useCollection<Campus>(campusesQuery);
+  const { data: programsRaw } = useCollection<Program>(programsQuery);
+  const { data: allShiftsRaw } = useCollection<Shift>(shiftsQuery);
+
+  // Estabilización de datos para los Selectores
+  const records = useMemo(() => recordsRaw || [], [recordsRaw]);
+  const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
+  const campuses = useMemo(() => campusesRaw || [], [campusesRaw]);
+  const programs = useMemo(() => programsRaw || [], [programsRaw]);
+  const allShifts = useMemo(() => allShiftsRaw || [], [allShiftsRaw]);
 
   const dailyReports = useMemo(() => {
-    if (!records) return [];
-    const userMap = profiles ? new Map(profiles.map(p => [p.id, p])) : null;
+    const userMap = new Map(profiles.map(p => [p.id, p]));
     const grouped = new Map<string, any>();
 
     records.forEach(r => {
-      const uData = userMap ? userMap.get(r.userId) : null;
+      const uData = userMap.get(r.userId);
       if (!isDocent) {
         if (selectedDocent !== 'all' && r.userId !== selectedDocent) return;
         if (selectedCampus !== 'all' && uData?.campus !== selectedCampus) return;
@@ -152,13 +174,45 @@ export default function ReportsPage() {
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-[2rem] shadow-xl no-print">
-        <Select value={period} onValueChange={setPeriod}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Semana Actual">Semana Actual</SelectItem><SelectItem value="Mes Actual">Mes Actual</SelectItem><SelectItem value="Todo el Historial">Todo</SelectItem></SelectContent></Select>
+        <Select value={period} onValueChange={setPeriod}>
+          <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Semana Actual">Semana Actual</SelectItem>
+            <SelectItem value="Mes Actual">Mes Actual</SelectItem>
+            <SelectItem value="Todo el Historial">Todo</SelectItem>
+          </SelectContent>
+        </Select>
+        
         {!isDocent && (
           <>
-            <Select value={selectedDocent} onValueChange={setSelectedDocent}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Docente" /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem>{profiles?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={selectedCampus} onValueChange={setSelectedCampus}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Sede" /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={selectedProgram} onValueChange={setSelectedProgram}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Programa" /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={selectedShift} onValueChange={setSelectedShift}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Jornada" /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{allShifts?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>
+            <Select value={selectedDocent} onValueChange={setSelectedDocent}>
+              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Docente" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={selectedCampus} onValueChange={setSelectedCampus}>
+              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Sede" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {campuses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={selectedProgram} onValueChange={setSelectedProgram}>
+              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Programa" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {programs.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={selectedShift} onValueChange={setSelectedShift}>
+              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Jornada" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {allShifts.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </>
         )}
       </div>

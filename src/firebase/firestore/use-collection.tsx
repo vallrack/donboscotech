@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -27,12 +28,14 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
   });
 
   useEffect(() => {
+    // Si la consulta es nula, nos aseguramos de no estar cargando y salimos
     if (!query) {
-      setState(prev => prev.loading ? { ...prev, loading: false } : prev);
+      setState(prev => prev.loading ? { ...prev, loading: false, error: null } : prev);
       return;
     }
 
-    setState(prev => ({ ...prev, loading: true }));
+    // Solo activamos loading si no estábamos ya cargando para evitar renders innecesarios
+    setState(prev => prev.loading ? prev : { ...prev, loading: true });
 
     const unsubscribe = onSnapshot(
       query,
@@ -41,6 +44,8 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
           ...(doc.data() as any),
           id: doc.id,
         }) as T);
+        
+        // Actualizamos el estado de una sola vez
         setState({ data: items, loading: false, error: null });
       },
       (serverError: FirestoreError) => {
@@ -59,7 +64,7 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
     );
 
     return () => unsubscribe();
-  }, [query]);
+  }, [query]); // La estabilidad de 'query' es vital aquí
 
   return state;
 }
