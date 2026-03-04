@@ -9,22 +9,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Memoize filtered items to prevent redundant renders and infinite loops
-  const filteredNavItems = useMemo(() => {
+  const navItems = useMemo(() => {
     if (!user) return [];
     
-    const allItems = [
+    const items = [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
       { name: 'Mi Perfil', href: '/dashboard/profile', icon: User, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
       { name: 'Mi Carnet', href: '/dashboard/profile/carnet', icon: CreditCard, roles: ['docent', 'coordinator', 'secretary', 'admin'] },
@@ -35,7 +29,7 @@ export function Navbar() {
       { name: 'Configuración', href: '/dashboard/admin/settings', icon: Settings, roles: ['admin', 'coordinator'] },
     ];
     
-    return allItems.filter(item => item.roles.includes(user.role));
+    return items.filter(item => item.roles.includes(user.role));
   }, [user?.role]);
 
   if (!user) return null;
@@ -45,7 +39,7 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
           <div className="flex items-center gap-6 flex-1">
-            <Link href="/dashboard" className="flex-shrink-0 flex items-center gap-3 group">
+            <Link href="/dashboard" className="flex-shrink-0 flex items-center gap-3">
               <Image 
                 src="https://ciudaddonbosco.org/wp-content/uploads/2025/07/CIUDAD-DON-BOSCO_CABECERA-04-1024x284.png"
                 alt="Ciudad Don Bosco"
@@ -55,32 +49,26 @@ export function Navbar() {
                 priority
               />
               <div className="h-6 w-px bg-gray-200 hidden md:block" />
-              <span className="text-primary font-black text-xl tracking-tighter hidden md:block group-hover:text-primary/80 transition-colors">Track</span>
+              <span className="text-primary font-black text-xl tracking-tighter hidden md:block">Track</span>
             </Link>
             
             <div className="hidden lg:flex gap-1 h-full items-center">
-              {filteredNavItems.map((item) => {
+              {navItems.map((item) => {
                 const isActive = pathname === item.href;
                 return (
-                  <Tooltip key={item.href}>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          "group inline-flex items-center px-3 py-2 text-xs font-bold transition-all whitespace-nowrap rounded-xl hover:bg-gray-50",
-                          isActive ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-primary"
-                        )}
-                      >
-                        <item.icon className={cn("w-5 h-5 shrink-0 transition-transform group-hover:scale-110", isActive && "text-primary")} />
-                        <span className="max-w-0 overflow-hidden group-hover:max-w-[200px] transition-all duration-300 ease-in-out ml-0 group-hover:ml-3 opacity-0 group-hover:opacity-100">
-                          {item.name}
-                        </span>
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="font-bold text-[10px] bg-primary text-white border-none shadow-lg">
-                      {item.name}
-                    </TooltipContent>
-                  </Tooltip>
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "inline-flex items-center px-4 py-2 text-xs font-bold transition-all rounded-xl",
+                      isActive 
+                        ? "text-primary bg-primary/5 shadow-inner" 
+                        : "text-muted-foreground hover:text-primary hover:bg-gray-50"
+                    )}
+                  >
+                    <item.icon className={cn("w-5 h-5 mr-2", isActive && "text-primary")} />
+                    <span>{item.name}</span>
+                  </Link>
                 );
               })}
             </div>
@@ -108,7 +96,7 @@ export function Navbar() {
               variant="ghost" 
               size="icon" 
               onClick={logout} 
-              className="text-gray-400 hover:text-primary hover:bg-primary/5 transition-all rounded-xl h-10 w-10"
+              className="text-gray-400 hover:text-primary hover:bg-primary/5 transition-all rounded-xl"
             >
               <LogOut className="w-5 h-5" /> 
             </Button>
@@ -125,7 +113,7 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="lg:hidden bg-white border-t animate-in slide-in-from-top duration-300">
           <div className="p-4 space-y-2">
-            {filteredNavItems.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

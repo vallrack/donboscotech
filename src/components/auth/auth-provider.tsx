@@ -22,67 +22,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useFirebaseAuth();
   const db = useFirestore();
   const { user: authUser, loading: authLoading } = useUser();
+  const [resolvedUser, setResolvedUser] = useState<User | null>(null);
+  const [resolving, setResolving] = useState(false);
   const syncAttempted = useRef(false);
-  const [lastResolvedUser, setLastResolvedUser] = useState<User | null>(null);
 
-  const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser?.uid, db]);
-  const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser?.uid, db]);
-  const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser?.uid, db]);
-  const sectRef = useMemo(() => authUser && db ? doc(db, 'roles_secretaries', authUser.uid) : null, [authUser?.uid, db]);
-
-  const { data: userProfile, loading: profileLoading } = useDoc(profileRef);
-  const { data: adminRole } = useDoc(adminRef);
-  const { data: coordRole } = useDoc(coordRef);
-  const { data: sectRole } = useDoc(sectRef);
-
-  // Memoize basic data to avoid infinite loops
-  const resolvedUser = useMemo(() => {
-    if (!authUser || authLoading || profileLoading) return null;
-
-    let role: UserRole = (userProfile?.role as UserRole) || 'docent';
-    if (adminRole) role = 'admin';
-    else if (coordRole) role = 'coordinator';
-    else if (sectRole) role = 'secretary';
-
-    return {
-      id: authUser.uid,
-      name: userProfile?.name || authUser.displayName || 'Usuario',
-      email: authUser.email || '',
-      role,
-      avatarUrl: userProfile?.avatarUrl || authUser.photoURL || undefined,
-      documentId: userProfile?.documentId,
-      campus: userProfile?.campus,
-      program: userProfile?.program,
-      shiftIds: userProfile?.shiftIds || []
-    } as User;
-  }, [authUser, authLoading, profileLoading, adminRole, coordRole, sectRole, userProfile]);
-
-  // Handle the persistent user state without loop
+  // Monitor authUser and fetch profile once
   useEffect(() => {
-    if (resolvedUser) {
-      setLastResolvedUser(resolvedUser);
-    }
-  }, [resolvedUser]);
+    async function resolveInstitutionalData() {
+      if (!authUser || !db) {
+        setResolvedUser(null);
+        setResolving(false);
+        return;
+      }
 
-  // Sync profile if it doesn't exist
-  useEffect(() => {
-    async function syncProfile() {
-      if (authUser && db && !profileLoading && !syncAttempted.current) {
-        syncAttempted.current = true;
-        const pRef = doc(db, 'userProfiles', authUser.uid);
-        const existingSnap = await getDoc(pRef);
-        if (!existingSnap.exists()) {
-          await setDoc(pRef, {
+      setResolving(true);
+      try {
+        const uid = authUser.uid;
+        const profileRef = doc(db, 'userProfiles', uid);
+        const profileSnap = await getDoc(profileRef);
+        
+        let profileData = profileSnap.exists() ? profileSnap.data() : null;
+
+        // Sync basic profile if missing
+        if (!profileSnap.exists() && !syncAttempted.current) {
+          syncAttempted.current = true;
+          const initialData = {
             name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
             email: authUser.email || '',
             role: 'docent',
             createdAt: serverTimestamp()
-          });
+          };
+          await setDoc(profileRef, initialData);
+          profileData = initialData;
         }
+
+        // Check for elevated roles in parallel
+        const [adminSnap, coordSnap, sectSnap] = await Promise.all([
+          getDoc(doc(db, 'roles_admins', uid)),
+          getDoc(doc(db, 'roles_coordinators', uid)),
+          getDoc(doc(db, 'roles_secretaries', uid))
+        ]);
+
+        let finalRole: UserRole = (profileData?.role as UserRole) || 'docent';
+        if (adminSnap.exists()) finalRole = 'admin';
+        else if (coordSnap.exists()) finalRole = 'coordinator';
+        else if (sectSnap.exists()) finalRole = 'secretary';
+
+        setResolvedUser({
+          id: uid,
+          name: profileData?.name || authUser.displayName || 'Usuario',
+          email: authUser.email || '',
+          role: finalRole,
+          avatarUrl: profileData?.avatarUrl || authUser.photoURL || undefined,
+          documentId: profileData?.documentId,
+          campus: profileData?.campus,
+          program: profileData?.program,
+          shiftIds: profileData?.shiftIds || []
+        } as User);
+      } catch (error) {
+        console.error("Error resolving institutional user:", error);
+      } finally {
+        setResolving(false);
       }
     }
-    syncProfile();
-  }, [authUser, profileLoading, db]);
+
+    resolveInstitutionalData();
+  }, [authUser, db]);
 
   const login = async () => {
     if (!auth) return;
@@ -98,8 +103,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUpWithEmail = async (email: string, pass: string, name: string, role: UserRole = 'docent') => {
     if (!auth || !db) return;
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    const pRef = doc(db, 'userProfiles', userCredential.user.uid);
-    await setDoc(pRef, {
+    const uid = userCredential.user.uid;
+    
+    await setDoc(doc(db, 'userProfiles', uid), {
       name,
       email,
       role,
@@ -112,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (role !== 'docent') {
       const col = role === 'admin' ? 'roles_admins' : role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
-      await setDoc(doc(db, col, userCredential.user.uid), {
+      await setDoc(doc(db, col, uid), {
         email,
         assignedAt: new Date().toISOString()
       });
@@ -121,17 +127,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     if (!auth) return;
-    setLastResolvedUser(null);
+    setResolvedUser(null);
     await signOut(auth);
   };
 
-  // We are loading if auth hasn't determined the user yet,
-  // or if we HAVE a user but haven't resolved their institutional profile yet.
-  const loading = authLoading || (!!authUser && !resolvedUser && !lastResolvedUser);
+  const loading = authLoading || (!!authUser && resolving && !resolvedUser);
 
   return (
     <AuthContext.Provider value={{ 
-      user: resolvedUser || lastResolvedUser, 
+      user: resolvedUser, 
       login, 
       loginWithEmail, 
       signUpWithEmail, 
