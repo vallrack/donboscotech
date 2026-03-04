@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Search, Mail, Loader2, ShieldCheck, UserCog, 
-  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, MapPin, Shield
+  ShieldAlert, UserPlus, Lock, User as UserIcon, Building2, BookOpen, MapPin, Shield, Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,7 @@ export default function UserManagementPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Consultas de datos institucionales
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
   const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
   const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
@@ -83,7 +84,7 @@ export default function UserManagementPage() {
     e.preventDefault();
     if (!db || isCreating) return;
     
-    // Restricción: Coordinador no puede crear Administradores
+    // RESTRICCIÓN: Coordinador no puede crear Administradores
     if (currentUser?.role === 'coordinator' && formData.role === 'admin') {
       toast({
         variant: "destructive",
@@ -102,7 +103,7 @@ export default function UserManagementPage() {
       const userCredential = await createUserWithEmailAndPassword(tempAuth, formData.email, formData.password);
       const newUserId = userCredential.user.uid;
 
-      await setDoc(doc(db, 'userProfiles', newUserId), {
+      const userProfile = {
         name: formData.name,
         email: formData.email,
         role: formData.role,
@@ -112,8 +113,11 @@ export default function UserManagementPage() {
         shiftIds: formData.shiftIds,
         createdAt: serverTimestamp(),
         createdBy: currentUser?.id
-      });
+      };
 
+      await setDoc(doc(db, 'userProfiles', newUserId), userProfile);
+
+      // Sincronizar con colecciones de roles para Security Rules
       if (formData.role === 'admin') await setDoc(doc(db, 'roles_admins', newUserId), { email: formData.email });
       if (formData.role === 'coordinator') await setDoc(doc(db, 'roles_coordinators', newUserId), { email: formData.email });
       if (formData.role === 'secretary') await setDoc(doc(db, 'roles_secretaries', newUserId), { email: formData.email });
@@ -132,17 +136,17 @@ export default function UserManagementPage() {
   const handleRoleChange = async (userId: string, targetRole: UserRole, userEmail: string, currentRole: string) => {
     if (!db || !userId) return;
 
-    // RESTRICCIÓN CRÍTICA: Coordinador no puede modificar a un Administrador
+    // RESTRICCIÓN: Coordinador no puede modificar a un Administrador
     if (currentUser?.role === 'coordinator' && currentRole === 'admin') {
       toast({
         variant: "destructive",
         title: "Acción bloqueada",
-        description: "Los coordinadores no tienen permisos para gestionar cuentas de administrador."
+        description: "Los coordinadores no pueden gestionar cuentas de administrador."
       });
       return;
     }
 
-    // RESTRICCIÓN: Coordinador no puede elevar a alguien a Administrador
+    // RESTRICCIÓN: Coordinador no puede elevar a nadie a Administrador
     if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
       toast({
         variant: "destructive",
@@ -155,6 +159,7 @@ export default function UserManagementPage() {
     setUpdatingId(userId);
     try {
       await updateDoc(doc(db, 'userProfiles', userId), { role: targetRole });
+      
       const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
       for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
       
@@ -162,11 +167,29 @@ export default function UserManagementPage() {
       if (targetRole === 'coordinator') await setDoc(doc(db, 'roles_coordinators', userId), { email: userEmail });
       if (targetRole === 'secretary') await setDoc(doc(db, 'roles_secretaries', userId), { email: userEmail });
       
-      toast({ title: "Acceso Actualizado" });
+      toast({ title: "Acceso Actualizado", description: `Nuevo rol: ${targetRole}` });
     } catch (error) {
       toast({ title: "Error", variant: "destructive" });
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userRole: string) => {
+    if (!db || !userId) return;
+    
+    if (currentUser?.role === 'coordinator' && userRole === 'admin') {
+      toast({ variant: "destructive", title: "Acción denegada", description: "No puedes eliminar a un administrador." });
+      return;
+    }
+
+    if (confirm('¿Estás seguro de eliminar este perfil? Esta acción solo borra el perfil en la base de datos, no la cuenta de acceso.')) {
+      try {
+        await deleteDoc(doc(db, 'userProfiles', userId));
+        toast({ title: "Perfil eliminado" });
+      } catch (e) {
+        toast({ variant: "destructive", title: "Error al eliminar" });
+      }
     }
   };
 
@@ -191,7 +214,7 @@ export default function UserManagementPage() {
           <h1 className="text-3xl font-black text-primary">Gestión de Personal</h1>
           <p className="text-muted-foreground flex items-center gap-2 mt-1">
              <ShieldCheck className="w-4 h-4 text-primary" />
-             <span className="text-xs font-bold uppercase tracking-wider">Control total de roles y carnets institucionales</span>
+             <span className="text-xs font-bold uppercase tracking-wider">Control de roles y carnets institucionales</span>
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -239,14 +262,29 @@ export default function UserManagementPage() {
           </DialogContent>
         </Dialog>
       </div>
+
       <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-white">
-        <CardHeader className="bg-gray-50/50 pb-6 border-b p-8"><div className="relative max-w-xl"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" /><Input placeholder="Buscar por nombre, correo o ID..." className="pl-12 h-14 border-gray-200 rounded-2xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div></CardHeader>
+        <CardHeader className="bg-gray-50/50 pb-6 border-b p-8">
+          <div className="relative max-w-xl">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Input placeholder="Buscar por nombre, correo o identificación..." className="pl-12 h-14 border-gray-200 rounded-2xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead><tr className="bg-gray-50/30 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground"><th className="px-8 py-6">Personal</th><th className="px-8 py-6">Info</th><th className="px-8 py-6">Permisos</th></tr></thead>
+              <thead>
+                <tr className="bg-gray-50/30 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                  <th className="px-8 py-6">Personal</th>
+                  <th className="px-8 py-6">Información Institucional</th>
+                  <th className="px-8 py-6">Permisos / Rol</th>
+                  <th className="px-8 py-6 text-center">Acciones</th>
+                </tr>
+              </thead>
               <tbody className="divide-y divide-gray-100">
-                {usersLoading ? (<tr><td colSpan={3} className="py-24 text-center"><Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" /></td></tr>) : (
+                {usersLoading ? (
+                  <tr><td colSpan={4} className="py-24 text-center"><Loader2 className="w-12 h-12 animate-spin mx-auto text-primary opacity-20" /></td></tr>
+                ) : (
                   filteredUsers.map((u) => {
                     const isProtectedAdmin = u.role === 'admin' && currentUser?.role === 'coordinator';
                     const isSelf = currentUser?.id === u.id;
@@ -260,18 +298,30 @@ export default function UserManagementPage() {
                               "w-12 h-12 rounded-2xl flex items-center justify-center font-black",
                               u.role === 'admin' ? "bg-primary text-white" : "bg-primary/10 text-primary"
                             )}>
-                              {u.role === 'admin' ? <Shield className="w-6 h-6" /> : u.name?.charAt(0)}
+                              {u.role === 'admin' ? <Shield className="w-6 h-6" /> : u.name?.charAt(0).toUpperCase()}
                             </div>
                             <div>
                               <div className="font-black text-base flex items-center gap-2">
                                 {u.name}
-                                {isProtectedAdmin && <Badge variant="secondary" className="text-[8px]">PROTEGIDO</Badge>}
+                                {isProtectedAdmin && <Badge variant="secondary" className="text-[8px] font-black">PROTEGIDO</Badge>}
                               </div>
-                              <div className="text-xs text-muted-foreground">{u.email}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Mail className="w-3 h-3" /> {u.email}
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-8 py-6"><div className="space-y-1"><div className="text-[10px] font-black uppercase"><MapPin className="w-3 h-3 inline mr-1" /> {u.campus || 'Sin Sede'}</div><div className="text-[10px] font-black uppercase text-primary"><BookOpen className="w-3 h-3 inline mr-1" /> {u.program || 'Sin Programa'}</div></div></td>
+                        <td className="px-8 py-6">
+                          <div className="space-y-1">
+                            <div className="text-[10px] font-black uppercase text-gray-500">
+                              <MapPin className="w-3 h-3 inline mr-1" /> {u.campus || 'Sin Sede'}
+                            </div>
+                            <div className="text-[10px] font-black uppercase text-primary">
+                              <BookOpen className="w-3 h-3 inline mr-1" /> {u.program || 'Sin Programa'}
+                            </div>
+                            <div className="text-[9px] font-bold text-muted-foreground">ID: {u.documentId || '---'}</div>
+                          </div>
+                        </td>
                         <td className="px-8 py-6">
                           <Select 
                             disabled={isDisabled} 
@@ -292,6 +342,17 @@ export default function UserManagementPage() {
                             </SelectContent>
                           </Select>
                         </td>
+                        <td className="px-8 py-6 text-center">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive hover:bg-destructive/10 rounded-xl"
+                            disabled={isDisabled}
+                            onClick={() => handleDeleteUser(u.id, u.role)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
                       </tr>
                     )
                   })
@@ -299,6 +360,11 @@ export default function UserManagementPage() {
               </tbody>
             </table>
           </div>
+          {!usersLoading && filteredUsers.length === 0 && (
+            <div className="py-20 text-center text-muted-foreground italic font-medium">
+              No se encontraron miembros del personal registrados.
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
