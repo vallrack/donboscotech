@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check, X as CloseIcon
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
