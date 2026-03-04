@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User, Mail, Shield, BookOpen, Building2, Clock, Contact, Loader2, Save, Image as ImageIcon, Camera, Upload, CreditCard, ArrowRight } from 'lucide-react';
+import { User, Loader2, Save, Camera, Upload, CreditCard, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -58,11 +58,10 @@ export default function ProfilePage() {
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
       const current = prev.shiftIds || [];
-      if (current.includes(shiftId)) {
-        return { ...prev, shiftIds: current.filter(id => id !== shiftId) };
-      } else {
-        return { ...prev, shiftIds: [...current, shiftId] };
-      }
+      const newShifts = current.includes(shiftId)
+        ? current.filter(id => id !== shiftId)
+        : [...current, shiftId];
+      return { ...prev, shiftIds: newShifts };
     });
   };
 
@@ -76,13 +75,14 @@ export default function ProfilePage() {
     }
 
     if (file.size > 1024 * 1024) {
-      toast({ variant: "destructive", title: "Imagen muy grande", description: "El límite es 1MB." });
+      toast({ variant: "destructive", title: "Imagen muy grande", description: "El límite es 1MB para el carnet." });
       return;
     }
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      setFormData(prev => ({ ...prev, avatarUrl: reader.result as string }));
+      const base64 = reader.result as string;
+      setFormData(prev => ({ ...prev, avatarUrl: base64 }));
     };
     reader.readAsDataURL(file);
   };
@@ -94,19 +94,25 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       const userRef = doc(db, 'userProfiles', user.id);
+      
+      // Explicitly include all fields including the photo
       await updateDoc(userRef, {
-        ...formData,
+        name: formData.name,
+        documentId: formData.documentId,
+        campus: formData.campus,
+        program: formData.program,
+        shiftIds: formData.shiftIds,
+        avatarUrl: formData.avatarUrl,
         updatedAt: new Date().toISOString()
       });
       
-      toast({ title: "Perfil Actualizado", description: "Los cambios se han guardado correctamente." });
-      router.refresh(); // Force Next.js to refresh data
+      toast({ title: "Perfil Actualizado", description: "La información y la foto se guardaron correctamente." });
+      router.refresh();
     } catch (error) {
       console.error("Error saving profile:", error);
-      toast({ variant: "destructive", title: "Error al guardar", description: "Verifica tu conexión o permisos." });
+      toast({ variant: "destructive", title: "Error al guardar", description: "No se pudieron persistir los cambios." });
     } finally {
-      // Small delay to ensure DB sync before re-enabling buttons
-      setTimeout(() => setSaving(false), 500);
+      setSaving(false);
     }
   };
 
@@ -131,7 +137,7 @@ export default function ProfilePage() {
            <div className="relative group">
               <div className="w-40 h-40 rounded-[2.5rem] bg-gray-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl relative">
                 {formData.avatarUrl ? (
-                  <Image src={formData.avatarUrl} alt={formData.name} width={160} height={160} className="object-cover w-full h-full" />
+                  <Image src={formData.avatarUrl} alt={formData.name} width={160} height={160} className="object-cover w-full h-full" unoptimized />
                 ) : (
                   <User className="w-16 h-16 text-gray-300" />
                 )}
@@ -141,7 +147,7 @@ export default function ProfilePage() {
                   className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2"
                 >
                   <Camera className="w-8 h-8" />
-                  <span className="text-[10px] font-black uppercase">Cambiar</span>
+                  <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
                 </button>
               </div>
               <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
@@ -153,15 +159,15 @@ export default function ProfilePage() {
              </Badge>
            </div>
            <Button variant="outline" size="sm" className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase h-10 px-6" onClick={() => fileInputRef.current?.click()}>
-             <Upload className="w-3 h-3" /> Subir Foto
+             <Upload className="w-3 h-3" /> Subir desde dispositivo
            </Button>
         </Card>
 
         <Card className="md:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
            <form onSubmit={handleSave}>
               <CardHeader className="border-b bg-gray-50/30 p-8">
-                 <CardTitle className="text-lg font-black">Información del Sistema</CardTitle>
-                 <CardDescription className="text-xs font-bold">Estos datos aparecen en tu carnet oficial.</CardDescription>
+                 <CardTitle className="text-lg font-black">Información Institucional</CardTitle>
+                 <CardDescription className="text-xs font-bold text-muted-foreground">Datos requeridos para el carnet oficial y auditoría de asistencia.</CardDescription>
               </CardHeader>
               <CardContent className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-2">
@@ -190,22 +196,20 @@ export default function ProfilePage() {
                       <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
                       <SelectContent>
                         {campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                        {!campuses?.length && <SelectItem value="loading" disabled>Cargando sedes...</SelectItem>}
                       </SelectContent>
                     </Select>
                  </div>
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Programa Académico</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Programa / Carrera</Label>
                     <Select value={formData.program} onValueChange={(v) => setFormData({...formData, program: v})}>
                       <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                       <SelectContent>
                         {programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                        {!programs?.length && <SelectItem value="loading" disabled>Cargando programas...</SelectItem>}
                       </SelectContent>
                     </Select>
                  </div>
                  <div className="space-y-2 md:col-span-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jornadas Institucionales</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jornadas Laborales</Label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 bg-gray-50 p-6 rounded-3xl border border-dashed border-gray-200">
                       {shifts?.map(s => (
                         <div key={s.id} className="flex items-center space-x-3 bg-white p-4 rounded-2xl border shadow-sm hover:border-primary/30 transition-colors">
@@ -221,17 +225,16 @@ export default function ProfilePage() {
                           </label>
                         </div>
                       ))}
-                      {!shifts?.length && <p className="text-xs text-muted-foreground italic p-4">Cargando jornadas...</p>}
                     </div>
                  </div>
               </CardContent>
               <CardFooter className="bg-gray-50/50 p-8 border-t flex justify-between items-center">
                  <p className="text-[10px] font-bold text-muted-foreground max-w-[250px]">
-                   Asegúrate de que tu información sea verídica para evitar problemas en el registro de asistencia.
+                   Al guardar, tu carnet institucional se actualizará automáticamente con la nueva foto e información.
                  </p>
                  <Button type="submit" className="h-12 px-10 rounded-2xl font-black gap-2 shadow-lg" disabled={saving}>
                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                   Guardar Cambios
+                   Sincronizar Datos
                  </Button>
               </CardFooter>
            </form>

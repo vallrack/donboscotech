@@ -24,36 +24,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user: authUser, loading: authLoading } = useUser();
   const syncRef = useRef(false);
 
-  const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser, db]);
-  const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser, db]);
-  const sectRef = useMemo(() => authUser && db ? doc(db, 'roles_secretaries', authUser.uid) : null, [authUser, db]);
-  const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser, db]);
+  // Refs for consistent queries
+  const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser?.uid, db]);
+  const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser?.uid, db]);
+  const sectRef = useMemo(() => authUser && db ? doc(db, 'roles_secretaries', authUser.uid) : null, [authUser?.uid, db]);
+  const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser?.uid, db]);
 
   const { data: adminRole, loading: adminLoading } = useDoc(adminRef);
   const { data: coordRole, loading: coordLoading } = useDoc(coordRef);
   const { data: sectRole, loading: sectLoading } = useDoc(sectRef);
   const { data: userProfile, loading: profileLoading } = useDoc(profileRef);
 
-  const isLoading = authLoading || adminLoading || coordLoading || sectLoading || profileLoading;
+  // Only consider auth and main profile loading for "system load"
+  const isLoading = authLoading || profileLoading;
 
   const resolvedUser = useMemo(() => {
     if (!authUser) return null;
 
-    let role: UserRole = 'docent';
-    // Priority: Security Collections are the Source of Truth for privileged roles
-    if (adminRole) {
-      role = 'admin';
-    } else if (coordRole) {
-      role = 'coordinator';
-    } else if (sectRole) {
-      role = 'secretary';
-    } else if (userProfile?.role) {
-      role = userProfile.role as UserRole;
-    }
+    let role: UserRole = (userProfile?.role as UserRole) || 'docent';
+    
+    // Privilege escalation from security collections
+    if (adminRole) role = 'admin';
+    else if (coordRole) role = 'coordinator';
+    else if (sectRole) role = 'secretary';
 
     return {
       id: authUser.uid,
-      name: userProfile?.name || authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
+      name: userProfile?.name || authUser.displayName || 'Usuario',
       email: authUser.email || '',
       role,
       avatarUrl: userProfile?.avatarUrl || authUser.photoURL || undefined,
@@ -64,26 +61,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authUser, adminRole, coordRole, sectRole, userProfile]);
 
-  // Handle profile synchronization only when necessary
+  // Sync profile logic (once)
   useEffect(() => {
-    if (authUser && db && !profileLoading && resolvedUser && !syncRef.current) {
+    if (authUser && db && !profileLoading && !userProfile && !syncRef.current) {
+      syncRef.current = true;
       const pRef = doc(db, 'userProfiles', authUser.uid);
-      
-      if (!userProfile) {
-        syncRef.current = true;
-        setDoc(pRef, {
-          name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
-          email: authUser.email || '',
-          role: resolvedUser.role,
-          avatarUrl: authUser.photoURL || '',
-          createdAt: serverTimestamp()
-        }, { merge: true }).finally(() => { syncRef.current = false; });
-      } else if (userProfile.role !== resolvedUser.role) {
-        syncRef.current = true;
-        updateDoc(pRef, { role: resolvedUser.role }).finally(() => { syncRef.current = false; });
-      }
+      setDoc(pRef, {
+        name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
+        email: authUser.email || '',
+        role: 'docent',
+        avatarUrl: authUser.photoURL || '',
+        createdAt: serverTimestamp()
+      }, { merge: true }).finally(() => { syncRef.current = false; });
     }
-  }, [authUser, userProfile, profileLoading, db, resolvedUser]);
+  }, [authUser, userProfile, profileLoading, db]);
 
   const login = async () => {
     if (!auth) return;
@@ -107,8 +98,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       createdAt: serverTimestamp()
     });
 
-    if (role === 'secretary') {
-      await setDoc(doc(db, 'roles_secretaries', userCredential.user.uid), {
+    if (role === 'secretary' || role === 'coordinator' || role === 'admin') {
+      const col = role === 'admin' ? 'roles_admins' : role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
+      await setDoc(doc(db, col, userCredential.user.uid), {
         email,
         assignedAt: new Date().toISOString()
       });
@@ -118,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     if (!auth) return;
     await signOut(auth);
+    window.location.href = '/';
   };
 
   return (
