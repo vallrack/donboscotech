@@ -221,7 +221,9 @@ export default function ReportsPage() {
     toast({ title: "Excel Generado", description: "El reporte se ha descargado con formato profesional para Excel." });
   };
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    window.print();
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
@@ -396,6 +398,9 @@ export default function ReportsPage() {
           .no-print { display: none !important; }
           body { background: white !important; }
           .print-card { box-shadow: none !important; border: 1px solid #eee !important; }
+          .sidebar { display: none !important; }
+          main { padding: 0 !important; }
+          .max-w-7xl { max-width: 100% !important; }
         }
       `}</style>
     </div>
