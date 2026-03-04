@@ -95,7 +95,7 @@ export default function ProfilePage() {
     try {
       const userRef = doc(db, 'userProfiles', user.id);
       
-      // Explicitly include all fields including the photo
+      // Update firestore document
       await updateDoc(userRef, {
         name: formData.name,
         documentId: formData.documentId,
@@ -107,11 +107,11 @@ export default function ProfilePage() {
       });
       
       toast({ title: "Perfil Actualizado", description: "La información y la foto se guardaron correctamente." });
-      router.refresh();
     } catch (error) {
       console.error("Error saving profile:", error);
       toast({ variant: "destructive", title: "Error al guardar", description: "No se pudieron persistir los cambios." });
     } finally {
+      // Ensure the saving state is cleared so buttons become responsive again
       setSaving(false);
     }
   };
@@ -125,7 +125,7 @@ export default function ProfilePage() {
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
           <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales.</p>
         </div>
-        <Link href="/dashboard/profile/carnet">
+        <Link href="/dashboard/profile/carnet" className="no-underline">
           <Button size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl bg-primary hover:bg-primary/90">
             <CreditCard className="w-5 h-5" /> Ver Mi Carnet <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
@@ -158,8 +158,14 @@ export default function ProfilePage() {
                {user.role}
              </Badge>
            </div>
-           <Button variant="outline" size="sm" className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase h-10 px-6" onClick={() => fileInputRef.current?.click()}>
-             <Upload className="w-3 h-3" /> Subir desde dispositivo
+           <Button 
+             variant="outline" 
+             size="sm" 
+             className="mt-6 rounded-xl font-bold gap-2 text-[10px] uppercase h-10 px-6" 
+             onClick={() => fileInputRef.current?.click()}
+             disabled={saving}
+           >
+             <Upload className="w-3 h-3" /> Subir Foto
            </Button>
         </Card>
 
@@ -178,6 +184,7 @@ export default function ProfilePage() {
                       className="h-12 rounded-xl" 
                       placeholder="Juan Bosco" 
                       required
+                      disabled={saving}
                     />
                  </div>
                  <div className="space-y-2">
@@ -188,11 +195,16 @@ export default function ProfilePage() {
                       className="h-12 rounded-xl" 
                       placeholder="C.C. 123.456.789" 
                       required
+                      disabled={saving}
                     />
                  </div>
                  <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sede Asignada</Label>
-                    <Select value={formData.campus} onValueChange={(v) => setFormData({...formData, campus: v})}>
+                    <Select 
+                      value={formData.campus} 
+                      onValueChange={(v) => setFormData({...formData, campus: v})}
+                      disabled={saving}
+                    >
                       <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
                       <SelectContent>
                         {campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
@@ -201,7 +213,11 @@ export default function ProfilePage() {
                  </div>
                  <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Programa / Carrera</Label>
-                    <Select value={formData.program} onValueChange={(v) => setFormData({...formData, program: v})}>
+                    <Select 
+                      value={formData.program} 
+                      onValueChange={(v) => setFormData({...formData, program: v})}
+                      disabled={saving}
+                    >
                       <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                       <SelectContent>
                         {programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
@@ -218,6 +234,7 @@ export default function ProfilePage() {
                             checked={formData.shiftIds?.includes(s.id)}
                             onCheckedChange={() => toggleShift(s.id)}
                             className="w-5 h-5"
+                            disabled={saving}
                           />
                           <label htmlFor={`profile-shift-${s.id}`} className="text-xs font-black cursor-pointer leading-tight">
                             {s.name} <br/>
