@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -12,11 +12,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check, X as CloseIcon
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check, X as CloseIcon, Edit3
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { UserRole, Campus, Program, Shift } from '@/lib/types';
+import { UserRole, Campus, Program, Shift, User } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,7 +35,9 @@ export default function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
@@ -45,7 +47,7 @@ export default function UserManagementPage() {
   const { data: campusesRaw } = useCollection<Campus>(campusesQuery);
   const { data: programsRaw } = useCollection<Program>(programsQuery);
   const { data: shiftsRaw } = useCollection<Shift>(shiftsQuery);
-  const { data: usersRaw, loading: usersLoading } = useCollection(usersQuery);
+  const { data: usersRaw, loading: usersLoading } = useCollection<User>(usersQuery as any);
 
   const campuses = useMemo(() => campusesRaw || [], [campusesRaw]);
   const programs = useMemo(() => programsRaw || [], [programsRaw]);
@@ -63,14 +65,11 @@ export default function UserManagementPage() {
     role: 'docent' as UserRole
   });
 
-  const updateCreateField = useCallback((field: string, value: any) => {
-    setFormData(prev => {
-      if (prev[field as keyof typeof prev] === value) return prev;
-      return { ...prev, [field]: value };
-    });
+  const updateFormField = useCallback((field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  const toggleCreateShift = useCallback((id: string) => {
+  const toggleShift = useCallback((id: string) => {
     setFormData(prev => {
       const current = prev.shiftIds || [];
       const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
@@ -80,7 +79,7 @@ export default function UserManagementPage() {
 
   const filteredUsers = useMemo(() => {
     const search = searchTerm.toLowerCase();
-    return (users || []).filter(u => 
+    return users.filter(u => 
       u.name?.toLowerCase().includes(search) || 
       u.email?.toLowerCase().includes(search) ||
       u.documentId?.toLowerCase().includes(search)
@@ -89,9 +88,9 @@ export default function UserManagementPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || isCreating) return;
+    if (!db || isSaving) return;
     
-    setIsCreating(true);
+    setIsSaving(true);
     let tempApp;
     try {
       const appName = `temp-app-${Date.now()}`;
@@ -122,33 +121,67 @@ export default function UserManagementPage() {
 
       toast({ title: "Personal Registrado Exitosamente" });
       setIsCreateDialogOpen(false);
-      setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftIds: [], role: 'docent' });
+      resetForm();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error de Registro", description: error.message });
     } finally {
       if (tempApp) await deleteApp(tempApp);
-      setIsCreating(false);
+      setIsSaving(false);
     }
   };
 
-  const handleRoleChange = useCallback(async (userId: string, targetRole: UserRole, userEmail: string) => {
-    if (!db || updatingId) return;
-    setUpdatingId(userId);
+  const handleEditClick = (u: User) => {
+    setEditingUser(u);
+    setFormData({
+      name: u.name || '',
+      email: u.email || '',
+      password: '', // No editamos password aquí
+      documentId: u.documentId || '',
+      campus: u.campus || '',
+      program: u.program || '',
+      shiftIds: u.shiftIds || [],
+      role: u.role || 'docent'
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !editingUser || isSaving) return;
+
+    setIsSaving(true);
     try {
-      await updateDoc(doc(db, 'userProfiles', userId), { role: targetRole });
-      const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
-      for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
-      if (targetRole !== 'docent') {
-        const col = targetRole === 'admin' ? 'roles_admins' : targetRole === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
-        await setDoc(doc(db, col, userId), { email: userEmail });
+      const updateData = {
+        name: formData.name,
+        documentId: formData.documentId,
+        campus: formData.campus,
+        program: formData.program,
+        shiftIds: formData.shiftIds,
+        role: formData.role,
+        updatedAt: serverTimestamp()
+      };
+
+      await updateDoc(doc(db, 'userProfiles', editingUser.id), updateData);
+
+      // Sincronizar colecciones de roles si cambió el rol
+      if (formData.role !== editingUser.role) {
+        const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
+        for (const col of rolesCols) await deleteDoc(doc(db, col, editingUser.id));
+        if (formData.role !== 'docent') {
+          const col = formData.role === 'admin' ? 'roles_admins' : formData.role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
+          await setDoc(doc(db, col, editingUser.id), { email: formData.email });
+        }
       }
-      toast({ title: "Rol de acceso actualizado" });
-    } catch (error) {
-      toast({ title: "Error al actualizar rol", variant: "destructive" });
+
+      toast({ title: "Perfil de usuario actualizado" });
+      setIsEditDialogOpen(false);
+      resetForm();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al actualizar", description: error.message });
     } finally {
-      setUpdatingId(null);
+      setIsSaving(false);
     }
-  }, [db, updatingId, toast]);
+  };
 
   const handleDeleteUser = async (userId: string) => {
     if (!db || !confirm('¿Dar de baja a este miembro del personal?')) return;
@@ -162,6 +195,11 @@ export default function UserManagementPage() {
     }
   };
 
+  const resetForm = () => {
+    setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftIds: [], role: 'docent' });
+    setEditingUser(null);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -170,7 +208,7 @@ export default function UserManagementPage() {
           <p className="text-muted-foreground font-medium mt-2">Administra los roles, sedes y jornadas de Ciudad Don Bosco.</p>
         </div>
         
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog open={isCreateDialogOpen} onOpenChange={(val) => { setIsCreateDialogOpen(val); if(!val) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl hover:scale-105 transition-all">
               <PlusCircle className="w-6 h-6" /> Registrar Nuevo Miembro
@@ -186,42 +224,41 @@ export default function UserManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
-                      <Input value={formData.name} onChange={(e) => updateCreateField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Ej: Juan Bosco" required />
+                      <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="Ej: Juan Bosco" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Documento de Identidad</Label>
-                      <Input value={formData.documentId} onChange={(e) => updateCreateField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Cédula" required />
+                      <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="Cédula" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Correo Institucional</Label>
-                      <Input type="email" value={formData.email} onChange={(e) => updateCreateField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="usuario@donbosco.edu" required />
+                      <Input type="email" value={formData.email} onChange={(e) => updateFormField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="usuario@donbosco.edu" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña Temporal</Label>
-                      <Input type="password" value={formData.password} onChange={(e) => updateCreateField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100" placeholder="Min. 6 caracteres" required />
+                      <Input type="password" value={formData.password} onChange={(e) => updateFormField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="Min. 6 caracteres" required />
                     </div>
                   </div>
-
+                  {/* Reuse common fields logic */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Asignada</Label>
-                      <Select value={formData.campus || undefined} onValueChange={(val) => updateCreateField('campus', val)}>
-                        <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
-                        <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+                      <Select value={formData.campus || undefined} onValueChange={(val) => updateFormField('campus', val)}>
+                        <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
+                        <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold">{c.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
-                      <Select value={formData.program || undefined} onValueChange={(val) => updateCreateField('program', val)}>
-                        <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
-                        <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
+                      <Select value={formData.program || undefined} onValueChange={(val) => updateFormField('program', val)}>
+                        <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
+                        <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                   </div>
-
                   <div className="space-y-4">
                     <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Laborales (Asignación Múltiple)</Label>
-                    <Select onValueChange={(val) => toggleCreateShift(val)}>
+                    <Select onValueChange={(val) => toggleShift(val)}>
                       <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 border-gray-100 font-bold">
                         <div className="flex items-center gap-2">
                           <Plus className="w-4 h-4 text-primary" />
@@ -231,10 +268,7 @@ export default function UserManagementPage() {
                       <SelectContent>
                         {shifts?.map(s => (
                           <SelectItem key={s.id} value={s.id} className="font-bold py-3">
-                             <div className="flex items-center gap-2">
-                               {s.name} ({s.startTime} - {s.endTime})
-                               {formData.shiftIds?.includes(s.id) && <Check className="w-3 h-3 text-green-500" />}
-                             </div>
+                             {s.name} ({s.startTime} - {s.endTime})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -245,16 +279,15 @@ export default function UserManagementPage() {
                          return (
                            <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">
                              {s?.name}
-                             <Trash className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => toggleCreateShift(id)} />
+                             <Trash className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => toggleShift(id)} />
                            </Badge>
                          )
                        })}
                     </div>
                   </div>
-
                   <div className="space-y-4 pt-4 border-t">
                     <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Rol Institucional</Label>
-                    <Select value={formData.role} onValueChange={(val: UserRole) => updateCreateField('role', val)}>
+                    <Select value={formData.role} onValueChange={(val: UserRole) => updateFormField('role', val)}>
                       <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
@@ -264,9 +297,8 @@ export default function UserManagementPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
-                  <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isCreating}>
-                    {isCreating ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
+                  <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isSaving}>
+                    {isSaving ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
                     Confirmar Registro
                   </Button>
                 </div>
@@ -276,13 +308,84 @@ export default function UserManagementPage() {
         </Dialog>
       </div>
 
+      <Dialog open={isEditDialogOpen} onOpenChange={(val) => { setIsEditDialogOpen(val); if(!val) resetForm(); }}>
+        <DialogContent className="sm:max-w-[750px] rounded-[3rem] border-none shadow-2xl bg-white p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="p-10 pb-0">
+            <DialogTitle className="text-2xl font-black text-gray-800">Editar Perfil Institucional</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 p-10 pt-4 space-y-8">
+            <form onSubmit={handleUpdateUser}>
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
+                    <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Documento de Identidad</Label>
+                    <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" required />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Asignada</Label>
+                    <Select value={formData.campus || undefined} onValueChange={(val) => updateFormField('campus', val)}>
+                      <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
+                      <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold">{c.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
+                    <Select value={formData.program || undefined} onValueChange={(val) => updateFormField('program', val)}>
+                      <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
+                      <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Laborales</Label>
+                  <Select onValueChange={(val) => toggleShift(val)}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 border-gray-100 font-bold">
+                      <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada</span></div>
+                    </SelectTrigger>
+                    <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id} className="font-bold py-3">{s.name} ({s.startTime} - {s.endTime})</SelectItem>)}</SelectContent>
+                  </Select>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.shiftIds.map(id => {
+                      const s = shifts.find(sh => sh.id === id);
+                      return <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">{s?.name}<Trash className="w-3 h-3 cursor-pointer" onClick={() => toggleShift(id)} /></Badge>
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-4 pt-4 border-t">
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Rol Institucional</Label>
+                  <Select value={formData.role} onValueChange={(val: UserRole) => updateFormField('role', val)}>
+                    <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
+                      <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
+                      <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
+                      <SelectItem value="admin" className="font-bold py-3 text-primary">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <Save className="w-6 h-6 mr-2" />}
+                  Guardar Cambios
+                </Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
         <CardHeader className="bg-gray-50/50 pb-10 border-b p-10">
           <div className="relative max-w-2xl mx-auto">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input 
               placeholder="Buscar por nombre, correo o cédula..." 
-              className="pl-12 h-14 border-gray-200 rounded-2xl shadow-sm bg-white" 
+              className="pl-12 h-14 border-gray-200 rounded-2xl shadow-sm bg-white font-bold" 
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)} 
             />
@@ -323,20 +426,19 @@ export default function UserManagementPage() {
                         </div>
                       </td>
                       <td className="px-10 py-8">
-                        <Select disabled={updatingId === u.id} onValueChange={(val) => handleRoleChange(u.id, val as UserRole, u.email)} value={u.role || 'docent'}>
-                          <SelectTrigger className="w-48 h-12 rounded-xl text-xs font-black bg-white"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
-                            <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
-                            <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
-                            <SelectItem value="admin" className="font-bold py-3 text-primary">Administrador</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="font-black uppercase text-[10px] px-4 py-1.5 rounded-xl">
+                          {u.role || 'docent'}
+                        </Badge>
                       </td>
-                      <td className="px-10 py-8 text-center">
-                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl h-12 w-12" onClick={() => handleDeleteUser(u.id)}>
-                          <Trash2 className="w-5 h-5" />
-                        </Button>
+                      <td className="px-10 py-8">
+                        <div className="flex items-center justify-center gap-2">
+                          <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/5 rounded-xl h-12 w-12" onClick={() => handleEditClick(u)}>
+                            <Edit3 className="w-5 h-5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl h-12 w-12" onClick={() => handleDeleteUser(u.id)}>
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))

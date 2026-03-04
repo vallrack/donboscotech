@@ -271,9 +271,6 @@ export default function ProfilePage() {
                                 </Button>
                              </div>
                            ))}
-                           {assignedShifts.length === 0 && (
-                             <p className="text-[10px] text-muted-foreground font-bold italic p-2 col-span-2">No has seleccionado ninguna jornada aún.</p>
-                           )}
                         </div>
                       </div>
                    </div>
