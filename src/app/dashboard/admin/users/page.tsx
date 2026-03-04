@@ -46,7 +46,7 @@ export default function UserManagementPage() {
   const { data: programs } = useCollection<Program>(db ? collection(db, 'programs') : null as any);
   const { data: shifts } = useCollection<Shift>(db ? collection(db, 'shifts') : null as any);
   
-  // Consulta simplificada para asegurar visibilidad de TODOS (sin orderBy en servidor que filtre nulos)
+  // Consulta simplificada para asegurar visibilidad de TODOS (sin filtros de servidor)
   const { data: users, loading: usersLoading } = useCollection(db ? collection(db, 'userProfiles') : null as any);
 
   const [formData, setFormData] = useState({
@@ -62,20 +62,23 @@ export default function UserManagementPage() {
 
   const filteredUsers = useMemo(() => {
     const search = searchTerm.toLowerCase();
-    // Procesamos y ordenamos en cliente para no perder registros incompletos
+    
+    // Procesamos todos los usuarios traídos de la colección
     const list = (users || []).map(u => ({
       ...u,
       name: u.name || 'Personal sin Nombre',
       email: u.email || 'Sin Email',
-      role: u.role || 'docent'
+      role: u.role || 'docent',
+      id: u.id || (u as any).uid // Compatibilidad con diferentes formatos de ID
     }));
     
+    // Ordenar alfabéticamente
     list.sort((a, b) => a.name.localeCompare(b.name));
     
     return list.filter(u => 
       u.name.toLowerCase().includes(search) || 
       u.email.toLowerCase().includes(search) ||
-      u.documentId?.toLowerCase().includes(search) ||
+      (u.documentId && u.documentId.toLowerCase().includes(search)) ||
       u.role.toLowerCase().includes(search)
     );
   }, [users, searchTerm]);
@@ -181,7 +184,6 @@ export default function UserManagementPage() {
     if (confirm('¿Estás seguro de eliminar este perfil? Esta acción es irreversible en la base de datos.')) {
       try {
         await deleteDoc(doc(db, 'userProfiles', userId));
-        // También limpiar roles de seguridad
         const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
         for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
         
@@ -193,18 +195,6 @@ export default function UserManagementPage() {
   };
 
   if (authLoading) return null;
-
-  const isPrivileged = currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
-
-  if (!isPrivileged) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-gray-50 rounded-3xl">
-        <ShieldAlert className="w-16 h-16 text-destructive mb-6 opacity-20" />
-        <h2 className="text-3xl font-black text-destructive">Acceso Restringido</h2>
-        <p className="text-muted-foreground font-bold">Solo personal administrativo puede gestionar usuarios.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -361,7 +351,7 @@ export default function UserManagementPage() {
           </div>
           {!usersLoading && filteredUsers.length === 0 && (
             <div className="py-20 text-center text-muted-foreground italic font-medium">
-              No se encontraron miembros del personal registrados con estos criterios.
+              No se encontraron miembros del personal registrados.
             </div>
           )}
         </CardContent>

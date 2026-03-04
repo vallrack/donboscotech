@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { User, UserRole } from '@/lib/types';
-import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
+import { useAuth as useFirebaseAuth, useUser, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
@@ -26,7 +26,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [resolving, setResolving] = useState(false);
   const syncAttempted = useRef(false);
 
-  // Monitor authUser and fetch profile once
   useEffect(() => {
     async function resolveInstitutionalData() {
       if (!authUser || !db) {
@@ -43,20 +42,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         let profileData = profileSnap.exists() ? profileSnap.data() : null;
 
-        // Sync basic profile if missing
-        if (!profileSnap.exists() && !syncAttempted.current) {
-          syncAttempted.current = true;
+        // Si el perfil no existe, lo creamos inmediatamente para que aparezca en las listas
+        if (!profileSnap.exists()) {
           const initialData = {
-            name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
+            name: authUser.displayName || authUser.email?.split('@')[0] || 'Nuevo Miembro',
             email: authUser.email || '',
             role: 'docent',
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
+            documentId: '',
+            campus: '',
+            program: '',
+            shiftIds: []
           };
           await setDoc(profileRef, initialData);
           profileData = initialData;
         }
 
-        // Check for elevated roles in parallel
+        // Verificamos roles elevados
         const [adminSnap, coordSnap, sectSnap] = await Promise.all([
           getDoc(doc(db, 'roles_admins', uid)),
           getDoc(doc(db, 'roles_coordinators', uid)),
@@ -70,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setResolvedUser({
           id: uid,
-          name: profileData?.name || authUser.displayName || 'Usuario',
+          name: profileData?.name || authUser.displayName || 'Nuevo Miembro',
           email: authUser.email || '',
           role: finalRole,
           avatarUrl: profileData?.avatarUrl || authUser.photoURL || undefined,
@@ -80,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           shiftIds: profileData?.shiftIds || []
         } as User);
       } catch (error) {
-        console.error("Error resolving institutional user:", error);
+        console.error("Error resolving user profile:", error);
       } finally {
         setResolving(false);
       }
