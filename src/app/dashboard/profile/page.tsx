@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -9,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight, Plus, Trash2, Check } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight, Plus, Trash2, Check, PenTool } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -24,6 +25,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sigInputRef = useRef<HTMLInputElement>(null);
   const lastSyncedUserId = useRef<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -32,7 +34,8 @@ export default function ProfilePage() {
     campus: '',
     program: '',
     shiftIds: [] as string[],
-    avatarUrl: ''
+    avatarUrl: '',
+    signatureUrl: ''
   });
 
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
@@ -55,7 +58,8 @@ export default function ProfilePage() {
         campus: user.campus || '',
         program: user.program || '',
         shiftIds: user.shiftIds || [],
-        avatarUrl: user.avatarUrl || ''
+        avatarUrl: user.avatarUrl || '',
+        signatureUrl: user.signatureUrl || ''
       });
       lastSyncedUserId.current = user.id;
     }
@@ -79,11 +83,11 @@ export default function ProfilePage() {
     });
   }, [saving]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'avatarUrl' | 'signatureUrl') => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => updateField('avatarUrl', reader.result as string);
+    reader.onloadend = () => updateField(field, reader.result as string);
     reader.readAsDataURL(file);
   };
 
@@ -133,29 +137,51 @@ export default function ProfilePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-4">
-          <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-12 text-center flex flex-col items-center h-full">
+        <div className="lg:col-span-4 space-y-8">
+          <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-10 text-center flex flex-col items-center">
              <div className="relative group cursor-pointer" onClick={() => !saving && fileInputRef.current?.click()}>
-                <div className="w-48 h-48 rounded-[3.5rem] bg-gray-50 flex items-center justify-center overflow-hidden border-4 border-white shadow-2xl relative transition-transform hover:scale-105">
+                <div className="w-40 h-40 rounded-[3rem] bg-gray-50 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl relative transition-transform hover:scale-105">
                   {formData.avatarUrl ? (
-                    <Image src={formData.avatarUrl} alt={formData.name} width={200} height={200} className="object-cover w-full h-full" unoptimized />
+                    <Image src={formData.avatarUrl} alt={formData.name} width={160} height={160} className="object-cover w-full h-full" unoptimized />
                   ) : (
-                    <UserIcon className="w-20 h-20 text-gray-200" />
+                    <UserIcon className="w-16 h-16 text-gray-200" />
                   )}
                   <div className="absolute inset-0 bg-primary/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
-                    <Camera className="w-10 h-10" />
-                    <span className="text-[10px] font-black uppercase">Cambiar Foto</span>
+                    <Camera className="w-8 h-8" />
+                    <span className="text-[8px] font-black uppercase">Foto</span>
                   </div>
                 </div>
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'avatarUrl')} className="hidden" accept="image/*" />
              </div>
              
-             <div className="mt-10 space-y-3">
-               <h3 className="text-2xl font-black text-gray-800 line-clamp-2">{formData.name || 'Cargando...'}</h3>
-               <Badge variant="secondary" className="uppercase font-black text-[10px] px-5 py-2 rounded-xl">
+             <div className="mt-8 space-y-2">
+               <h3 className="text-xl font-black text-gray-800">{formData.name || 'Cargando...'}</h3>
+               <Badge variant="secondary" className="uppercase font-black text-[9px] px-4 py-1.5 rounded-xl">
                  {user?.role || 'docent'}
                </Badge>
              </div>
+          </Card>
+
+          <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-10 flex flex-col items-center gap-4">
+             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Firma Digital para Reportes</h4>
+             <div 
+               className="w-full aspect-video bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden relative group cursor-pointer"
+               onClick={() => !saving && sigInputRef.current?.click()}
+             >
+                {formData.signatureUrl ? (
+                  <img src={formData.signatureUrl} alt="Firma" className="max-w-full max-h-full object-contain p-4" />
+                ) : (
+                  <div className="flex flex-col items-center text-muted-foreground/40 gap-2">
+                    <PenTool className="w-8 h-8" />
+                    <span className="text-[10px] font-bold">Subir foto de firma</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                   <Badge className="bg-white text-black font-black text-[8px] border-none shadow-sm">EDITAR FIRMA</Badge>
+                </div>
+             </div>
+             <input type="file" ref={sigInputRef} onChange={(e) => handleFileChange(e, 'signatureUrl')} className="hidden" accept="image/*" />
+             <p className="text-[9px] text-center text-muted-foreground font-medium italic">Esta firma aparecerá en los reportes de auditoría que generes.</p>
           </Card>
         </div>
 

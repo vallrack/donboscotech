@@ -7,6 +7,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatarUrl?: string;
+  signatureUrl?: string;
   documentId?: string;
   campus?: string;
   program?: string;

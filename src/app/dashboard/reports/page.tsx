@@ -10,7 +10,7 @@ import {
   Sparkles, Loader2, Calendar, TrendingUp, 
   Users, BarChart3, Printer, 
   MapPin, BookOpen, Clock, FilterX,
-  Download
+  Download, PenTool
 } from 'lucide-react';
 import { summarizeAttendanceReport, AiReportSummaryOutput } from '@/ai/flows/ai-report-summary';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
@@ -20,10 +20,10 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { AttendanceRecord, User, Campus, Program, Shift } from '@/lib/types';
+import Image from 'next/image';
 
 /**
  * Calcula las horas trabajadas entre dos marcas de tiempo (HH:mm).
- * Devuelve un número decimal para cálculos internos.
  */
 function calculateHoursDecimal(start: string | null, end: string | null): number {
   if (!start || !end) return 0;
@@ -64,7 +64,7 @@ export default function ReportsPage() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
-  // Consultas Memorizadas para evitar bucles infinitos
+  // Consultas Memorizadas para evitar bucles infinitos y proteger cuota
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return isDocent 
@@ -177,10 +177,25 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+      {/* Encabezado Institucional (Visible en Print) */}
+      <div className="hidden print:flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
+        <div className="flex items-center gap-4">
+           <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl text-white font-black text-2xl">DB</div>
+           <div>
+             <h1 className="text-2xl font-black text-primary uppercase">Ciudad Don Bosco</h1>
+             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Informe Oficial de Auditoría de Asistencia</p>
+           </div>
+        </div>
+        <div className="text-right space-y-1">
+           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Fecha de Generación</p>
+           <p className="text-sm font-black">{new Date().toLocaleDateString()}</p>
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">{isDocent ? 'Mi Historial' : 'Auditoría Institucional'}</h1>
-          <p className="text-muted-foreground font-medium">Análisis detallado de jornadas y presencia.</p>
+          <p className="text-muted-foreground font-medium italic">Análisis detallado de jornadas y presencia.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="rounded-xl font-black gap-2" onClick={() => {
@@ -192,7 +207,7 @@ export default function ReportsPage() {
             link.download = "Reporte_DonBosco.csv";
             link.click();
           }}><Download className="w-4 h-4 text-green-600" /> Excel</Button>
-          <Button onClick={() => window.print()} className="rounded-xl font-black gap-2"><Printer className="w-4 h-4" /> PDF</Button>
+          <Button onClick={() => window.print()} className="rounded-xl font-black gap-2 h-11 px-6 shadow-md"><Printer className="w-4 h-4" /> Exportar PDF</Button>
         </div>
       </div>
       
@@ -240,7 +255,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 no-print">
         <Card className="lg:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
           <CardHeader className="p-8 border-b bg-gray-50/30"><CardTitle className="text-xl font-black">Visualización de Horas</CardTitle></CardHeader>
           <CardContent className="pt-10 h-[350px]">
@@ -256,7 +271,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden no-print">
+        <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden">
           <CardHeader className="p-8"><CardTitle className="text-2xl font-black flex items-center gap-3"><Sparkles className="w-6 h-6" /> Auditoría IA</CardTitle></CardHeader>
           <CardContent className="p-8 pt-0 flex flex-col gap-6">
             {aiSummary ? <div className="bg-white/10 p-6 rounded-[2rem] text-sm font-bold animate-in zoom-in overflow-y-auto max-h-[250px]">"{aiSummary.summary}"</div> : (
@@ -270,8 +285,8 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden print:border">
-        <CardHeader className="border-b bg-gray-50/50 p-8"><CardTitle className="text-xl font-black">Desglose Institucional</CardTitle></CardHeader>
+      <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden print:shadow-none print:border print:rounded-none">
+        <CardHeader className="border-b bg-gray-50/50 p-8 no-print"><CardTitle className="text-xl font-black">Desglose Institucional</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -296,13 +311,36 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
+      {/* Sección de Firma (Visible solo en Print) */}
+      <div className="hidden print:flex flex-col items-end mt-20 pr-12">
+        <div className="w-64 text-center space-y-4">
+          <div className="border-b-2 border-gray-300 pb-2">
+            {user?.signatureUrl ? (
+              <img src={user.signatureUrl} alt="Firma Responsable" className="h-24 mx-auto object-contain mb-2" />
+            ) : (
+              <div className="h-24" />
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-black uppercase text-gray-800">{user?.name}</p>
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{user?.role || 'Responsable de Auditoría'}</p>
+            <p className="text-[8px] font-bold text-gray-400 mt-1">Sello Digital Ciudad Don Bosco</p>
+          </div>
+        </div>
+      </div>
+
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; }
-          .sidebar, header, nav { display: none !important; }
-          main { padding: 0 !important; }
-          .Card { box-shadow: none !important; border: 1px solid #eee !important; border-radius: 1rem !important; }
+          body { background: white !important; margin: 0; padding: 0; }
+          .sidebar, header, nav, .SidebarTrigger { display: none !important; }
+          main { padding: 0 !important; margin: 0 !important; }
+          .max-w-7xl { max-width: 100% !important; }
+          .Card { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+          table { width: 100% !important; border-collapse: collapse !important; }
+          th, td { border-bottom: 1px solid #eee !important; padding: 10px !important; }
+          .Badge { background-color: transparent !important; color: black !important; border: 1px solid #ccc !important; }
+          .bg-green-500 { background-color: #f0fdf4 !important; color: #166534 !important; border: 1px solid #bbf7d0 !important; }
         }
       `}</style>
     </div>

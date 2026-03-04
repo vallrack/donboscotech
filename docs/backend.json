@@ -18,6 +18,7 @@
           "description": "IDs de las jornadas asignadas" 
         },
         "avatarUrl": { "type": "string" },
+        "signatureUrl": { "type": "string", "description": "URL o base64 de la firma digital" },
         "status": { "type": "string", "enum": ["active", "inactive"] }
       },
       "required": ["name", "email", "role", "documentId", "campus", "program"]
