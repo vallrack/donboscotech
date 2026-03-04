@@ -25,9 +25,10 @@ export default function ProfilePage() {
   const db = useFirestore();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Consultas memoizadas para prevenir Quota Exceeded
+  // Consultas memoizadas
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
   const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
@@ -45,27 +46,20 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Estabilización de la sincronización de datos para evitar bucles infinitos
+  // Sincronización inicial única para evitar bucles infinitos
   useEffect(() => {
-    if (user) {
-      setFormData(prev => {
-        const newData = {
-          name: user.name || '',
-          documentId: user.documentId || '',
-          campus: user.campus || '',
-          program: user.program || '',
-          shiftIds: user.shiftIds || [],
-          avatarUrl: user.avatarUrl || ''
-        };
-        
-        // Solo actualizar si hay cambios reales en los valores
-        if (JSON.stringify(prev) === JSON.stringify(newData)) {
-          return prev;
-        }
-        return newData;
+    if (user && !hasInitialized) {
+      setFormData({
+        name: user.name || '',
+        documentId: user.documentId || '',
+        campus: user.campus || '',
+        program: user.program || '',
+        shiftIds: user.shiftIds || [],
+        avatarUrl: user.avatarUrl || ''
       });
+      setHasInitialized(true);
     }
-  }, [user]);
+  }, [user, hasInitialized]);
 
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
@@ -206,7 +200,7 @@ export default function ProfilePage() {
                            value={formData.name} 
                            onChange={(e) => setFormData({...formData, name: e.target.value})} 
                            className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-sm focus:bg-white transition-all" 
-                           placeholder="Ingresa tu nombre oficial" 
+                           placeholder="Nombre completo" 
                            required
                            disabled={saving}
                          />
@@ -217,7 +211,7 @@ export default function ProfilePage() {
                            value={formData.documentId} 
                            onChange={(e) => setFormData({...formData, documentId: e.target.value})} 
                            className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-sm focus:bg-white transition-all" 
-                           placeholder="Número de C.C." 
+                           placeholder="C.C." 
                            required
                            disabled={saving}
                          />
@@ -225,13 +219,15 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Sede Principal</Label>
                          <Select 
-                           value={formData.campus} 
+                           value={formData.campus || ""} 
                            onValueChange={(v) => {
                              if (v !== formData.campus) setFormData({...formData, campus: v});
                            }}
                            disabled={saving}
                          >
-                           <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
+                           <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
+                             <SelectValue placeholder="Seleccionar Sede" />
+                           </SelectTrigger>
                            <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
                              {campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold py-3 rounded-xl">{c.name}</SelectItem>)}
                            </SelectContent>
@@ -240,13 +236,15 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Programa / Cargo</Label>
                          <Select 
-                           value={formData.program} 
+                           value={formData.program || ""} 
                            onValueChange={(v) => {
                              if (v !== formData.program) setFormData({...formData, program: v});
                            }}
                            disabled={saving}
                          >
-                           <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
+                           <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold text-xs">
+                             <SelectValue placeholder="Seleccionar Programa" />
+                           </SelectTrigger>
                            <SelectContent className="rounded-2xl border-none shadow-2xl p-2">
                              {programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold py-3 rounded-xl">{p.name}</SelectItem>)}
                            </SelectContent>
@@ -263,10 +261,7 @@ export default function ProfilePage() {
                           {shifts?.map(s => (
                             <div 
                               key={s.id} 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                if (!saving) toggleShift(s.id);
-                              }}
+                              onClick={() => !saving && toggleShift(s.id)}
                               className={cn(
                                 "flex items-center space-x-4 p-5 rounded-3xl border-2 transition-all cursor-pointer",
                                 formData.shiftIds?.includes(s.id) 
@@ -279,6 +274,7 @@ export default function ProfilePage() {
                                 checked={formData.shiftIds?.includes(s.id)}
                                 className="w-5 h-5 rounded-md border-primary pointer-events-none"
                                 disabled={saving}
+                                onCheckedChange={() => {}} // Manejado por el onClick del div
                               />
                               <div className="flex flex-col">
                                 <span className="text-xs font-black text-gray-800">{s.name}</span>

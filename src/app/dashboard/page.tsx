@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  // Consultas memoizadas con useMemoFirebase para evitar Quota Exceeded
+  // Consultas optimizadas para evitar Quota Exceeded
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     if (user.role === 'docent') {
@@ -50,7 +50,7 @@ export default function DashboardPage() {
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: rawAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
 
-  // Filtrado del lado del cliente para asegurar visibilidad inmediata sin índices complejos
+  // Filtrado en el cliente para evitar requisitos de índices complejos en Firestore
   const activeAnnouncements = useMemo(() => {
     return (rawAnnouncements || [])
       .filter(a => a.status === 'active')
