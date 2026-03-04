@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useMemo } from 'react';
@@ -24,18 +23,16 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const db = useFirestore();
   
-  // Estados de Filtros
   const [period, setPeriod] = useState('Mes Actual');
   const [selectedDocent, setSelectedDocent] = useState('all');
   const [selectedCampus, setSelectedCampus] = useState('all');
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedShift, setSelectedShift] = useState('all');
   
-  const [viewType, setViewType] = useState<'weekly' | 'monthly'>('monthly');
+  const [viewType, setViewType] = useState<'weekly' | 'monthly'>('weekly');
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
-  // Consultas a Firestore
   const recordsQuery = useMemo(() => {
     if (!db) return null;
     return query(collection(db, 'globalAttendanceRecords'), orderBy('date', 'desc'));
@@ -67,32 +64,23 @@ export default function ReportsPage() {
   const { data: programs } = useCollection<Program>(programsQuery as any);
   const { data: shifts } = useCollection<Shift>(shiftsQuery as any);
 
-  // Lógica de filtrado combinada
   const filteredRecords = useMemo(() => {
     if (!records || !profiles) return [];
     
-    // Mapa de perfiles para búsqueda rápida
     const userMap = new Map(profiles.map(p => [p.id, p]));
 
     return records.filter(r => {
       const user = userMap.get(r.userId);
       if (!user) return false;
 
-      // Filtro por Docente/Usuario
       if (selectedDocent !== 'all' && r.userId !== selectedDocent) return false;
-      
-      // Filtro por Sede (Campus)
       if (selectedCampus !== 'all' && user.campus !== selectedCampus) return false;
-      
-      // Filtro por Programa
       if (selectedProgram !== 'all' && user.program !== selectedProgram) return false;
-      
-      // Filtro por Jornada (Shift)
       if (selectedShift !== 'all' && !user.shiftIds?.includes(selectedShift)) return false;
 
-      // Filtro por Periodo de Tiempo
       const now = new Date();
-      const recordDate = new Date(r.date);
+      const recordDate = new Date(r.date + 'T00:00:00');
+      
       if (period === 'Semana Actual') {
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         if (recordDate < weekAgo) return false;
@@ -105,24 +93,48 @@ export default function ReportsPage() {
     });
   }, [records, profiles, selectedDocent, selectedCampus, selectedProgram, selectedShift, period]);
 
-  // Datos para gráficos basados en los registros filtrados
   const chartData = useMemo(() => {
-    const days = viewType === 'monthly' ? ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'] : ['Lun', 'Mar', 'Mie', 'Jue', 'Vie'];
-    return days.map(day => ({
-      name: day,
-      asistencia: Math.floor(Math.random() * 20) + 80 
-    }));
+    if (!filteredRecords.length) {
+      const emptyDays = viewType === 'monthly' ? ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] : ['Lun', 'Mar', 'Mie', 'Jue', 'Vie'];
+      return emptyDays.map(name => ({ name, asistencia: 0 }));
+    }
+
+    if (viewType === 'weekly') {
+      const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      const counts: Record<string, number> = {};
+      days.forEach(d => counts[d] = 0);
+
+      filteredRecords.forEach(r => {
+        const date = new Date(r.date + 'T00:00:00');
+        const dayName = days[date.getDay() === 0 ? 6 : date.getDay() - 1];
+        if (counts[dayName] !== undefined) counts[dayName]++;
+      });
+
+      return Object.entries(counts).map(([name, count]) => ({ name, asistencia: count }));
+    } else {
+      const weeks: Record<string, number> = { 'Sem 1': 0, 'Sem 2': 0, 'Sem 3': 0, 'Sem 4': 0, 'Sem 5': 0 };
+      
+      filteredRecords.forEach(r => {
+        const date = new Date(r.date + 'T00:00:00');
+        const dayOfMonth = date.getDate();
+        const weekNum = Math.ceil(dayOfMonth / 7);
+        const weekLabel = `Sem ${weekNum > 5 ? 5 : weekNum}`;
+        weeks[weekLabel]++;
+      });
+
+      return Object.entries(weeks).map(([name, count]) => ({ name, asistencia: count }));
+    }
   }, [viewType, filteredRecords]);
 
   const handleGenerateAiSummary = async () => {
     if (filteredRecords.length === 0) {
-      toast({ title: "Sin datos", description: "No hay registros en el periodo seleccionado.", variant: "destructive" });
+      toast({ title: "Sin datos", description: "No hay registros reales para analizar.", variant: "destructive" });
       return;
     }
     
     setGeneratingAi(true);
     try {
-      const reportData = filteredRecords.slice(0, 30).map(r => ({
+      const reportData = filteredRecords.slice(0, 50).map(r => ({
         userId: r.userId,
         userName: r.userName,
         date: r.date,
@@ -134,11 +146,11 @@ export default function ReportsPage() {
 
       const context = [
         period,
-        selectedDocent !== 'all' ? `Usuario: ${profiles.find(p => p.id === selectedDocent)?.name}` : 'Todo el personal',
+        selectedDocent !== 'all' ? `Docente: ${profiles.find(p => p.id === selectedDocent)?.name}` : 'Personal General',
         selectedCampus !== 'all' ? `Sede: ${selectedCampus}` : '',
         selectedProgram !== 'all' ? `Programa: ${selectedProgram}` : '',
         selectedShift !== 'all' ? `Jornada: ${shifts.find(s => s.id === selectedShift)?.name}` : ''
-      ].filter(Boolean).join(' - ');
+      ].filter(Boolean).join(' | ');
 
       const result = await summarizeAttendanceReport({
         reportData,
@@ -146,7 +158,7 @@ export default function ReportsPage() {
       });
       setAiSummary(result);
     } catch (err) {
-      toast({ title: "Error de IA", variant: "destructive" });
+      toast({ title: "Error en Auditoría IA", variant: "destructive" });
     } finally {
       setGeneratingAi(false);
     }
@@ -162,7 +174,10 @@ export default function ReportsPage() {
   };
 
   const exportToExcel = () => {
-    if (filteredRecords.length === 0) return;
+    if (filteredRecords.length === 0) {
+      toast({ title: "Error", description: "No hay datos para exportar.", variant: "destructive" });
+      return;
+    }
     
     const userMap = new Map(profiles?.map(p => [p.id, p]));
     const headers = ['Docente', 'Email', 'Sede', 'Programa', 'Fecha', 'Hora', 'Tipo', 'Metodo'];
@@ -187,9 +202,9 @@ export default function ReportsPage() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `Reporte_DonBosco_Audit.csv`);
+    link.setAttribute('download', `Reporte_Asistencia_DonBosco.csv`);
     link.click();
-    toast({ title: "Excel Exportado" });
+    toast({ title: "Reporte Exportado", description: "El archivo Excel ha sido generado con éxito." });
   };
 
   return (
@@ -197,16 +212,15 @@ export default function ReportsPage() {
       <div className="flex flex-col gap-6 no-print">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
-            <p className="text-muted-foreground font-medium">Control total de asistencia por sedes, programas y jornadas.</p>
+            <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría de Datos Reales</h1>
+            <p className="text-muted-foreground font-medium">Visualización de asistencia basada exclusivamente en registros de Firestore.</p>
           </div>
           <Button variant="ghost" className="text-muted-foreground hover:text-primary font-black text-xs uppercase tracking-widest gap-2" onClick={clearFilters}>
             <FilterX className="w-4 h-4" /> Limpiar Filtros
           </Button>
         </div>
         
-        {/* Barra de Filtros Avanzada */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-[2rem] shadow-xl border border-gray-100">
           <div className="space-y-1.5">
             <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Periodo</label>
             <Select value={period} onValueChange={setPeriod}>
@@ -289,57 +303,68 @@ export default function ReportsPage() {
 
         <div className="flex gap-2 justify-end">
           <Button variant="outline" size="lg" className="h-12 rounded-xl bg-white shadow-sm gap-2 font-black" onClick={exportToExcel}>
-            <FileSpreadsheet className="w-5 h-5 text-green-600" /> Exportar Excel
+            <FileSpreadsheet className="w-5 h-5 text-green-600" /> Excel
           </Button>
           <Button variant="outline" size="lg" className="h-12 rounded-xl bg-white shadow-sm gap-2 font-black" onClick={() => window.print()}>
-            <Printer className="w-5 h-5 text-primary" /> Imprimir PDF
+            <Printer className="w-5 h-5 text-primary" /> PDF
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Gráfico de Tendencias */}
         <Card className="lg:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
           <CardHeader className="pb-2 border-b bg-gray-50/30 p-8">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xl font-black text-gray-800 flex items-center gap-3">
-                   <TrendingUp className="w-6 h-6 text-primary" /> Cumplimiento Laboral
+                   <TrendingUp className="w-6 h-6 text-primary" /> Frecuencia de Asistencia Real
                 </CardTitle>
-                <CardDescription className="font-bold">Distribución de asistencia en el periodo.</CardDescription>
+                <CardDescription className="font-bold">Total de marcajes registrados por unidad de tiempo.</CardDescription>
               </div>
               <Tabs value={viewType} onValueChange={(v: any) => setViewType(v)} className="no-print">
                 <TabsList className="bg-gray-100 rounded-xl h-10 p-1">
-                  <TabsTrigger value="weekly" className="text-[10px] font-black uppercase px-4 rounded-lg">Semana</TabsTrigger>
-                  <TabsTrigger value="monthly" className="text-[10px] font-black uppercase px-4 rounded-lg">Mes</TabsTrigger>
+                  <TabsTrigger value="weekly" className="text-[10px] font-black uppercase px-4 rounded-lg">Semanal</TabsTrigger>
+                  <TabsTrigger value="monthly" className="text-[10px] font-black uppercase px-4 rounded-lg">Mensual</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
           </CardHeader>
           <CardContent className="pt-10 h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
-                <RechartsTooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 900 }}
-                />
-                <Bar dataKey="asistencia" fill="hsl(var(--primary))" radius={[12, 12, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+            {recordsLoading ? (
+               <div className="flex items-center justify-center h-full">
+                 <Loader2 className="w-10 h-10 animate-spin text-primary opacity-20" />
+               </div>
+            ) : filteredRecords.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                <div className="p-4 bg-gray-50 rounded-full border-2 border-dashed">
+                  <BarChart3 className="w-10 h-10 text-gray-300" />
+                </div>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">No hay registros reales en este periodo</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
+                  <RechartsTooltip 
+                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 900 }}
+                  />
+                  <Bar dataKey="asistencia" fill="hsl(var(--primary))" radius={[12, 12, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
-        {/* Resumen con Inteligencia Artificial */}
         <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden relative flex flex-col">
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
           <CardHeader className="p-8">
             <CardTitle className="text-2xl font-black flex items-center gap-3">
-              <Sparkles className="w-6 h-6" /> Resumen IA
+              <Sparkles className="w-6 h-6" /> Auditoría IA Real
             </CardTitle>
-            <CardDescription className="text-primary-foreground/70 font-bold uppercase tracking-widest text-[10px]">Auditoría Inteligente Ciudad Don Bosco</CardDescription>
+            <CardDescription className="text-primary-foreground/70 font-bold uppercase tracking-widest text-[10px]">Análisis de datos registrados en Firestore</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 p-8 pt-0 flex flex-col gap-6">
             {aiSummary ? (
@@ -349,39 +374,37 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-10 space-y-6">
                 <div className="w-20 h-20 bg-white/10 rounded-[2rem] flex items-center justify-center mx-auto shadow-inner">
-                  <BarChart3 className="w-10 h-10 opacity-40" />
+                  <TrendingUp className="w-10 h-10 opacity-40" />
                 </div>
                 <p className="text-xs opacity-80 font-bold uppercase tracking-widest px-4 leading-loose">
-                  Analiza patrones de puntualidad y ausentismo basados en los filtros actuales de sede, programa y docente.
+                  {filteredRecords.length > 0 
+                    ? `Lista para analizar ${filteredRecords.length} registros reales encontrados.` 
+                    : "Esperando registros reales para iniciar el análisis inteligente."}
                 </p>
                 <Button 
                   onClick={handleGenerateAiSummary} 
-                  disabled={generatingAi} 
+                  disabled={generatingAi || filteredRecords.length === 0} 
                   variant="secondary" 
                   className="w-full h-14 rounded-2xl font-black text-primary shadow-xl hover:scale-105 transition-all"
                 >
                   {generatingAi ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />}
-                  Analizar con IA
+                  Generar Auditoría IA
                 </Button>
               </div>
             )}
-            <div className="mt-auto pt-6 border-t border-white/10 text-center">
-               <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-40">Don Bosco Track AI Audit v3.0</span>
-            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Registros Detallados con Información Cruzada */}
       <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
         <CardHeader className="border-b bg-gray-50/50 p-8">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-xl font-black">Registros de Auditoría</CardTitle>
-              <CardDescription className="font-bold">Datos reales cruzados con perfil institucional.</CardDescription>
+              <CardTitle className="text-xl font-black">Historial de Auditoría</CardTitle>
+              <CardDescription className="font-bold">Listado detallado de registros sincronizados.</CardDescription>
             </div>
             <Badge className="bg-primary/10 text-primary font-black px-4 py-1.5 rounded-xl border-none">
-              {filteredRecords.length} REGISTROS FILTRADOS
+              {filteredRecords.length} REGISTROS TOTALES
             </Badge>
           </div>
         </CardHeader>
@@ -394,7 +417,7 @@ export default function ReportsPage() {
                   <th className="px-8 py-6">Detalle Institucional</th>
                   <th className="px-8 py-6">Fecha / Hora</th>
                   <th className="px-8 py-6">Ubicación / Sede</th>
-                  <th className="px-8 py-6 text-center">Audit</th>
+                  <th className="px-8 py-6 text-center">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -429,7 +452,7 @@ export default function ReportsPage() {
                         </td>
                         <td className="px-8 py-6">
                            <div className="text-xs font-bold text-gray-500 max-w-[200px] truncate">
-                             {r.location?.address || 'Terminal Oficial - Ciudad Don Bosco'}
+                             {r.location?.address || 'Terminal Oficial'}
                            </div>
                            <Badge variant="outline" className="text-[8px] font-black px-2 mt-1 uppercase">{r.method}</Badge>
                         </td>
@@ -444,7 +467,7 @@ export default function ReportsPage() {
                   })
                 )}
                 {!recordsLoading && filteredRecords.length === 0 && (
-                  <tr><td colSpan={5} className="py-40 text-center font-black text-gray-300 uppercase tracking-widest">No se encontraron registros coincidentes</td></tr>
+                  <tr><td colSpan={5} className="py-40 text-center font-black text-gray-300 uppercase tracking-widest">No se encontraron registros reales</td></tr>
                 )}
               </tbody>
             </table>
