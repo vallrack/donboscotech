@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useFirebaseAuth();
   const db = useFirestore();
   const { user: authUser, loading: authLoading } = useUser();
+  const syncRef = useRef(false);
 
   const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser, db]);
   const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser, db]);
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!authUser) return null;
 
     let role: UserRole = 'docent';
-    // Priority 1: Direct security collections (The Source of Truth)
+    // Priority: Security Collections are the Source of Truth for privileged roles
     if (adminRole) {
       role = 'admin';
     } else if (coordRole) {
@@ -55,28 +56,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: userProfile?.name || authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
       email: authUser.email || '',
       role,
-      avatarUrl: userProfile?.avatarUrl || authUser.photoURL || undefined
+      avatarUrl: userProfile?.avatarUrl || authUser.photoURL || undefined,
+      documentId: userProfile?.documentId,
+      campus: userProfile?.campus,
+      program: userProfile?.program,
+      shiftIds: userProfile?.shiftIds
     };
   }, [authUser, adminRole, coordRole, sectRole, userProfile]);
 
-  // Persistent synchronization of the role in the profile
+  // Handle profile synchronization only when necessary
   useEffect(() => {
-    if (authUser && db && !profileLoading && resolvedUser) {
+    if (authUser && db && !profileLoading && resolvedUser && !syncRef.current) {
       const pRef = doc(db, 'userProfiles', authUser.uid);
       
-      // If profile doesn't exist, create it
       if (!userProfile) {
+        syncRef.current = true;
         setDoc(pRef, {
           name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
           email: authUser.email || '',
           role: resolvedUser.role,
           avatarUrl: authUser.photoURL || '',
           createdAt: serverTimestamp()
-        }, { merge: true });
-      } 
-      // If profile exists but the role is out of sync with security collections, update it
-      else if (userProfile.role !== resolvedUser.role) {
-        updateDoc(pRef, { role: resolvedUser.role });
+        }, { merge: true }).finally(() => { syncRef.current = false; });
+      } else if (userProfile.role !== resolvedUser.role) {
+        syncRef.current = true;
+        updateDoc(pRef, { role: resolvedUser.role }).finally(() => { syncRef.current = false; });
       }
     }
   }, [authUser, userProfile, profileLoading, db, resolvedUser]);
@@ -103,7 +107,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       createdAt: serverTimestamp()
     });
 
-    // Special handling for secretary role (sync collection for rules)
     if (role === 'secretary') {
       await setDoc(doc(db, 'roles_secretaries', userCredential.user.uid), {
         email,
