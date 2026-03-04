@@ -9,13 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Sparkles, Loader2, Calendar, TrendingUp, 
-  Users, BarChart3, FileSpreadsheet, Printer, 
-  MapPin, BookOpen, Clock, FilterX, AlertCircle,
+  Users, BarChart3, Printer, 
+  MapPin, BookOpen, Clock, FilterX,
   Download
 } from 'lucide-react';
 import { summarizeAttendanceReport, AiReportSummaryOutput } from '@/ai/flows/ai-report-summary';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, where } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -84,8 +84,6 @@ export default function ReportsPage() {
     const grouped = new Map<string, any>();
 
     records.forEach(r => {
-      if (isDocent && r.userId !== user?.id) return;
-      
       const uData = userMap ? userMap.get(r.userId) : null;
       
       if (!isDocent) {
@@ -134,6 +132,58 @@ export default function ReportsPage() {
       return true;
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [records, profiles, selectedDocent, selectedCampus, selectedProgram, selectedShift, period, isDocent, user]);
+
+  const chartData = useMemo(() => {
+    if (!dailyReports.length) {
+      const emptyDays = viewType === 'monthly' ? ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] : ['Lun', 'Mar', 'Mie', 'Jue', 'Vie'];
+      return emptyDays.map(name => ({ name: name, horas: 0 }));
+    }
+
+    if (viewType === 'weekly') {
+      const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      const counts: Record<string, number> = {};
+      days.forEach(d => counts[d] = 0);
+      dailyReports.forEach(r => {
+        const date = new Date(r.date + 'T00:00:00');
+        const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1;
+        const dayName = days[dayIndex];
+        if (counts[dayName] !== undefined) counts[dayName] += r.hours;
+      });
+      return Object.entries(counts).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
+    } else {
+      const weeks: Record<string, number> = { 'Sem 1': 0, 'Sem 2': 0, 'Sem 3': 0, 'Sem 4': 0, 'Sem 5': 0 };
+      dailyReports.forEach(r => {
+        const date = new Date(r.date + 'T00:00:00');
+        const weekNum = Math.ceil(date.getDate() / 7);
+        const weekLabel = `Sem ${weekNum > 5 ? 5 : weekNum}`;
+        weeks[weekLabel] += r.hours;
+      });
+      return Object.entries(weeks).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
+    }
+  }, [viewType, dailyReports]);
+
+  const handleGenerateAiSummary = async () => {
+    if (dailyReports.length === 0) return;
+    setGeneratingAi(true);
+    try {
+      const result = await summarizeAttendanceReport({
+        reportData: dailyReports.map(r => ({
+          userId: r.userId,
+          userName: r.userName,
+          date: r.date,
+          entryTime: r.entry || undefined,
+          exitTime: r.exit || undefined,
+          totalHours: r.hours,
+        })),
+        reportingPeriod: period
+      });
+      setAiSummary(result);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error de IA", description: "No se pudo generar el resumen inteligente." });
+    } finally {
+      setGeneratingAi(false);
+    }
+  };
 
   const handleExportExcel = () => {
     if (dailyReports.length === 0) {
@@ -283,7 +333,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="flex-1 p-8 pt-0 flex flex-col gap-6">
             {aiSummary ? (
-              <div className="bg-white/10 p-6 rounded-[2rem] border border-white/10 text-sm font-bold animate-in zoom-in">"{aiSummary.summary}"</div>
+              <div className="bg-white/10 p-6 rounded-[2rem] border border-white/10 text-sm font-bold animate-in zoom-in overflow-y-auto max-h-[250px]">"{aiSummary.summary}"</div>
             ) : (
               <div className="text-center py-10 space-y-6">
                 <div className="w-20 h-20 bg-white/10 rounded-[2rem] flex items-center justify-center mx-auto"><TrendingUp className="w-10 h-10 opacity-30" /></div>
@@ -325,6 +375,13 @@ export default function ReportsPage() {
                     <td className="px-8 py-6 text-center"><Badge className={cn("font-black", r.hours > 0 ? "bg-green-500" : "bg-red-100 text-red-500")}>{r.hours}h</Badge></td>
                   </tr>
                 ))}
+                {!recordsLoading && dailyReports.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20 italic">
+                      No se encontraron registros bajo este criterio.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -340,37 +397,4 @@ export default function ReportsPage() {
       `}</style>
     </div>
   );
-}
-
-const chartData = useMemo(() => {
-    if (!dailyReports.length) {
-      const emptyDays = viewType === 'monthly' ? ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] : ['Lun', 'Mar', 'Mie', 'Jue', 'Vie'];
-      return emptyDays.map(name => ({ name: name, horas: 0 }));
-    }
-
-    if (viewType === 'weekly') {
-      const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sáb', 'Dom'];
-      const counts: Record<string, number> = {};
-      days.forEach(d => counts[d] = 0);
-      dailyReports.forEach(r => {
-        const date = new Date(r.date + 'T00:00:00');
-        const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1;
-        const dayName = days[dayIndex];
-        if (counts[dayName] !== undefined) counts[dayName] += r.hours;
-      });
-      return Object.entries(counts).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
-    } else {
-      const weeks: Record<string, number> = { 'Sem 1': 0, 'Sem 2': 0, 'Sem 3': 0, 'Sem 4': 0, 'Sem 5': 0 };
-      dailyReports.forEach(r => {
-        const date = new Date(r.date + 'T00:00:00');
-        const weekNum = Math.ceil(date.getDate() / 7);
-        const weekLabel = `Sem ${weekNum > 5 ? 5 : weekNum}`;
-        weeks[weekLabel] += r.hours;
-      });
-      return Object.entries(weeks).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
-    }
-}, [viewType, dailyReports]);
-
-function handleGenerateAiSummary() {
-    // Definición interna del hook para evitar errores de renderizado
 }
