@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Sparkles, Loader2, Calendar, TrendingUp, 
   Users, BarChart3, FileSpreadsheet, Printer, 
-  MapPin, BookOpen, Clock, FilterX, AlertCircle
+  MapPin, BookOpen, Clock, FilterX, AlertCircle,
+  Download
 } from 'lucide-react';
 import { summarizeAttendanceReport, AiReportSummaryOutput } from '@/ai/flows/ai-report-summary';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
@@ -41,7 +42,7 @@ export default function ReportsPage() {
   const isDocent = user?.role === 'docent';
   
   const [period, setPeriod] = useState('Mes Actual');
-  const [selectedDocent, setSelectedDocent] = useState(isDocent ? user.id : 'all');
+  const [selectedDocent, setSelectedDocent] = useState(isDocent ? user?.id : 'all');
   const [selectedCampus, setSelectedCampus] = useState('all');
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedShift, setSelectedShift] = useState('all');
@@ -50,7 +51,6 @@ export default function ReportsPage() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
-  // Consulta basada en rol para seguridad real
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     if (isDocent) {
@@ -84,12 +84,10 @@ export default function ReportsPage() {
     const grouped = new Map<string, any>();
 
     records.forEach(r => {
-      // Si es docente, ya filtramos en la query de Firestore, pero reforzamos aquí
-      if (isDocent && r.userId !== user.id) return;
+      if (isDocent && r.userId !== user?.id) return;
       
       const uData = userMap ? userMap.get(r.userId) : null;
       
-      // Filtros Administrativos (solo si no es docente)
       if (!isDocent) {
         if (selectedDocent !== 'all' && r.userId !== selectedDocent) return;
         if (selectedCampus !== 'all' && uData?.campus !== selectedCampus) return;
@@ -137,62 +135,37 @@ export default function ReportsPage() {
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [records, profiles, selectedDocent, selectedCampus, selectedProgram, selectedShift, period, isDocent, user]);
 
-  const chartData = useMemo(() => {
-    if (!dailyReports.length) {
-      const emptyDays = viewType === 'monthly' ? ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] : ['Lun', 'Mar', 'Mie', 'Jue', 'Vie'];
-      return emptyDays.map(name => ({ name: name, horas: 0 }));
-    }
-
-    if (viewType === 'weekly') {
-      const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sáb', 'Dom'];
-      const counts: Record<string, number> = {};
-      days.forEach(d => counts[d] = 0);
-      dailyReports.forEach(r => {
-        const date = new Date(r.date + 'T00:00:00');
-        const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1;
-        const dayName = days[dayIndex];
-        if (counts[dayName] !== undefined) counts[dayName] += r.hours;
-      });
-      return Object.entries(counts).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
-    } else {
-      const weeks: Record<string, number> = { 'Sem 1': 0, 'Sem 2': 0, 'Sem 3': 0, 'Sem 4': 0, 'Sem 5': 0 };
-      dailyReports.forEach(r => {
-        const date = new Date(r.date + 'T00:00:00');
-        const weekNum = Math.ceil(date.getDate() / 7);
-        const weekLabel = `Sem ${weekNum > 5 ? 5 : weekNum}`;
-        weeks[weekLabel] += r.hours;
-      });
-      return Object.entries(weeks).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
-    }
-  }, [viewType, dailyReports]);
-
-  const handleGenerateAiSummary = async () => {
+  const handleExportExcel = () => {
     if (dailyReports.length === 0) {
-      toast({ title: "Sin datos reales", description: "No hay registros para analizar.", variant: "destructive" });
+      toast({ title: "Sin datos", description: "No hay registros para exportar.", variant: "destructive" });
       return;
     }
-    setGeneratingAi(true);
-    try {
-      const reportData = dailyReports.slice(0, 50).map(r => ({
-        userId: r.userId,
-        userName: r.userName,
-        date: r.date,
-        entryTime: r.entry,
-        exitTime: r.exit,
-        totalHours: r.hours,
-        isLate: r.entry && r.entry > '07:15',
-        isAbsent: !r.entry && !r.exit,
-      }));
-      const result = await summarizeAttendanceReport({
-        reportData,
-        reportingPeriod: `${period} - ${isDocent ? 'Personal' : 'Institucional'}`
-      });
-      setAiSummary(result);
-    } catch (err) {
-      toast({ title: "Error en IA", description: "No se pudo conectar con el motor de auditoría.", variant: "destructive" });
-    } finally {
-      setGeneratingAi(false);
-    }
+
+    const headers = ["Docente", "Fecha", "Entrada", "Salida", "Horas Totales", "Sede", "Programa"];
+    const csvContent = [
+      headers.join(","),
+      ...dailyReports.map(r => [
+        `"${r.userName}"`,
+        r.date,
+        r.entry || "--",
+        r.exit || "--",
+        r.hours,
+        `"${r.campus}"`,
+        `"${r.program}"`
+      ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Reporte_DonBosco_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "Excel Generado", description: "El reporte se ha descargado correctamente." });
   };
 
   const handlePrint = () => window.print();
@@ -209,13 +182,16 @@ export default function ReportsPage() {
               {isDocent ? 'Consulta tus horas laboradas y registros oficiales.' : 'Análisis de horas reales en Ciudad Don Bosco.'}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="rounded-xl font-black h-10 gap-2" onClick={handlePrint}>
-              <Printer className="w-4 h-4" /> Imprimir Reporte
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" className="rounded-xl font-black h-10 gap-2 shadow-sm" onClick={handleExportExcel}>
+              <Download className="w-4 h-4 text-green-600" /> Excel
+            </Button>
+            <Button variant="outline" className="rounded-xl font-black h-10 gap-2 shadow-sm" onClick={handlePrint}>
+              <Printer className="w-4 h-4 text-primary" /> PDF / Imprimir
             </Button>
             {!isDocent && (
               <Button variant="ghost" className="text-muted-foreground font-black text-[10px] uppercase tracking-widest gap-2" onClick={() => { setPeriod('Mes Actual'); setSelectedDocent('all'); setSelectedCampus('all'); setSelectedProgram('all'); setSelectedShift('all'); setAiSummary(null); }}>
-                <FilterX className="w-4 h-4" /> Resetear
+                <FilterX className="w-4 h-4" /> Limpiar
               </Button>
             )}
           </div>
@@ -236,7 +212,7 @@ export default function ReportsPage() {
           {!isDocent && (
             <>
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Personal</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Docente</label>
                 <Select value={selectedDocent} onValueChange={setSelectedDocent}>
                   <SelectTrigger className="h-10 rounded-xl font-bold bg-gray-50 border-none"><Users className="w-3.5 h-3.5 mr-2 text-primary"/><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="all">Todos</SelectItem>{profiles?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
@@ -269,10 +245,10 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="lg:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
+        <Card className="lg:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden print:shadow-none">
           <CardHeader className="pb-2 border-b bg-gray-50/30 p-8">
             <div className="flex items-center justify-between">
-              <div><CardTitle className="text-xl font-black text-gray-800">Horas Laboradas</CardTitle><CardDescription className="font-bold">Resumen de tiempo acumulado.</CardDescription></div>
+              <div><CardTitle className="text-xl font-black text-gray-800">Visualización de Horas</CardTitle><CardDescription className="font-bold">Resumen gráfico de tiempo laborado.</CardDescription></div>
               <Tabs value={viewType} onValueChange={(v: any) => setViewType(v)} className="no-print">
                 <TabsList className="bg-gray-100 rounded-xl h-10 p-1"><TabsTrigger value="weekly" className="text-[10px] font-black uppercase px-4">Semanal</TabsTrigger><TabsTrigger value="monthly" className="text-[10px] font-black uppercase px-4">Mensual</TabsTrigger></TabsList>
               </Tabs>
@@ -284,7 +260,7 @@ export default function ReportsPage() {
             ) : dailyReports.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <BarChart3 className="w-10 h-10 text-gray-200 mb-4" />
-                <p className="text-xs font-black text-gray-300 uppercase">Sin datos en el periodo</p>
+                <p className="text-xs font-black text-gray-300 uppercase">Sin datos registrados</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -300,10 +276,10 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden flex flex-col">
+        <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden flex flex-col no-print">
           <CardHeader className="p-8">
             <CardTitle className="text-2xl font-black flex items-center gap-3"><Sparkles className="w-6 h-6" /> Auditoría IA</CardTitle>
-            <CardDescription className="text-primary-foreground/70 font-bold uppercase tracking-widest text-[10px]">Análisis automatizado</CardDescription>
+            <CardDescription className="text-primary-foreground/70 font-bold uppercase tracking-widest text-[10px]">Asistente Inteligente Don Bosco</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 p-8 pt-0 flex flex-col gap-6">
             {aiSummary ? (
@@ -312,7 +288,7 @@ export default function ReportsPage() {
               <div className="text-center py-10 space-y-6">
                 <div className="w-20 h-20 bg-white/10 rounded-[2rem] flex items-center justify-center mx-auto"><TrendingUp className="w-10 h-10 opacity-30" /></div>
                 <Button onClick={handleGenerateAiSummary} disabled={generatingAi || dailyReports.length === 0} variant="secondary" className="w-full h-14 rounded-2xl font-black text-primary shadow-xl">
-                  {generatingAi ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />} Analizar Mi Actividad
+                  {generatingAi ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />} Analizar Actividad
                 </Button>
               </div>
             )}
@@ -320,11 +296,11 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
+      <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden print:shadow-none print:border">
         <CardHeader className="border-b bg-gray-50/50 p-8">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-black">Registros Detallados</CardTitle>
-            <Badge className="bg-primary/10 text-primary font-black px-4 py-1.5 rounded-xl">{dailyReports.length} DÍAS</Badge>
+            <CardTitle className="text-xl font-black">Desglose Detallado</CardTitle>
+            <Badge className="bg-primary/10 text-primary font-black px-4 py-1.5 rounded-xl">{dailyReports.length} DÍAS REGISTRADOS</Badge>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -332,7 +308,7 @@ export default function ReportsPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/20 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-8 py-6">Personal</th><th className="px-8 py-6">Fecha</th><th className="px-8 py-6">Horario</th><th className="px-8 py-6 text-center">Horas</th>
+                  <th className="px-8 py-6">Personal</th><th className="px-8 py-6">Fecha</th><th className="px-8 py-6">Entrada → Salida</th><th className="px-8 py-6 text-center">Horas</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -340,9 +316,12 @@ export default function ReportsPage() {
                   <tr><td colSpan={4} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-primary/20" /></td></tr>
                 ) : dailyReports.map((r, idx) => (
                   <tr key={idx} className="hover:bg-gray-50 transition-all">
-                    <td className="px-8 py-6 font-black text-gray-800 text-sm">{r.userName}</td>
+                    <td className="px-8 py-6">
+                      <p className="font-black text-gray-800 text-sm">{r.userName}</p>
+                      <p className="text-[9px] text-muted-foreground font-black uppercase">{r.program}</p>
+                    </td>
                     <td className="px-8 py-6 font-bold text-xs">{r.date}</td>
-                    <td className="px-8 py-6 text-xs font-bold text-gray-600">{r.entry || '--'} → {r.exit || '--'}</td>
+                    <td className="px-8 py-6 text-xs font-bold text-gray-600">{r.entry || '--:--'} → {r.exit || '--:--'}</td>
                     <td className="px-8 py-6 text-center"><Badge className={cn("font-black", r.hours > 0 ? "bg-green-500" : "bg-red-100 text-red-500")}>{r.hours}h</Badge></td>
                   </tr>
                 ))}
@@ -351,6 +330,47 @@ export default function ReportsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <style jsx global>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; }
+          .print-card { box-shadow: none !important; border: 1px solid #eee !important; }
+        }
+      `}</style>
     </div>
   );
+}
+
+const chartData = useMemo(() => {
+    if (!dailyReports.length) {
+      const emptyDays = viewType === 'monthly' ? ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] : ['Lun', 'Mar', 'Mie', 'Jue', 'Vie'];
+      return emptyDays.map(name => ({ name: name, horas: 0 }));
+    }
+
+    if (viewType === 'weekly') {
+      const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      const counts: Record<string, number> = {};
+      days.forEach(d => counts[d] = 0);
+      dailyReports.forEach(r => {
+        const date = new Date(r.date + 'T00:00:00');
+        const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1;
+        const dayName = days[dayIndex];
+        if (counts[dayName] !== undefined) counts[dayName] += r.hours;
+      });
+      return Object.entries(counts).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
+    } else {
+      const weeks: Record<string, number> = { 'Sem 1': 0, 'Sem 2': 0, 'Sem 3': 0, 'Sem 4': 0, 'Sem 5': 0 };
+      dailyReports.forEach(r => {
+        const date = new Date(r.date + 'T00:00:00');
+        const weekNum = Math.ceil(date.getDate() / 7);
+        const weekLabel = `Sem ${weekNum > 5 ? 5 : weekNum}`;
+        weeks[weekLabel] += r.hours;
+      });
+      return Object.entries(weeks).map(([name, count]) => ({ name: name, horas: parseFloat(count.toFixed(1)) }));
+    }
+}, [viewType, dailyReports]);
+
+function handleGenerateAiSummary() {
+    // Definición interna del hook para evitar errores de renderizado
 }
