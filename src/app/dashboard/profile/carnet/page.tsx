@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useAuth } from '@/components/auth/auth-provider';
@@ -49,7 +50,7 @@ export default function CarnetPage() {
       </div>
 
       <div className="flex justify-center items-center py-10 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-200">
-        <Card className="w-[360px] h-[640px] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card flex flex-col">
+        <Card className="w-[360px] h-[680px] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card flex flex-col">
           {/* Header Superior Institucional */}
           <div className="bg-primary pt-10 pb-14 px-8 text-white text-center relative">
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
@@ -92,45 +93,45 @@ export default function CarnetPage() {
                    className="w-full h-full object-contain"
                  />
               </div>
-              <span className="text-[8px] font-black text-primary/30 uppercase tracking-[0.5em] mt-3">Sincronización QR</span>
+              <span className="text-[8px] font-black text-primary/30 uppercase tracking-[0.5em] mt-3">SINCRONIZACIÓN QR</span>
             </div>
           </div>
 
           {/* Bloque de Información Detallada */}
-          <div className="p-8 bg-gray-50/80 border-t border-gray-100 space-y-5">
+          <div className="p-8 pb-10 bg-gray-50/80 border-t border-gray-100 space-y-5">
             <div className="grid grid-cols-2 gap-y-4 gap-x-6">
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                  <Fingerprint className="w-2.5 h-2.5 opacity-50" /> Cédula
+                  <Fingerprint className="w-2.5 h-2.5 opacity-50" /> CÉDULA
                 </div>
-                <p className="text-[12px] font-black text-gray-700">{user.documentId || 'No registrada'}</p>
+                <p className="text-[12px] font-black text-gray-700">{user.documentId || 'NO REGISTRADA'}</p>
               </div>
               <div className="space-y-1 text-right">
                 <div className="flex items-center justify-end gap-1.5 text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                  <Building2 className="w-2.5 h-2.5 opacity-50" /> Sede
+                  <Building2 className="w-2.5 h-2.5 opacity-50" /> SEDE
                 </div>
-                <p className="text-[12px] font-black text-gray-700 truncate">{user.campus || 'Principal'}</p>
+                <p className="text-[12px] font-black text-gray-700 truncate">{user.campus || 'PRINCIPAL'}</p>
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                  <BookOpen className="w-2.5 h-2.5 opacity-50" /> Programa
+                  <BookOpen className="w-2.5 h-2.5 opacity-50" /> PROGRAMA
                 </div>
-                <p className="text-[12px] font-black text-primary truncate">{user.program || 'N/A'}</p>
+                <p className="text-[12px] font-black text-primary truncate uppercase">{user.program || 'N/A'}</p>
               </div>
               <div className="space-y-1 text-right">
                 <div className="flex items-center justify-end gap-1.5 text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                  <Clock className="w-2.5 h-2.5 opacity-50" /> Jornada
+                  <Clock className="w-2.5 h-2.5 opacity-50" /> JORNADA
                 </div>
-                <p className="text-[11px] font-black text-gray-700 truncate">{userShiftNames}</p>
+                <p className="text-[11px] font-black text-gray-700 truncate uppercase">{userShiftNames}</p>
               </div>
             </div>
             
             <div className="pt-4 border-t border-dashed border-gray-200 flex items-center justify-between">
                <div className="flex items-center gap-1.5">
                   <ShieldCheck className="w-3 h-3 text-primary opacity-30" />
-                  <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">Don Bosco Track Sinc</span>
+                  <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">DON BOSCO TRACK SINC</span>
                </div>
-               <span className="text-[8px] font-mono text-gray-300 font-bold">UID: {user.id.substring(0, 10).toUpperCase()}</span>
+               <span className="text-[8px] font-mono text-gray-300 font-bold uppercase">UID: {user.id.substring(0, 10)}</span>
             </div>
           </div>
         </Card>
