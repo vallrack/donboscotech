@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Users, Clock, Plus, Trash, Check
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from '@/components/label';
+import { Label } from '@/components/ui/label';
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
@@ -47,10 +47,10 @@ export default function UserManagementPage() {
   const { data: shiftsRaw } = useCollection<Shift>(shiftsQuery);
   const { data: usersRaw, loading: usersLoading } = useCollection(usersQuery);
 
-  const campuses = useMemo(() => campusesRaw, [campusesRaw]);
-  const programs = useMemo(() => programsRaw, [programsRaw]);
-  const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
-  const users = useMemo(() => usersRaw, [usersRaw]);
+  const campuses = useMemo(() => campusesRaw || [], [campusesRaw]);
+  const programs = useMemo(() => programsRaw || [], [programsRaw]);
+  const shifts = useMemo(() => shiftsRaw || [], [shiftsRaw]);
+  const users = useMemo(() => usersRaw || [], [usersRaw]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -63,13 +63,13 @@ export default function UserManagementPage() {
     role: 'docent' as UserRole
   });
 
-  const toggleCreateShift = (id: string) => {
+  const toggleCreateShift = useCallback((id: string) => {
     setFormData(prev => {
       const current = prev.shiftIds || [];
       const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
       return { ...prev, shiftIds: next };
     });
-  };
+  }, []);
 
   const filteredUsers = useMemo(() => {
     const search = searchTerm.toLowerCase();
@@ -124,7 +124,7 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleRoleChange = async (userId: string, targetRole: UserRole, userEmail: string) => {
+  const handleRoleChange = useCallback(async (userId: string, targetRole: UserRole, userEmail: string) => {
     if (!db || updatingId) return;
     setUpdatingId(userId);
     try {
@@ -141,7 +141,7 @@ export default function UserManagementPage() {
     } finally {
       setUpdatingId(null);
     }
-  };
+  }, [db, updatingId, toast]);
 
   const handleDeleteUser = async (userId: string) => {
     if (!db || !confirm('¿Dar de baja a este miembro del personal?')) return;
@@ -198,14 +198,14 @@ export default function UserManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede Asignada</Label>
-                      <Select value={formData.campus} onValueChange={(val) => setFormData({...formData, campus: val})}>
+                      <Select value={formData.campus || undefined} onValueChange={(val) => setFormData(p => ({...p, campus: val}))}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
                         <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Carrera</Label>
-                      <Select value={formData.program} onValueChange={(val) => setFormData({...formData, program: val})}>
+                      <Select value={formData.program || undefined} onValueChange={(val) => setFormData(p => ({...p, program: val}))}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                         <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
                       </Select>
@@ -247,7 +247,7 @@ export default function UserManagementPage() {
 
                   <div className="space-y-4 pt-4 border-t">
                     <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Rol Institucional</Label>
-                    <Select value={formData.role} onValueChange={(val: UserRole) => setFormData({...formData, role: val})}>
+                    <Select value={formData.role} onValueChange={(val: UserRole) => setFormData(p => ({...p, role: val}))}>
                       <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>

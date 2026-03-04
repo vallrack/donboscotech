@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight, Clock, Plus, Trash2, Check } from 'lucide-react';
+import { User as UserIcon, Loader2, Save, Camera, CreditCard, ArrowRight, Plus, Trash2, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
@@ -43,9 +43,9 @@ export default function ProfilePage() {
   const { data: programsRaw } = useCollection<Program>(programsQuery);
   const { data: shiftsRaw } = useCollection<Shift>(shiftsQuery);
 
-  const campuses = useMemo(() => campusesRaw, [campusesRaw]);
-  const programs = useMemo(() => programsRaw, [programsRaw]);
-  const shifts = useMemo(() => shiftsRaw, [shiftsRaw]);
+  const campuses = useMemo(() => campusesRaw || [], [campusesRaw]);
+  const programs = useMemo(() => programsRaw || [], [programsRaw]);
+  const shifts = useMemo(() => shiftsRaw || [], [shiftsRaw]);
 
   useEffect(() => {
     if (user && lastSyncedUserId.current !== user.id) {
@@ -69,6 +69,7 @@ export default function ProfilePage() {
   }, []);
 
   const toggleShift = useCallback((shiftId: string) => {
+    if (saving) return;
     setFormData(prev => {
       const current = prev.shiftIds || [];
       const newShifts = current.includes(shiftId)
@@ -76,7 +77,7 @@ export default function ProfilePage() {
         : [...current, shiftId];
       return { ...prev, shiftIds: newShifts };
     });
-  }, []);
+  }, [saving]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -189,8 +190,9 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede Principal</Label>
                          <Select 
-                           value={formData.campus} 
+                           value={formData.campus || undefined} 
                            onValueChange={(v) => updateField('campus', v)}
+                           disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Sede" />
@@ -206,8 +208,9 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Cargo</Label>
                          <Select 
-                           value={formData.program} 
+                           value={formData.program || undefined} 
                            onValueChange={(v) => updateField('program', v)}
+                           disabled={saving}
                          >
                            <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-xs">
                              <SelectValue placeholder="Seleccionar Programa" />
@@ -226,6 +229,7 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <Select 
                           onValueChange={(v) => toggleShift(v)}
+                          disabled={saving}
                         >
                           <SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-sm text-primary">
                             <div className="flex items-center gap-3">
@@ -261,6 +265,7 @@ export default function ProfilePage() {
                                   size="icon" 
                                   className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                                   onClick={() => toggleShift(s.id)}
+                                  disabled={saving}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
