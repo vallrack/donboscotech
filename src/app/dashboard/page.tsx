@@ -50,7 +50,7 @@ export default function DashboardPage() {
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: rawAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
 
-  // Filtrado en el cliente para asegurar visibilidad inmediata sin errores de cuota
+  // Filtrado en el cliente para asegurar visibilidad inmediata sin errores de cuota o índices
   const activeAnnouncements = useMemo(() => {
     return (rawAnnouncements || [])
       .filter(a => a.status === 'active')

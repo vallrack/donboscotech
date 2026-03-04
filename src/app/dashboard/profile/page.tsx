@@ -50,7 +50,10 @@ export default function ProfilePage() {
   const updateField = useCallback((field: keyof typeof formData, value: any) => {
     setFormData(prev => {
       // Si el valor es idéntico, retornamos el mismo objeto para evitar re-renderizado
-      if (JSON.stringify(prev[field]) === JSON.stringify(value)) return prev;
+      const isArrayChange = Array.isArray(value) && JSON.stringify(prev[field]) === JSON.stringify(value);
+      const isSimpleChange = !Array.isArray(value) && prev[field] === value;
+      
+      if (isArrayChange || isSimpleChange) return prev;
       return { ...prev, [field]: value };
     });
   }, []);
