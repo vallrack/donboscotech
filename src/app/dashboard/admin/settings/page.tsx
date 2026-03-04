@@ -3,15 +3,14 @@
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Building2, BookOpen, Clock, Plus, Trash2, ShieldAlert, Loader2, CalendarCheck } from 'lucide-react';
+import { Building2, BookOpen, Clock, Trash2, ShieldAlert, Loader2, CalendarCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Campus, Program, Shift } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -25,13 +24,13 @@ export default function SettingsPage() {
   const [selectedDays, setSelectedDays] = useState<string[]>(['Lun', 'Mar', 'Mie', 'Jue', 'Vie']);
   const daysOfWeek = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
 
-  const campusesQuery = useMemo(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
-  const programsQuery = useMemo(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
-  const shiftsQuery = useMemo(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
+  const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
+  const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
+  const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
 
-  const { data: campuses } = useCollection<Campus>(campusesQuery as any);
-  const { data: programs } = useCollection<Program>(programsQuery as any);
-  const { data: shifts } = useCollection<Shift>(shiftsQuery as any);
+  const { data: campuses } = useCollection<Campus>(campusesQuery);
+  const { data: programs } = useCollection<Program>(programsQuery);
+  const { data: shifts } = useCollection<Shift>(shiftsQuery);
 
   const handleAddItem = async (col: string, data: any) => {
     if (!db) return;
@@ -92,11 +91,11 @@ export default function SettingsPage() {
         <TabsContent value="sedes" className="mt-6">
           <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
             <CardHeader className="p-8 border-b bg-gray-50/50">
-              <CardTitle className="text-xl font-black">Gestión de Sedes</CardTitle>
+              <CardTitle className="text-xl font-black">Sedes Ciudad Don Bosco</CardTitle>
             </CardHeader>
             <CardContent className="p-8">
               <div className="flex gap-4 mb-8">
-                <Input id="new-campus" placeholder="Nombre de la Sede (Ej: Prado)" className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold" />
+                <Input id="new-campus" placeholder="Nombre de la Sede" className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold" />
                 <Button onClick={() => { 
                   const el = document.getElementById('new-campus') as HTMLInputElement; 
                   if (el.value) handleAddItem('campuses', { name: el.value }); 
@@ -122,7 +121,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="p-8">
               <div className="flex gap-4 mb-8">
-                <Input id="new-program" placeholder="Nombre del Programa (Ej: Mecánica)" className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold" />
+                <Input id="new-program" placeholder="Nombre del Programa" className="h-12 rounded-xl border-gray-100 bg-gray-50/50 font-bold" />
                 <Button onClick={() => { 
                   const el = document.getElementById('new-program') as HTMLInputElement; 
                   if (el.value) handleAddItem('programs', { name: el.value, type: 'Technical' }); 
@@ -145,6 +144,7 @@ export default function SettingsPage() {
           <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
             <CardHeader className="p-8 border-b bg-gray-50/50">
               <CardTitle className="text-xl font-black">Configuración de Jornadas Laborales</CardTitle>
+              <CardDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">Define los horarios oficiales de la institución</CardDescription>
             </CardHeader>
             <CardContent className="p-8 space-y-8">
               <div className="p-8 bg-primary/5 rounded-[2rem] border-2 border-primary/10 space-y-6">
@@ -164,7 +164,7 @@ export default function SettingsPage() {
                 </div>
                 
                 <div className="space-y-3">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Días de la Semana</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Días de Aplicación</Label>
                   <div className="flex flex-wrap gap-3">
                     {daysOfWeek.map(day => (
                       <div 
@@ -191,7 +191,7 @@ export default function SettingsPage() {
                     handleAddItem('shifts', { name, startTime: start, endTime: end, days: selectedDays });
                     (document.getElementById('shift-name') as HTMLInputElement).value = '';
                   } else {
-                    toast({ variant: "destructive", title: "Datos incompletos", description: "Completa todos los campos y selecciona al menos un día." });
+                    toast({ variant: "destructive", title: "Datos incompletos", description: "Completa todos los campos y días." });
                   }
                 }} disabled={loading}>
                   <CalendarCheck className="w-5 h-5 mr-2" /> Crear Jornada Oficial
@@ -218,12 +218,6 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-              {!loading && shifts?.length === 0 && (
-                <div className="py-20 text-center opacity-20">
-                  <Clock className="w-16 h-16 mx-auto mb-4" />
-                  <p className="font-black uppercase tracking-widest">No hay jornadas configuradas</p>
-                </div>
-              )}
             </CardContent>
           </Card>
         </TabsContent>

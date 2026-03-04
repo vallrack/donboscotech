@@ -5,9 +5,9 @@ import { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit, where, getCountFromServer } from 'firebase/firestore';
-import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Clock, CheckCircle2, AlertTriangle, Users, CalendarDays, ArrowRight, BarChart3, Loader2, MapPin, Megaphone } from 'lucide-react';
+import { Clock, CheckCircle2, Users, CalendarDays, Loader2, MapPin, Megaphone } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
+  // Consultas memoizadas con useMemoFirebase para evitar Quota Exceeded
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     if (user.role === 'docent') {
@@ -36,23 +37,18 @@ export default function DashboardPage() {
     }
   }, [db, user?.id, user?.role]);
 
-  // Consulta simplificada para evitar errores de índice compuesto
   const announcementsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db) return null;
     return query(
       collection(db, 'announcements'),
+      where('status', '==', 'active'),
       orderBy('createdAt', 'desc'),
-      limit(20)
+      limit(10)
     );
-  }, [db, user]);
+  }, [db]);
 
   const { data: records, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
-  const { data: allAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
-
-  // Filtrado de anuncios activos en el cliente para mayor robustez
-  const activeAnnouncements = useMemo(() => {
-    return (allAnnouncements || []).filter(ann => ann.status === 'active').slice(0, 10);
-  }, [allAnnouncements]);
+  const { data: activeAnnouncements, loading: annLoading } = useCollection<Announcement>(announcementsQuery as any);
 
   useEffect(() => {
     if (!db || user?.role === 'docent') return;
@@ -62,7 +58,6 @@ export default function DashboardPage() {
         const snapshot = await getCountFromServer(q);
         setTodayCount(snapshot.data().count);
       } catch (e) {
-        console.error("Error fetching stats:", e);
         setTodayCount(0);
       }
     };
@@ -127,10 +122,10 @@ export default function DashboardPage() {
                         <p className="text-[10px] text-muted-foreground uppercase font-black">{record.date} • {record.time}</p>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-[9px] font-black">{record.method}</Badge>
+                    <Badge variant="outline" className="text-[9px] font-black uppercase">{record.method} • {record.shiftName || 'S/J'}</Badge>
                   </div>
                 ))}
-                {records.length === 0 && <p className="text-center py-10 text-muted-foreground text-xs font-black uppercase tracking-widest">Sin registros</p>}
+                {records.length === 0 && <p className="text-center py-10 text-muted-foreground text-xs font-black uppercase tracking-widest">Sin registros recientes</p>}
               </div>
             )}
           </CardContent>
