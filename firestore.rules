@@ -10,12 +10,11 @@ service cloud.firestore {
     function isPrivileged() { return isAdmin() || isCoordinator() || isSecretary(); }
 
     // ACCESO SIN RESTRICCIONES PARA ADMIN Y COORDINADOR
-    // Permite lectura y escritura total si el usuario tiene privilegios administrativos
     match /{document=**} {
       allow read, write: if isAdmin() || isCoordinator();
     }
 
-    // Perfiles de usuario y asistencia para otros roles
+    // Perfiles de usuario y asistencia
     match /userProfiles/{userId} {
       // Visibilidad pública para que los escáneres puedan validar perfiles
       allow read: if true; 
@@ -25,35 +24,24 @@ service cloud.firestore {
       allow delete: if isAdmin() || isCoordinator();
 
       match /attendanceRecords/{recordId} {
-        // Permite a cualquier terminal institucional registrar asistencia
-        allow create: if true; 
-        allow read, update: if isSignedIn() && (request.auth.uid == userId || isPrivileged());
+        // Permite a cualquier terminal leer y crear (para smart scanning)
+        allow create, read: if true; 
+        allow update: if isSignedIn() && (request.auth.uid == userId || isPrivileged());
         allow delete: if isAdmin() || isCoordinator();
       }
     }
 
     // Historial global de asistencia
     match /globalAttendanceRecords/{recordId} {
-      allow create: if true; // Para registros desde terminales anónimas
+      allow create: if true; 
       allow read: if isSignedIn() && isPrivileged();
       allow update, delete: if isAdmin() || isCoordinator();
     }
     
     // Colecciones de roles
-    match /roles_admins/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isCoordinator();
-    }
-
-    match /roles_coordinators/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isCoordinator();
-    }
-
-    match /roles_secretaries/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isCoordinator();
-    }
+    match /roles_admins/{userId} { allow read: if isSignedIn(); allow write: if isAdmin() || isCoordinator(); }
+    match /roles_coordinators/{userId} { allow read: if isSignedIn(); allow write: if isAdmin() || isCoordinator(); }
+    match /roles_secretaries/{userId} { allow read: if isSignedIn(); allow write: if isAdmin() || isCoordinator(); }
     
     // Configuración institucional
     match /campuses/{id} { allow read: if true; allow write: if isAdmin() || isCoordinator(); }

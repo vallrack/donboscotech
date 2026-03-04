@@ -33,7 +33,6 @@ export default function PublicAttendanceScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const isProcessing = useRef(false);
 
-  // 1. GPS Validation
   useEffect(() => {
     if ("geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
@@ -53,7 +52,6 @@ export default function PublicAttendanceScanner() {
     }
   }, [toast]);
 
-  // 2. Camera Setup
   useEffect(() => {
     const getCameraPermission = async () => {
       try {
@@ -72,11 +70,9 @@ export default function PublicAttendanceScanner() {
     }
   }, [mode]);
 
-  // 3. Scanner Initialization
   useEffect(() => {
     if (mode === 'camera' && hasCameraPermission) {
       html5QrCode.current = new Html5Qrcode(qrRegionId);
-      
       const config = { fps: 15, qrbox: { width: 250, height: 250 } };
       
       html5QrCode.current.start(
@@ -130,14 +126,14 @@ export default function PublicAttendanceScanner() {
       const now = new Date();
       const dateStr = now.toISOString().split('T')[0];
       
-      // LOGIC TO DETERMINE ENTRY OR EXIT
+      // LOGIC TO DETERMINE ENTRY OR EXIT - Querying the private subcollection instead of global
       const q = query(
-        collection(db, 'globalAttendanceRecords'),
-        where('userId', '==', userId),
+        collection(db, 'userProfiles', userId, 'attendanceRecords'),
         where('date', '==', dateStr),
         orderBy('createdAt', 'desc'),
         limit(1)
       );
+      
       const querySnap = await getDocs(q);
       let recordType: 'entry' | 'exit' = 'entry';
       if (!querySnap.empty) {
@@ -188,11 +184,19 @@ export default function PublicAttendanceScanner() {
     } catch (err: any) {
       setScanning(false);
       isProcessing.current = false;
-      toast({
-        variant: "destructive",
-        title: "Error de sincronización",
-        description: "No se pudo conectar con el servidor central."
-      });
+      
+      if (err.code === 'permission-denied') {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `userProfiles/${userId}/attendanceRecords`,
+          operation: 'list'
+        }));
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error de sincronización",
+          description: "No se pudo conectar con el servidor central."
+        });
+      }
     }
   };
 
