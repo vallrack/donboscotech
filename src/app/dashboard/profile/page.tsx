@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useRef } from 'react';
@@ -38,7 +39,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Efecto de inicialización robusto
+  // Sincronizar el formulario cuando el usuario del AuthProvider cambie (en tiempo real)
   useEffect(() => {
     if (user) {
       setFormData({
@@ -50,7 +51,7 @@ export default function ProfilePage() {
         avatarUrl: user.avatarUrl || ''
       });
     }
-  }, [user?.id]); // Solo re-inicializar si cambia el usuario, no con cada pequeño cambio de perfil
+  }, [user]);
 
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {

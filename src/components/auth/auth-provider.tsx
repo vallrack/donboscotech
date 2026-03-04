@@ -1,11 +1,11 @@
 
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -24,10 +24,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user: authUser, loading: authLoading } = useUser();
   const [resolvedUser, setResolvedUser] = useState<User | null>(null);
   const [resolving, setResolving] = useState(false);
-  const syncAttempted = useRef(false);
 
   useEffect(() => {
-    async function resolveInstitutionalData() {
+    let unsubscribeProfile: (() => void) | undefined;
+
+    async function setupAuth() {
       if (!authUser || !db) {
         setResolvedUser(null);
         setResolving(false);
@@ -35,60 +36,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setResolving(true);
-      try {
-        const uid = authUser.uid;
-        const profileRef = doc(db, 'userProfiles', uid);
-        const profileSnap = await getDoc(profileRef);
-        
-        let profileData = profileSnap.exists() ? profileSnap.data() : null;
+      const uid = authUser.uid;
+      const profileRef = doc(db, 'userProfiles', uid);
 
-        // Si el perfil no existe, lo creamos inmediatamente para que aparezca en las listas
-        if (!profileSnap.exists()) {
-          const initialData = {
-            name: authUser.displayName || authUser.email?.split('@')[0] || 'Nuevo Miembro',
-            email: authUser.email || '',
-            role: 'docent',
-            createdAt: serverTimestamp(),
-            documentId: '',
-            campus: '',
-            program: '',
-            shiftIds: []
-          };
-          await setDoc(profileRef, initialData);
-          profileData = initialData;
-        }
-
-        // Verificamos roles elevados
-        const [adminSnap, coordSnap, sectSnap] = await Promise.all([
-          getDoc(doc(db, 'roles_admins', uid)),
-          getDoc(doc(db, 'roles_coordinators', uid)),
-          getDoc(doc(db, 'roles_secretaries', uid))
-        ]);
-
-        let finalRole: UserRole = (profileData?.role as UserRole) || 'docent';
-        if (adminSnap.exists()) finalRole = 'admin';
-        else if (coordSnap.exists()) finalRole = 'coordinator';
-        else if (sectSnap.exists()) finalRole = 'secretary';
-
-        setResolvedUser({
-          id: uid,
-          name: profileData?.name || authUser.displayName || 'Nuevo Miembro',
+      // Verificación inicial y creación si no existe
+      const profileSnap = await getDoc(profileRef);
+      if (!profileSnap.exists()) {
+        const initialData = {
+          name: authUser.displayName || authUser.email?.split('@')[0] || 'Nuevo Miembro',
           email: authUser.email || '',
-          role: finalRole,
-          avatarUrl: profileData?.avatarUrl || authUser.photoURL || undefined,
-          documentId: profileData?.documentId,
-          campus: profileData?.campus,
-          program: profileData?.program,
-          shiftIds: profileData?.shiftIds || []
-        } as User);
-      } catch (error) {
-        console.error("Error resolving user profile:", error);
-      } finally {
-        setResolving(false);
+          role: 'docent',
+          createdAt: serverTimestamp(),
+          documentId: '',
+          campus: '',
+          program: '',
+          shiftIds: []
+        };
+        await setDoc(profileRef, initialData);
       }
+
+      // Escucha en tiempo real para el perfil y roles
+      unsubscribeProfile = onSnapshot(profileRef, async (docSnap) => {
+        if (docSnap.exists()) {
+          const profileData = docSnap.data();
+          
+          // Verificación rápida de roles elevados
+          const [adminSnap, coordSnap, sectSnap] = await Promise.all([
+            getDoc(doc(db, 'roles_admins', uid)),
+            getDoc(doc(db, 'roles_coordinators', uid)),
+            getDoc(doc(db, 'roles_secretaries', uid))
+          ]);
+
+          let finalRole: UserRole = (profileData.role as UserRole) || 'docent';
+          if (adminSnap.exists()) finalRole = 'admin';
+          else if (coordSnap.exists()) finalRole = 'coordinator';
+          else if (sectSnap.exists()) finalRole = 'secretary';
+
+          setResolvedUser({
+            id: uid,
+            name: profileData.name || authUser.displayName || 'Miembro',
+            email: authUser.email || '',
+            role: finalRole,
+            avatarUrl: profileData.avatarUrl || authUser.photoURL || undefined,
+            documentId: profileData.documentId || '',
+            campus: profileData.campus || '',
+            program: profileData.program || '',
+            shiftIds: profileData.shiftIds || []
+          } as User);
+          setResolving(false);
+        }
+      });
     }
 
-    resolveInstitutionalData();
+    setupAuth();
+
+    return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, [authUser, db]);
 
   const login = async () => {
@@ -155,4 +159,4 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
+}
