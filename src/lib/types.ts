@@ -30,10 +30,10 @@ export interface Shift {
   name: string;
   startTime: string; // HH:mm
   endTime: string; // HH:mm
-  days: string[]; // ["Mon", "Tue"...]
+  days: string[]; // ["Lun", "Mar"...]
 }
 
-export type AttendanceMethod = 'QR' | 'Manual';
+export type AttendanceMethod = 'QR' | 'Manual' | 'QR Terminal';
 export type AttendanceType = 'entry' | 'exit';
 
 export interface AttendanceRecord {
@@ -44,6 +44,8 @@ export interface AttendanceRecord {
   time: string;
   type: AttendanceType;
   method: AttendanceMethod;
+  shiftId?: string;
+  shiftName?: string;
   location: {
     lat: number;
     lng: number;
