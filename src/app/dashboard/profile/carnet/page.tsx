@@ -2,7 +2,7 @@
 "use client"
 
 import { useAuth } from '@/components/auth/auth-provider';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,13 @@ export default function CarnetPage() {
   const { user } = useAuth();
   const db = useFirestore();
 
-  // Obtenemos las jornadas para mostrar los nombres reales en lugar de IDs
-  const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
+  // Consulta memoizada para evitar Quota Exceeded
+  const shiftsQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return query(collection(db, 'shifts'), orderBy('name'));
+  }, [db]);
+
+  const { data: shifts } = useCollection<Shift>(shiftsQuery as any);
 
   const userShiftNames = useMemo(() => {
     if (!user?.shiftIds || !shifts) return 'No asignada';
@@ -32,7 +37,6 @@ export default function CarnetPage() {
 
   if (!user) return null;
 
-  // URL del QR optimizada para contraste y tamaño
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${user.id}&margin=10`;
 
   return (
@@ -52,7 +56,7 @@ export default function CarnetPage() {
       <div className="flex justify-center items-center py-10 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-200">
         <Card className="w-[360px] h-[680px] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card flex flex-col">
           {/* Header Superior Institucional */}
-          <div className="bg-primary pt-10 pb-14 px-8 text-white text-center relative">
+          <div className="bg-primary pt-10 pb-14 px-8 text-white text-center relative header-red">
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
             <div className="relative z-10">
               <p className="font-black text-2xl tracking-tighter uppercase leading-tight">Ciudad Don Bosco</p>
@@ -60,7 +64,6 @@ export default function CarnetPage() {
             </div>
           </div>
 
-          {/* Cuerpo Central: Foto, Nombre y QR */}
           <div className="flex-1 flex flex-col items-center -mt-10 relative z-10 px-6">
             <div className="w-32 h-32 rounded-3xl bg-white p-1 shadow-2xl border border-gray-100 mb-4">
                <div className="w-full h-full rounded-2xl bg-gray-50 flex items-center justify-center overflow-hidden">
@@ -74,7 +77,7 @@ export default function CarnetPage() {
 
             <div className="text-center mb-6">
               <h2 className="text-xl font-black text-gray-800 leading-tight uppercase tracking-tight px-4">{user.name}</h2>
-              <div className="mt-2 inline-flex items-center gap-1.5 bg-primary/10 text-primary px-4 py-1.5 rounded-full">
+              <div className="mt-2 inline-flex items-center gap-1.5 bg-primary/10 text-primary px-4 py-1.5 rounded-full role-badge">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span className="text-[10px] font-black uppercase tracking-widest">
                   {user.role === 'docent' ? 'Docente' : 
@@ -84,7 +87,6 @@ export default function CarnetPage() {
               </div>
             </div>
 
-            {/* QR Code Gigante para Escaneo Rápido */}
             <div className="w-full flex flex-col items-center mb-4">
               <div className="w-44 h-44 bg-white p-3 rounded-[2rem] shadow-xl border-2 border-gray-50 flex items-center justify-center overflow-hidden transition-all hover:scale-105">
                  <img 
@@ -97,8 +99,7 @@ export default function CarnetPage() {
             </div>
           </div>
 
-          {/* Bloque de Información Detallada */}
-          <div className="p-8 pb-10 bg-gray-50/80 border-t border-gray-100 space-y-5">
+          <div className="p-8 pb-10 bg-gray-50/80 border-t border-gray-100 space-y-5 info-section">
             <div className="grid grid-cols-2 gap-y-4 gap-x-6">
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground uppercase tracking-widest">
@@ -137,24 +138,14 @@ export default function CarnetPage() {
         </Card>
       </div>
 
-      <div className="max-w-md mx-auto no-print space-y-4">
-        <div className="p-6 bg-yellow-50 rounded-[2rem] border border-yellow-100 flex items-start gap-4 shadow-sm">
-           <div className="p-2.5 bg-yellow-100 rounded-xl text-yellow-600">
-             <QrCode className="w-5 h-5" />
-           </div>
-           <div className="space-y-1">
-             <p className="text-sm font-black text-yellow-800">Uso de Terminal</p>
-             <p className="text-[11px] text-yellow-700 leading-relaxed font-bold">
-               Presente este código a la terminal institucional. El sistema validará su ingreso automáticamente según su sede y jornada asignada.
-             </p>
-           </div>
-        </div>
-      </div>
-
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }
-          .print-card, .print-card * { visibility: visible; }
+          .print-card, .print-card * { 
+            visibility: visible; 
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           .print-card { 
             position: fixed; 
             left: 50%; 
@@ -163,6 +154,18 @@ export default function CarnetPage() {
             box-shadow: none !important;
             border: 1px solid #e5e7eb !important;
             border-radius: 2.5rem !important;
+            background-color: white !important;
+          }
+          .header-red {
+            background-color: #a01c2c !important; /* Color primario forzado */
+            color: white !important;
+          }
+          .role-badge {
+            background-color: rgba(160, 28, 44, 0.1) !important;
+            color: #a01c2c !important;
+          }
+          .info-section {
+            background-color: #f9fafb !important;
           }
           .no-print { display: none !important; }
         }
