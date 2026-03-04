@@ -10,31 +10,36 @@ service cloud.firestore {
     function isPrivileged() { return isAdmin() || isCoordinator() || isSecretary(); }
 
     // ACCESO SIN RESTRICCIONES PARA ADMIN Y COORDINADOR
+    // Permite lectura y escritura total si el usuario tiene privilegios administrativos
     match /{document=**} {
       allow read, write: if isAdmin() || isCoordinator();
     }
 
     // Perfiles de usuario y asistencia para otros roles
     match /userProfiles/{userId} {
+      // Visibilidad pública para que los escáneres puedan validar perfiles
       allow read: if true; 
-      allow create, update: if request.auth.uid == userId || isPrivileged();
+      
+      // El propio usuario o personal administrativo pueden gestionar perfiles
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isPrivileged());
       allow delete: if isAdmin() || isCoordinator();
 
       match /attendanceRecords/{recordId} {
+        // Permite a cualquier terminal institucional registrar asistencia
         allow create: if true; 
-        allow read, update: if request.auth.uid == userId || isPrivileged();
+        allow read, update: if isSignedIn() && (request.auth.uid == userId || isPrivileged());
         allow delete: if isAdmin() || isCoordinator();
       }
     }
 
     // Historial global de asistencia
     match /globalAttendanceRecords/{recordId} {
-      allow create: if true;
-      allow read: if isPrivileged();
+      allow create: if true; // Para registros desde terminales anónimas
+      allow read: if isSignedIn() && isPrivileged();
       allow update, delete: if isAdmin() || isCoordinator();
     }
     
-    // Colecciones de roles (permite a admins y coordinadores gestionar otros roles)
+    // Colecciones de roles
     match /roles_admins/{userId} {
       allow read: if isSignedIn();
       allow write: if isAdmin() || isCoordinator();
