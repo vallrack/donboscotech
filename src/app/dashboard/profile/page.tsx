@@ -18,17 +18,15 @@ import { Campus, Program, Shift } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const db = useFirestore();
-  const router = useRouter();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [initialized, setInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Selector data
   const { data: campuses } = useCollection<Campus>(db ? query(collection(db, 'campuses'), orderBy('name')) : null as any);
   const { data: programs } = useCollection<Program>(db ? query(collection(db, 'programs'), orderBy('name')) : null as any);
   const { data: shifts } = useCollection<Shift>(db ? query(collection(db, 'shifts'), orderBy('name')) : null as any);
@@ -43,7 +41,7 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && !initialized) {
       setFormData({
         name: user.name || '',
         documentId: user.documentId || '',
@@ -52,8 +50,9 @@ export default function ProfilePage() {
         shiftIds: user.shiftIds || [],
         avatarUrl: user.avatarUrl || ''
       });
+      setInitialized(true);
     }
-  }, [user]);
+  }, [user, initialized]);
 
   const toggleShift = (shiftId: string) => {
     setFormData(prev => {
@@ -74,8 +73,8 @@ export default function ProfilePage() {
       return;
     }
 
-    if (file.size > 1024 * 1024) {
-      toast({ variant: "destructive", title: "Imagen muy grande", description: "El límite es 1MB para el carnet." });
+    if (file.size > 800 * 1024) {
+      toast({ variant: "destructive", title: "Imagen muy grande", description: "El límite es 800KB para el carnet." });
       return;
     }
 
@@ -95,8 +94,7 @@ export default function ProfilePage() {
     try {
       const userRef = doc(db, 'userProfiles', user.id);
       
-      // Update firestore document
-      await updateDoc(userRef, {
+      const payload = {
         name: formData.name,
         documentId: formData.documentId,
         campus: formData.campus,
@@ -104,14 +102,15 @@ export default function ProfilePage() {
         shiftIds: formData.shiftIds,
         avatarUrl: formData.avatarUrl,
         updatedAt: new Date().toISOString()
-      });
+      };
+
+      await updateDoc(userRef, payload);
       
-      toast({ title: "Perfil Actualizado", description: "La información y la foto se guardaron correctamente." });
-    } catch (error) {
+      toast({ title: "Perfil Actualizado", description: "La información se guardó correctamente." });
+    } catch (error: any) {
       console.error("Error saving profile:", error);
-      toast({ variant: "destructive", title: "Error al guardar", description: "No se pudieron persistir los cambios." });
+      toast({ variant: "destructive", title: "Error al guardar", description: error.message || "No se pudieron persistir los cambios." });
     } finally {
-      // Ensure the saving state is cleared so buttons become responsive again
       setSaving(false);
     }
   };
@@ -125,7 +124,7 @@ export default function ProfilePage() {
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
           <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales.</p>
         </div>
-        <Link href="/dashboard/profile/carnet" className="no-underline">
+        <Link href="/dashboard/profile/carnet">
           <Button size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl bg-primary hover:bg-primary/90">
             <CreditCard className="w-5 h-5" /> Ver Mi Carnet <ArrowRight className="w-4 h-4 ml-2" />
           </Button>

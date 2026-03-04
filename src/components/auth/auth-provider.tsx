@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useRef 
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useDoc, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -22,20 +22,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useFirebaseAuth();
   const db = useFirestore();
   const { user: authUser, loading: authLoading } = useUser();
-  const syncRef = useRef(false);
+  const syncAttempted = useRef(false);
 
-  // Refs for consistent queries
+  const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser?.uid, db]);
   const adminRef = useMemo(() => authUser && db ? doc(db, 'roles_admins', authUser.uid) : null, [authUser?.uid, db]);
   const coordRef = useMemo(() => authUser && db ? doc(db, 'roles_coordinators', authUser.uid) : null, [authUser?.uid, db]);
   const sectRef = useMemo(() => authUser && db ? doc(db, 'roles_secretaries', authUser.uid) : null, [authUser?.uid, db]);
-  const profileRef = useMemo(() => authUser && db ? doc(db, 'userProfiles', authUser.uid) : null, [authUser?.uid, db]);
 
-  const { data: adminRole, loading: adminLoading } = useDoc(adminRef);
-  const { data: coordRole, loading: coordLoading } = useDoc(coordRef);
-  const { data: sectRole, loading: sectLoading } = useDoc(sectRef);
   const { data: userProfile, loading: profileLoading } = useDoc(profileRef);
+  const { data: adminRole } = useDoc(adminRef);
+  const { data: coordRole } = useDoc(coordRef);
+  const { data: sectRole } = useDoc(sectRef);
 
-  // Only consider auth and main profile loading for "system load"
   const isLoading = authLoading || profileLoading;
 
   const resolvedUser = useMemo(() => {
@@ -43,7 +41,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let role: UserRole = (userProfile?.role as UserRole) || 'docent';
     
-    // Privilege escalation from security collections
     if (adminRole) role = 'admin';
     else if (coordRole) role = 'coordinator';
     else if (sectRole) role = 'secretary';
@@ -61,19 +58,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [authUser, adminRole, coordRole, sectRole, userProfile]);
 
-  // Sync profile logic (once)
   useEffect(() => {
-    if (authUser && db && !profileLoading && !userProfile && !syncRef.current) {
-      syncRef.current = true;
-      const pRef = doc(db, 'userProfiles', authUser.uid);
-      setDoc(pRef, {
-        name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
-        email: authUser.email || '',
-        role: 'docent',
-        avatarUrl: authUser.photoURL || '',
-        createdAt: serverTimestamp()
-      }, { merge: true }).finally(() => { syncRef.current = false; });
+    async function syncProfile() {
+      if (authUser && db && !profileLoading && !userProfile && !syncAttempted.current) {
+        syncAttempted.current = true;
+        const pRef = doc(db, 'userProfiles', authUser.uid);
+        
+        const existingSnap = await getDoc(pRef);
+        if (!existingSnap.exists()) {
+          await setDoc(pRef, {
+            name: authUser.displayName || authUser.email?.split('@')[0] || 'Usuario',
+            email: authUser.email || '',
+            role: 'docent',
+            avatarUrl: authUser.photoURL || '',
+            createdAt: serverTimestamp()
+          });
+        }
+      }
     }
+    syncProfile();
   }, [authUser, userProfile, profileLoading, db]);
 
   const login = async () => {
@@ -98,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       createdAt: serverTimestamp()
     });
 
-    if (role === 'secretary' || role === 'coordinator' || role === 'admin') {
+    if (role !== 'docent') {
       const col = role === 'admin' ? 'roles_admins' : role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
       await setDoc(doc(db, col, userCredential.user.uid), {
         email,
