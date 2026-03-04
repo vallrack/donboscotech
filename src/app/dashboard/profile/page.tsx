@@ -123,8 +123,7 @@ export default function ProfilePage() {
         description: "Hubo un problema al conectar con el servidor." 
       });
     } finally {
-      // Liberar el estado de carga después de un breve delay
-      setTimeout(() => setSaving(false), 800);
+      setSaving(false);
     }
   };
 
@@ -143,11 +142,11 @@ export default function ProfilePage() {
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
           <p className="text-muted-foreground font-medium">Gestiona tu identidad y datos laborales.</p>
         </div>
-        <Link href="/dashboard/profile/carnet">
-          <Button size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl bg-primary hover:bg-primary/90">
+        <Button asChild size="lg" className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl bg-primary hover:bg-primary/90">
+          <Link href="/dashboard/profile/carnet">
             <CreditCard className="w-5 h-5" /> Ver Mi Carnet <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
