@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const uid = authUser.uid;
       const profileRef = doc(db, 'userProfiles', uid);
 
-      // Verificación inicial y creación si no existe
+      // Verificación inicial de perfil
       const profileSnap = await getDoc(profileRef);
       if (!profileSnap.exists()) {
         const initialData = {
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (docSnap.exists()) {
           const profileData = docSnap.data();
           
-          // Verificación de roles de seguridad concurrentemente
+          // Verificación de roles de seguridad concurrentemente para evitar latencia
           const [adminSnap, coordSnap, sectSnap] = await Promise.all([
             getDoc(doc(db, 'roles_admins', uid)),
             getDoc(doc(db, 'roles_coordinators', uid)),
@@ -87,7 +87,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setResolving(false);
         }
       }, (error) => {
-        console.error("Auth Profile Sync Error:", error);
         setResolving(false);
       });
     }

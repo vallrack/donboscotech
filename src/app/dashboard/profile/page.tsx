@@ -40,7 +40,7 @@ export default function ProfilePage() {
     avatarUrl: ''
   });
 
-  // Sincronizar formData con los datos del usuario logueado en tiempo real
+  // Sincronización robusta con el usuario logueado
   useEffect(() => {
     if (user) {
       setFormData({
@@ -70,15 +70,6 @@ export default function ProfilePage() {
 
     if (!file.type.startsWith('image/')) {
       toast({ variant: "destructive", title: "Archivo no válido" });
-      return;
-    }
-
-    if (file.size > 1024 * 1024) {
-      toast({ 
-        variant: "destructive", 
-        title: "Imagen muy grande", 
-        description: "Intente con una imagen menor a 1MB." 
-      });
       return;
     }
 
@@ -168,7 +159,7 @@ export default function ProfilePage() {
                <div className="flex flex-col items-center gap-2">
                  <Badge variant={user?.role === 'admin' ? 'default' : 'secondary'} className="uppercase font-black text-[10px] tracking-[0.2em] px-5 py-2 rounded-xl border-none shadow-sm">
                    {user?.role === 'admin' && <ShieldCheck className="w-3.5 h-3.5 mr-2" />}
-                   {user?.role || 'Docente'}
+                   {user?.role === 'admin' ? 'Administrador' : user?.role === 'coordinator' ? 'Coordinador' : user?.role === 'secretary' ? 'Secretaría' : 'Docente'}
                  </Badge>
                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">Rol de Sistema</span>
                </div>
