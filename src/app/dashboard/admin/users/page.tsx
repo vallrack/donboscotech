@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth as getFirebaseAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -14,11 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   Search, Mail, Loader2, ShieldCheck, 
   UserPlus, BookOpen, MapPin, Trash2, Users,
-  PlusCircle, AlertCircle
+  PlusCircle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { UserRole, Campus, Program, Shift } from '@/lib/types';
+import { UserRole, Campus, Program } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -189,12 +189,12 @@ export default function UserManagementPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Gestión de Personal</h1>
-          <p className="text-muted-foreground font-medium flex items-center gap-2 mt-2">
+          <div className="text-muted-foreground font-medium flex items-center gap-2 mt-2">
              <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
                <ShieldCheck className="w-3.5 h-3.5 text-primary" />
              </div>
              <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Control Centralizado de Roles y Permisos</span>
-          </p>
+          </div>
         </div>
         
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
