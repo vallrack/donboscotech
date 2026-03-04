@@ -8,28 +8,36 @@ service cloud.firestore {
     function isCoordinator() { return isSignedIn() && exists(/databases/$(database)/documents/roles_coordinators/$(request.auth.uid)); }
     function isSecretary() { return isSignedIn() && exists(/databases/$(database)/documents/roles_secretaries/$(request.auth.uid)); }
     function isPrivileged() { return isAdmin() || isCoordinator() || isSecretary(); }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
 
-    // Perfiles de usuario: Los administradores y el propio usuario pueden gestionar los datos
+    // ACCESO SIN RESTRICCIONES PARA ADMIN Y COORDINADOR
+    match /{document=**} {
+      allow read, write: if isAdmin() || isCoordinator();
+    }
+
+    // Perfiles de usuario y asistencia para otros roles
     match /userProfiles/{userId} {
-      allow read: if true; // Permite lectura pública para identificación de carnets en terminales
-      allow create: if isPrivileged() || isOwner(userId);
-      allow update: if isAdmin() || (isCoordinator() && request.resource.data.role != 'admin') || (isOwner(userId) && (request.resource.data.role == resource.data.role || !('role' in request.resource.data)));
-      allow delete: if isAdmin();
+      allow read: if true; 
+      allow create, update: if request.auth.uid == userId || isPrivileged();
+      allow delete: if isAdmin() || isCoordinator();
 
-      // Registros de asistencia individuales
       match /attendanceRecords/{recordId} {
-        // Permite creación desde terminal pública (sin sesión) validando el ID
         allow create: if true; 
-        allow read, update: if isPrivileged() || isOwner(userId);
-        allow delete: if isAdmin();
+        allow read, update: if request.auth.uid == userId || isPrivileged();
+        allow delete: if isAdmin() || isCoordinator();
       }
     }
 
-    // Colecciones de roles (utilizadas para las funciones de seguridad)
+    // Historial global de asistencia
+    match /globalAttendanceRecords/{recordId} {
+      allow create: if true;
+      allow read: if isPrivileged();
+      allow update, delete: if isAdmin() || isCoordinator();
+    }
+    
+    // Colecciones de roles (permite a admins y coordinadores gestionar otros roles)
     match /roles_admins/{userId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isCoordinator();
     }
 
     match /roles_coordinators/{userId} {
@@ -41,30 +49,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin() || isCoordinator();
     }
-
-    // Historial global de asistencia para reportes administrativos
-    match /globalAttendanceRecords/{recordId} {
-      // Permite creación pública para la terminal institucional (QR)
-      allow create: if true;
-      allow read: if isPrivileged();
-      allow update: if isSignedIn();
-      allow delete: if isAdmin();
-    }
     
-    // Configuración institucional: Sedes, Programas y Jornadas
-    match /campuses/{id} {
-      allow read: if true;
-      allow write: if isPrivileged();
-    }
-    
-    match /programs/{id} {
-      allow read: if true;
-      allow write: if isPrivileged();
-    }
-    
-    match /shifts/{id} {
-      allow read: if true;
-      allow write: if isPrivileged();
-    }
+    // Configuración institucional
+    match /campuses/{id} { allow read: if true; allow write: if isAdmin() || isCoordinator(); }
+    match /programs/{id} { allow read: if true; allow write: if isAdmin() || isCoordinator(); }
+    match /shifts/{id} { allow read: if true; allow write: if isAdmin() || isCoordinator(); }
   }
 }
