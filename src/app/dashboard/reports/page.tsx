@@ -29,9 +29,7 @@ function calculateHoursDecimal(start: string | null, end: string | null): number
     const [h2, m2] = end.split(':').map(Number);
     const totalMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
     return Math.max(0, totalMinutes / 60);
-  } catch (e) {
-    return 0;
-  }
+  } catch (e) { return 0; }
 }
 
 function formatDuration(decimalHours: number): string {
@@ -112,11 +110,7 @@ export default function ReportsPage() {
       const key = `${r.userId}_${r.date}_${r.shiftId || 'none'}`;
       if (!grouped.has(key)) {
         grouped.set(key, {
-          userId: r.userId,
-          userName: r.userName,
-          date: r.date,
-          entry: null,
-          exit: null,
+          userId: r.userId, userName: r.userName, date: r.date, entry: null, exit: null,
           shiftName: r.shiftName || 'N/A',
           program: uData?.program || user?.program || 'N/A',
         });
@@ -154,12 +148,8 @@ export default function ReportsPage() {
     try {
       const result = await summarizeAttendanceReport({
         reportData: dailyReports.map(r => ({ 
-          userId: r.userId, 
-          userName: r.userName, 
-          date: r.date, 
-          entryTime: r.entry || undefined, 
-          exitTime: r.exit || undefined, 
-          totalHours: r.hours 
+          userId: r.userId, userName: r.userName, date: r.date, entryTime: r.entry || undefined, 
+          exitTime: r.exit || undefined, totalHours: r.hours 
         })),
         reportingPeriod: period
       });
@@ -173,27 +163,17 @@ export default function ReportsPage() {
       <div className="hidden print:flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
         <div className="flex items-center gap-4">
            <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl text-white font-black text-2xl">DB</div>
-           <div>
-             <h1 className="text-2xl font-black text-primary uppercase">Ciudad Don Bosco</h1>
-             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Informe Oficial de Asistencia - {user?.role === 'docent' ? 'Historial Docente' : 'Auditoría Administrativa'}</p>
-           </div>
+           <div><h1 className="text-2xl font-black text-primary uppercase">Ciudad Don Bosco</h1><p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Informe Oficial - {user?.role === 'docent' ? 'Historial Docente' : 'Auditoría'}</p></div>
         </div>
-        <div className="text-right space-y-1">
-           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Fecha de Generación</p>
-           <p className="text-sm font-black">{new Date().toLocaleDateString()}</p>
-        </div>
+        <div className="text-right"><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Fecha de Generación</p><p className="text-sm font-black">{new Date().toLocaleDateString()}</p></div>
       </div>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
-        <div>
-          <h1 className="text-4xl font-black text-primary tracking-tighter">{isDocent ? 'Mi Historial' : 'Auditoría Institucional'}</h1>
-          <p className="text-muted-foreground font-medium italic">Análisis detallado de jornadas y presencia.</p>
-        </div>
+        <div><h1 className="text-4xl font-black text-primary tracking-tighter">{isDocent ? 'Mi Historial' : 'Auditoría Institucional'}</h1><p className="text-muted-foreground font-medium italic">Análisis detallado de jornadas y presencia.</p></div>
         <div className="flex gap-2">
           <Button variant="outline" className="rounded-xl font-black gap-2" onClick={() => {
-            const BOM = "\uFEFF";
             const headers = ["Personal", "Fecha", "Jornada", "Entrada", "Salida", "Horas", "Sello Digital"];
-            const csv = BOM + "sep=;\n" + headers.join(";") + "\n" + dailyReports.map(r => `"${r.userName}";"${r.date}";"${r.shiftName}";"${r.entry || "--"}";"${r.exit || "--"}";"${formatDuration(r.hours)}";"${user?.signatureUrl ? 'SINC' : 'PEND'}"`).join("\n");
+            const csv = "\uFEFF" + "sep=;\n" + headers.join(";") + "\n" + dailyReports.map(r => `"${r.userName}";"${r.date}";"${r.shiftName}";"${r.entry || "--"}";"${r.exit || "--"}";"${formatDuration(r.hours)}";"${user?.signatureUrl ? 'SINC' : 'PEND'}"`).join("\n");
             const link = document.createElement("a");
             link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
             link.download = `Reporte_${user?.name.replace(' ', '_')}.csv`;
@@ -204,46 +184,9 @@ export default function ReportsPage() {
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-[2rem] shadow-xl no-print">
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Semana Actual">Semana Actual</SelectItem>
-            <SelectItem value="Mes Actual">Mes Actual</SelectItem>
-            <SelectItem value="Todo el Historial">Todo</SelectItem>
-          </SelectContent>
-        </Select>
-        
+        <Select value={period} onValueChange={setPeriod}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Semana Actual">Semana Actual</SelectItem><SelectItem value="Mes Actual">Mes Actual</SelectItem><SelectItem value="Todo el Historial">Todo</SelectItem></SelectContent></Select>
         {!isDocent && (
-          <>
-            <Select value={selectedDocent} onValueChange={setSelectedDocent}>
-              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Docente" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={selectedCampus} onValueChange={setSelectedCampus}>
-              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Sede" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                {campuses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Programa" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {programs.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={selectedShift} onValueChange={setSelectedShift}>
-              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Jornada" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                {allShifts.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </>
+          <><Select value={selectedDocent} onValueChange={setSelectedDocent}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Docente" /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem>{profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select><Select value={selectedCampus} onValueChange={setSelectedCampus}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Sede" /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{campuses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><Select value={selectedProgram} onValueChange={setSelectedProgram}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Programa" /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem>{programs.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent></Select><Select value={selectedShift} onValueChange={setSelectedShift}><SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Jornada" /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{allShifts.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></>
         )}
       </div>
 
@@ -252,82 +195,36 @@ export default function ReportsPage() {
           <CardHeader className="p-8 border-b bg-gray-50/30"><CardTitle className="text-xl font-black">Visualización de Horas</CardTitle></CardHeader>
           <CardContent className="pt-10 h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900 }} unit="h" />
-                <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 900 }} />
-                <Bar dataKey="horas" fill="hsl(var(--primary))" radius={[10, 10, 0, 0]} barSize={40} />
-              </BarChart>
+              <BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900 }} /><YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900 }} unit="h" /><RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '20px', border: 'none', fontWeight: 900 }} /><Bar dataKey="horas" fill="hsl(var(--primary))" radius={[10, 10, 0, 0]} barSize={40} /></BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-
         <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden">
           <CardHeader className="p-8"><CardTitle className="text-2xl font-black flex items-center gap-3"><Sparkles className="w-6 h-6" /> Auditoría IA</CardTitle></CardHeader>
-          <CardContent className="p-8 pt-0 flex flex-col gap-6">
-            {aiSummary ? <div className="bg-white/10 p-6 rounded-[2rem] text-sm font-bold animate-in zoom-in overflow-y-auto max-h-[250px]">"{aiSummary.summary}"</div> : (
-              <div className="text-center py-10 space-y-6">
-                <Button onClick={handleGenerateAiSummary} disabled={generatingAi || dailyReports.length === 0} variant="secondary" className="w-full h-14 rounded-2xl font-black text-primary shadow-xl">
-                  {generatingAi ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />} Analizar Periodo
-                </Button>
-              </div>
-            )}
-          </CardContent>
+          <CardContent className="p-8 pt-0 flex flex-col gap-6">{aiSummary ? <div className="bg-white/10 p-6 rounded-[2rem] text-sm font-bold animate-in zoom-in overflow-y-auto max-h-[250px]">"{aiSummary.summary}"</div> : (<div className="text-center py-10 space-y-6"><Button onClick={handleGenerateAiSummary} disabled={generatingAi || dailyReports.length === 0} variant="secondary" className="w-full h-14 rounded-2xl font-black text-primary shadow-xl">{generatingAi ? <Loader2 className="animate-spin mr-2" /> : <Sparkles className="mr-2" />} Analizar Periodo</Button></div>)}</CardContent>
         </Card>
       </div>
 
       <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden print:shadow-none print:border print:rounded-none">
         <CardHeader className="border-b bg-gray-50/50 p-8 no-print"><CardTitle className="text-xl font-black">Desglose Institucional</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50/20 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-8 py-6">Personal</th><th className="px-8 py-6">Fecha</th><th className="px-8 py-6">Jornada</th><th className="px-8 py-6">Entrada/Salida</th><th className="px-8 py-6 text-center">Duración</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {dailyReports.map((r, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 transition-all">
-                    <td className="px-8 py-6 font-black text-sm">{r.userName}</td>
-                    <td className="px-8 py-6 font-bold text-xs">{r.date}</td>
-                    <td className="px-8 py-6"><Badge variant="outline" className="text-[9px] font-black uppercase">{r.shiftName}</Badge></td>
-                    <td className="px-8 py-6 text-xs font-bold text-gray-600">{r.entry || '--:--'} → {r.exit || '--:--'}</td>
-                    <td className="px-8 py-6 text-center"><Badge className="font-black bg-green-500">{formatDuration(r.hours)}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <table className="w-full text-left">
+            <thead><tr className="bg-gray-50/20 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground"><th className="px-8 py-6">Personal</th><th className="px-8 py-6">Fecha</th><th className="px-8 py-6">Jornada</th><th className="px-8 py-6">Entrada/Salida</th><th className="px-8 py-6 text-center">Duración</th></tr></thead>
+            <tbody className="divide-y divide-gray-100">{dailyReports.map((r, idx) => (<tr key={idx} className="hover:bg-gray-50 transition-all"><td className="px-8 py-6 font-black text-sm">{r.userName}</td><td className="px-8 py-6 font-bold text-xs">{r.date}</td><td className="px-8 py-6"><Badge variant="outline" className="text-[9px] font-black uppercase">{r.shiftName}</Badge></td><td className="px-8 py-6 text-xs font-bold text-gray-600">{r.entry || '--:--'} → {r.exit || '--:--'}</td><td className="px-8 py-6 text-center"><Badge className="font-black bg-green-500">{formatDuration(r.hours)}</Badge></td></tr>))}</tbody>
+          </table>
         </CardContent>
       </Card>
 
-      <div className="hidden print:flex flex-col items-end mt-20 pr-12 print-signature-block">
+      <div className="hidden print:flex flex-col items-end mt-20 pr-12">
         <div className="w-64 text-center space-y-4">
           <div className="border-b-2 border-gray-300 pb-2 min-h-[100px] flex items-center justify-center">
             {user?.signatureUrl ? (
-              <img src={user.signatureUrl} alt="Firma Responsable" className="max-h-24 mx-auto object-contain mb-2 print-force-visible" />
+              <img src={user.signatureUrl} alt="Firma" className="max-h-24 mx-auto object-contain mb-2 print-force-visible" />
             ) : (
-              <div className="h-24 w-full bg-gray-50 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-200">
-                 <PenTool className="w-6 h-6 text-gray-300 mb-1" />
-                 <span className="text-[10px] text-gray-400 font-black uppercase">Firma Pendiente</span>
-              </div>
+              <div className="h-24 w-full bg-gray-50 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-200"><PenTool className="w-6 h-6 text-gray-300 mb-1" /><span className="text-[10px] text-gray-400 font-black uppercase">Firma Pendiente</span></div>
             )}
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-center gap-1.5 text-primary mb-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span className="text-[8px] font-black uppercase tracking-[0.3em]">Sello Digital Don Bosco</span>
-            </div>
-            <p className="text-sm font-black uppercase text-gray-800">{user?.name}</p>
-            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
-              {user?.role === 'docent' ? 'Firma del Docente' : 
-               user?.role === 'secretary' ? 'Firma de Secretaría' : 
-               'Responsable de Auditoría'}
-            </p>
-            <p className="text-[7px] font-mono text-gray-400 mt-1 uppercase">ID: {user?.id.substring(0, 12)}</p>
-          </div>
+          <div className="space-y-1"><div className="flex items-center justify-center gap-1.5 text-primary mb-1"><ShieldCheck className="w-3.5 h-3.5" /><span className="text-[8px] font-black uppercase tracking-[0.3em]">Sello Digital Don Bosco</span></div><p className="text-sm font-black uppercase text-gray-800">{user?.name}</p><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{user?.role === 'docent' ? 'Firma del Docente' : 'Responsable de Auditoría'}</p></div>
         </div>
       </div>
 
@@ -335,15 +232,8 @@ export default function ReportsPage() {
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; margin: 0; padding: 20px; }
-          .sidebar, header, nav, .SidebarTrigger { display: none !important; }
+          .sidebar, header, nav { display: none !important; }
           main { padding: 0 !important; margin: 0 !important; }
-          .max-w-7xl { max-width: 100% !important; }
-          .Card { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
-          table { width: 100% !important; border-collapse: collapse !important; }
-          th, td { border-bottom: 1px solid #eee !important; padding: 10px !important; }
-          .Badge { background-color: transparent !important; color: black !important; border: 1px solid #ccc !important; }
-          .bg-green-500 { background-color: #f0fdf4 !important; color: #166534 !important; border: 1px solid #bbf7d0 !important; }
-          .print-signature-block { display: flex !important; margin-top: 50px !important; }
           .print-force-visible { display: block !important; visibility: visible !important; opacity: 1 !important; }
           img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }

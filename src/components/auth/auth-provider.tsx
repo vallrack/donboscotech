@@ -39,29 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const uid = authUser.uid;
       const profileRef = doc(db, 'userProfiles', uid);
 
-      // Verificación inicial de perfil
-      const profileSnap = await getDoc(profileRef);
-      if (!profileSnap.exists()) {
-        const initialData = {
-          name: authUser.displayName || authUser.email?.split('@')[0] || 'Nuevo Miembro',
-          email: authUser.email || '',
-          role: 'docent',
-          createdAt: serverTimestamp(),
-          documentId: '',
-          campus: '',
-          program: '',
-          shiftIds: [],
-          status: 'active'
-        };
-        await setDoc(profileRef, initialData);
-      }
-
-      // Escucha en tiempo real para el perfil y roles
       unsubscribeProfile = onSnapshot(profileRef, async (docSnap) => {
         if (docSnap.exists()) {
           const profileData = docSnap.data();
           
-          // Verificación de roles de seguridad concurrentemente para evitar latencia
           const [adminSnap, coordSnap, sectSnap] = await Promise.all([
             getDoc(doc(db, 'roles_admins', uid)),
             getDoc(doc(db, 'roles_coordinators', uid)),
@@ -79,13 +60,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: authUser.email || profileData.email || '',
             role: finalRole,
             avatarUrl: profileData.avatarUrl || authUser.photoURL || undefined,
-            signatureUrl: profileData.signatureUrl || undefined, // CAMBIO CRÍTICO: Se añade signatureUrl
+            signatureUrl: profileData.signatureUrl || undefined,
             documentId: profileData.documentId || '',
             campus: profileData.campus || '',
             program: profileData.program || '',
             shiftIds: profileData.shiftIds || []
           } as User);
           setResolving(false);
+        } else {
+          const initialData = {
+            name: authUser.displayName || authUser.email?.split('@')[0] || 'Nuevo Miembro',
+            email: authUser.email || '',
+            role: 'docent',
+            createdAt: serverTimestamp(),
+            documentId: '',
+            campus: '',
+            program: '',
+            shiftIds: [],
+            status: 'active'
+          };
+          await setDoc(profileRef, initialData);
         }
       }, (error) => {
         setResolving(false);

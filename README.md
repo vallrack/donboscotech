@@ -1,3 +1,4 @@
+
 # Don Bosco Track - Sistema Institucional de Asistencia
 
 Este proyecto es una solución inteligente para la gestión de asistencia y jornadas laborales en Ciudad Don Bosco.
@@ -12,8 +13,8 @@ Este proyecto es una solución inteligente para la gestión de asistencia y jorn
 Para subir tus cambios al repositorio oficial:
 
 1. `git add .`
-2. `git commit -m "Fix: corrección de rutas y estabilización de jornadas múltiples"`
-3. `git remote add origin https://github.com/vallrack/donboscotech.git`
+2. `git commit -m "Fix: corrección de rutas, firmas digitales y estabilización de jornadas"`
+3. `git remote add origin https://github.com/vallrack/donboscotech.git` (Solo si no está vinculado)
 4. `git push -u origin main`
 
 ## Despliegue en Vercel

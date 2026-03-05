@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Check, X as CloseIcon, Edit3, Save
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon 
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -212,7 +212,7 @@ export default function UserManagementPage() {
         
         <Dialog open={isCreateDialogOpen} onOpenChange={(val) => { setIsCreateDialogOpen(val); if(!val) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl hover:scale-105 transition-all">
+            <Button className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl">
               <PlusCircle className="w-6 h-6" /> Registrar Nuevo Miembro
             </Button>
           </DialogTrigger>
@@ -226,19 +226,19 @@ export default function UserManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
-                      <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="Ej: Juan Bosco" required />
+                      <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Documento de Identidad</Label>
-                      <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="Cédula" required />
+                      <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Correo Institucional</Label>
-                      <Input type="email" value={formData.email} onChange={(e) => updateFormField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="usuario@donbosco.edu" required />
+                      <Input type="email" value={formData.email} onChange={(e) => updateFormField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" required />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña Temporal</Label>
-                      <Input type="password" value={formData.password} onChange={(e) => updateFormField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" placeholder="Min. 6 caracteres" required />
+                      <Input type="password" value={formData.password} onChange={(e) => updateFormField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold" required />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -258,32 +258,18 @@ export default function UserManagementPage() {
                     </div>
                   </div>
                   <div className="space-y-4">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Laborales (Asignación Múltiple)</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Asignación de Jornadas</Label>
                     <Select onValueChange={(val) => toggleShift(val)}>
                       <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 border-gray-100 font-bold">
-                        <div className="flex items-center gap-2">
-                          <Plus className="w-4 h-4 text-primary" />
-                          <span>Añadir Jornada</span>
-                        </div>
+                        <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada</span></div>
                       </SelectTrigger>
-                      <SelectContent>
-                        {shifts?.map(s => (
-                          <SelectItem key={s.id} value={s.id} className="font-bold py-3">
-                             {s.name} ({s.startTime} - {s.endTime})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                      <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id} className="font-bold py-3">{s.name} ({s.startTime} - {s.endTime})</SelectItem>)}</SelectContent>
                     </Select>
                     <div className="flex flex-wrap gap-2">
-                       {formData.shiftIds.map(id => {
-                         const s = shifts.find(sh => sh.id === id);
-                         return (
-                           <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">
-                             {s?.name}
-                             <Trash className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => toggleShift(id)} />
-                           </Badge>
-                         )
-                       })}
+                      {formData.shiftIds.map(id => {
+                        const s = shifts.find(sh => sh.id === id);
+                        return <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">{s?.name}<Trash className="w-3 h-3 cursor-pointer" onClick={() => toggleShift(id)} /></Badge>
+                      })}
                     </div>
                   </div>
                   <div className="space-y-4 pt-4 border-t">
@@ -397,10 +383,7 @@ export default function UserManagementPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/20 border-b text-[11px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-10 py-8">Miembro</th>
-                  <th className="px-10 py-8">Sede / Programa</th>
-                  <th className="px-10 py-8">Rol</th>
-                  <th className="px-10 py-8 text-center">Acciones</th>
+                  <th className="px-10 py-8">Miembro</th><th className="px-10 py-8">Sede / Programa</th><th className="px-10 py-8">Rol</th><th className="px-10 py-8 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -414,33 +397,12 @@ export default function UserManagementPage() {
                           <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg", u.role === 'admin' ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
                             {u.name?.charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <div className="font-black text-lg text-gray-800">{u.name}</div>
-                            <div className="text-xs text-muted-foreground font-bold">{u.email}</div>
-                          </div>
+                          <div><div className="font-black text-lg text-gray-800">{u.name}</div><div className="text-xs text-muted-foreground font-bold">{u.email}</div></div>
                         </div>
                       </td>
-                      <td className="px-10 py-8">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><MapPin className="w-3.5 h-3.5" /> {u.campus || 'Sin Sede'}</div>
-                          <div className="flex items-center gap-2 text-[10px] font-black text-primary uppercase"><BookOpen className="w-3.5 h-3.5" /> {u.program || 'Sin Programa'}</div>
-                        </div>
-                      </td>
-                      <td className="px-10 py-8">
-                        <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="font-black uppercase text-[10px] px-4 py-1.5 rounded-xl">
-                          {u.role || 'docent'}
-                        </Badge>
-                      </td>
-                      <td className="px-10 py-8">
-                        <div className="flex items-center justify-center gap-2">
-                          <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/5 rounded-xl h-12 w-12" onClick={() => handleEditClick(u)}>
-                            <Edit3 className="w-5 h-5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl h-12 w-12" onClick={() => handleDeleteUser(u.id)}>
-                            <Trash2 className="w-5 h-5" />
-                          </Button>
-                        </div>
-                      </td>
+                      <td className="px-10 py-8"><div className="space-y-1"><div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><MapPin className="w-3.5 h-3.5" /> {u.campus || 'Sin Sede'}</div><div className="flex items-center gap-2 text-[10px] font-black text-primary uppercase"><BookOpen className="w-3.5 h-3.5" /> {u.program || 'Sin Programa'}</div></div></td>
+                      <td className="px-10 py-8"><Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="font-black uppercase text-[10px] px-4 py-1.5 rounded-xl">{u.role || 'docent'}</Badge></td>
+                      <td className="px-10 py-8"><div className="flex items-center justify-center gap-2"><Button variant="ghost" size="icon" className="text-primary hover:bg-primary/5 rounded-xl h-12 w-12" onClick={() => handleEditClick(u)}><Edit3 className="w-5 h-5" /></Button><Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl h-12 w-12" onClick={() => handleDeleteUser(u.id)}><Trash2 className="w-5 h-5" /></Button></div></td>
                     </tr>
                   ))
                 )}
