@@ -10,7 +10,7 @@ import {
   Sparkles, Loader2, Calendar, TrendingUp, 
   Users, BarChart3, Printer, 
   MapPin, BookOpen, Clock, FilterX,
-  Download, PenTool
+  Download, PenTool, ShieldCheck
 } from 'lucide-react';
 import { summarizeAttendanceReport, AiReportSummaryOutput } from '@/ai/flows/ai-report-summary';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
@@ -22,9 +22,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { AttendanceRecord, User, Campus, Program, Shift } from '@/lib/types';
 import Image from 'next/image';
 
-/**
- * Calcula las horas trabajadas entre dos marcas de tiempo (HH:mm).
- */
 function calculateHoursDecimal(start: string | null, end: string | null): number {
   if (!start || !end) return 0;
   try {
@@ -37,9 +34,6 @@ function calculateHoursDecimal(start: string | null, end: string | null): number
   }
 }
 
-/**
- * Formatea una duración decimal en una cadena legible (Xh Ym o Z min).
- */
 function formatDuration(decimalHours: number): string {
   const totalMinutes = Math.round(decimalHours * 60);
   if (totalMinutes === 0) return '--';
@@ -64,7 +58,6 @@ export default function ReportsPage() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
-  // Consultas Memorizadas para evitar bucles infinitos y proteger cuota
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return isDocent 
@@ -177,7 +170,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-      {/* Encabezado Institucional (Visible en Print) */}
       <div className="hidden print:flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
         <div className="flex items-center gap-4">
            <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl text-white font-black text-2xl">DB</div>
@@ -200,11 +192,11 @@ export default function ReportsPage() {
         <div className="flex gap-2">
           <Button variant="outline" className="rounded-xl font-black gap-2" onClick={() => {
             const BOM = "\uFEFF";
-            const headers = ["Personal", "Fecha", "Jornada", "Entrada", "Salida", "Horas"];
-            const csv = BOM + "sep=;\n" + headers.join(";") + "\n" + dailyReports.map(r => `"${r.userName}";"${r.date}";"${r.shiftName}";"${r.entry || "--"}";"${r.exit || "--"}";"${formatDuration(r.hours)}"`).join("\n");
+            const headers = ["Personal", "Fecha", "Jornada", "Entrada", "Salida", "Horas", "Sello Digital"];
+            const csv = BOM + "sep=;\n" + headers.join(";") + "\n" + dailyReports.map(r => `"${r.userName}";"${r.date}";"${r.shiftName}";"${r.entry || "--"}";"${r.exit || "--"}";"${formatDuration(r.hours)}";"${user?.signatureUrl ? 'SINC' : 'PEND'}"`).join("\n");
             const link = document.createElement("a");
             link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-            link.download = "Reporte_DonBosco.csv";
+            link.download = `Reporte_${user?.name.replace(' ', '_')}.csv`;
             link.click();
           }}><Download className="w-4 h-4 text-green-600" /> Excel</Button>
           <Button onClick={() => window.print()} className="rounded-xl font-black gap-2 h-11 px-6 shadow-md"><Printer className="w-4 h-4" /> Exportar PDF</Button>
@@ -311,26 +303,30 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {/* Sección de Firma (Visible solo en Print) */}
-      <div className="hidden print:flex flex-col items-end mt-20 pr-12">
+      <div className="hidden print:flex flex-col items-end mt-20 pr-12 print-signature-block">
         <div className="w-64 text-center space-y-4">
-          <div className="border-b-2 border-gray-300 pb-2">
+          <div className="border-b-2 border-gray-300 pb-2 min-h-[100px] flex items-center justify-center">
             {user?.signatureUrl ? (
-              <img src={user.signatureUrl} alt="Firma Responsable" className="h-24 mx-auto object-contain mb-2" />
+              <img src={user.signatureUrl} alt="Firma Responsable" className="max-h-24 mx-auto object-contain mb-2 print-force-visible" />
             ) : (
-              <div className="h-24 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-200">
-                 <span className="text-[10px] text-gray-400 font-black">Firma no cargada</span>
+              <div className="h-24 w-full bg-gray-50 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-200">
+                 <PenTool className="w-6 h-6 text-gray-300 mb-1" />
+                 <span className="text-[10px] text-gray-400 font-black uppercase">Firma Pendiente</span>
               </div>
             )}
           </div>
-          <div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-center gap-1.5 text-primary mb-1">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="text-[8px] font-black uppercase tracking-[0.3em]">Sello Digital Don Bosco</span>
+            </div>
             <p className="text-sm font-black uppercase text-gray-800">{user?.name}</p>
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               {user?.role === 'docent' ? 'Firma del Docente' : 
                user?.role === 'secretary' ? 'Firma de Secretaría' : 
                'Responsable de Auditoría'}
             </p>
-            <p className="text-[8px] font-bold text-gray-400 mt-1">Sello Digital Ciudad Don Bosco</p>
+            <p className="text-[7px] font-mono text-gray-400 mt-1 uppercase">ID: {user?.id.substring(0, 12)}</p>
           </div>
         </div>
       </div>
@@ -338,7 +334,7 @@ export default function ReportsPage() {
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; margin: 0; padding: 0; }
+          body { background: white !important; margin: 0; padding: 20px; }
           .sidebar, header, nav, .SidebarTrigger { display: none !important; }
           main { padding: 0 !important; margin: 0 !important; }
           .max-w-7xl { max-width: 100% !important; }
@@ -347,6 +343,9 @@ export default function ReportsPage() {
           th, td { border-bottom: 1px solid #eee !important; padding: 10px !important; }
           .Badge { background-color: transparent !important; color: black !important; border: 1px solid #ccc !important; }
           .bg-green-500 { background-color: #f0fdf4 !important; color: #166534 !important; border: 1px solid #bbf7d0 !important; }
+          .print-signature-block { display: flex !important; margin-top: 50px !important; }
+          .print-force-visible { display: block !important; visibility: visible !important; opacity: 1 !important; }
+          img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
     </div>

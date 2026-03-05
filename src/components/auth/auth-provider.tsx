@@ -79,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: authUser.email || profileData.email || '',
             role: finalRole,
             avatarUrl: profileData.avatarUrl || authUser.photoURL || undefined,
+            signatureUrl: profileData.signatureUrl || undefined, // CAMBIO CRÍTICO: Se añade signatureUrl
             documentId: profileData.documentId || '',
             campus: profileData.campus || '',
             program: profileData.program || '',
