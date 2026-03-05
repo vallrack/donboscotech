@@ -84,7 +84,7 @@ export default function AttendanceScanPage() {
         },
         { enableHighAccuracy: true }
       );
-      return () => navigator.geolocation.clearWatch(watchId);
+      return () => navigator.geolocation.watchPosition(watchId);
     }
   }, [toast]);
 

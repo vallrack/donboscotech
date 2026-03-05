@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,10 @@ export default function AnnouncementManagementPage() {
     status: 'active' as 'active' | 'inactive'
   });
 
-  const announcementsQuery = db ? query(collection(db, 'announcements'), orderBy('createdAt', 'desc')) : null;
+  const announcementsQuery = useMemoFirebase(() => 
+    db ? query(collection(db, 'announcements'), orderBy('createdAt', 'desc')) : null, 
+    [db]
+  );
   const { data: announcements, loading } = useCollection<Announcement>(announcementsQuery as any);
 
   const handleSave = async (e: React.FormEvent) => {

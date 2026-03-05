@@ -167,7 +167,7 @@ export default function PublicAttendanceScanner() {
 
       toast({ title: recordType === 'entry' ? "¡Bienvenido!" : "¡Hasta pronto!" });
 
-      // Reinicio automático después de 2 segundos (ajustado de 4 a 2 por petición del usuario)
+      // Reinicio automático después de 2 segundos para permitir escaneo continuo
       setTimeout(() => { 
         setLastScannedUser(null); 
         setScanning(false); 
