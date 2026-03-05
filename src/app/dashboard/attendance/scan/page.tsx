@@ -5,12 +5,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useFirestore } from '@/firebase';
 import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { QrCode, MapPin, CheckCircle2, Loader2, ShieldCheck, Camera, Image as ImageIcon, AlertCircle, Clock } from 'lucide-react';
+import { CheckCircle2, Loader2, MapPin, Camera, Image as ImageIcon, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
@@ -47,13 +44,29 @@ export default function AttendanceScanPage() {
   }, [mode]);
 
   useEffect(() => {
-    if (mode === 'camera' && hasCameraPermission) {
-      html5QrCode.current = new Html5Qrcode(qrRegionId);
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-      html5QrCode.current.start({ facingMode: "environment" }, config, (decodedText) => registerAttendance(decodedText), () => {}).catch(() => {});
-      return () => { if (html5QrCode.current?.isScanning) html5QrCode.current.stop().catch(() => {}); };
+    if (mode === 'camera' && hasCameraPermission && !success) {
+      const startScanner = async () => {
+        try {
+          html5QrCode.current = new Html5Qrcode(qrRegionId);
+          const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+          await html5QrCode.current.start(
+            { facingMode: "environment" }, 
+            config, 
+            (decodedText) => registerAttendance(decodedText), 
+            () => {}
+          );
+        } catch (err) {}
+      };
+
+      startScanner();
+
+      return () => { 
+        if (html5QrCode.current?.isScanning) {
+          html5QrCode.current.stop().catch(() => {}); 
+        }
+      };
     }
-  }, [mode, hasCameraPermission]);
+  }, [mode, hasCameraPermission, success]);
 
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -66,7 +79,7 @@ export default function AttendanceScanPage() {
         },
         (err) => {
           setLocationLoading(false);
-          toast({ title: "GPS Requerido", description: "Debe habilitar el GPS para validar su presencia.", variant: "destructive" });
+          toast({ title: "GPS Requerido", variant: "destructive" });
         },
         { enableHighAccuracy: true }
       );
@@ -77,7 +90,7 @@ export default function AttendanceScanPage() {
   const registerAttendance = async (token: string) => {
     if (!db || !user || success || scanning) return;
     if (!locationRef.current) {
-       toast({ variant: "destructive", title: "Esperando GPS", description: "Valide su ubicación antes de escanear." });
+       toast({ variant: "destructive", title: "Esperando GPS" });
        return;
     };
 
@@ -88,14 +101,12 @@ export default function AttendanceScanPage() {
     const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
     
     try {
-      // DETECCIÓN DE JORNADA ACTIVA
       let activeShift: Shift | null = null;
       if (user.shiftIds && user.shiftIds.length > 0) {
         const shiftsSnap = await getDocs(collection(db, 'shifts'));
         const availableShifts = shiftsSnap.docs
           .map(d => ({ id: d.id, ...d.data() } as Shift))
           .filter(s => user.shiftIds?.includes(s.id));
-        
         activeShift = availableShifts.find(s => s.days?.includes(dayName)) || null;
       }
 
@@ -128,11 +139,11 @@ export default function AttendanceScanPage() {
 
       setScanning(false);
       setSuccess({ type: recordType, time: timeStr, shift: activeShift?.name });
-      toast({ title: "Registro Sincronizado", description: `Jornada: ${activeShift?.name || 'No asignada'}` });
+      toast({ title: "Registro Sincronizado" });
 
     } catch (err: any) {
       setScanning(false);
-      toast({ variant: "destructive", title: "Error", description: "No se pudo sincronizar la asistencia." });
+      toast({ variant: "destructive", title: "Error" });
     }
   };
 
@@ -144,7 +155,7 @@ export default function AttendanceScanPage() {
       const decodedText = await scanner.scanFile(file, true);
       registerAttendance(decodedText);
     } catch (err) {
-      toast({ variant: "destructive", title: "QR No Detectado", description: "Imagen no legible." });
+      toast({ variant: "destructive", title: "QR No Detectado" });
     }
   };
 
@@ -160,7 +171,7 @@ export default function AttendanceScanPage() {
           <p className="text-lg font-black text-primary">{success.shift || 'Fuera de Horario'}</p>
           <p className="text-[10px] font-bold text-gray-400">{success.type === 'entry' ? 'Ingreso' : 'Salida'} a las {success.time}</p>
         </div>
-        <Button className="mt-8 h-12 rounded-xl font-bold px-8 shadow-lg" onClick={() => window.location.href = '/dashboard'}>Volver al Dashboard</Button>
+        <Button className="mt-8 h-12 rounded-xl font-bold px-8 shadow-lg" onClick={() => setSuccess(null)}>Escanear otro</Button>
       </div>
     );
   }

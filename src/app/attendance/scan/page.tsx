@@ -8,8 +8,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { QrCode, MapPin, Loader2, Camera, Image as ImageIcon, AlertCircle, ArrowLeft, User as UserIcon, ShieldCheck, LogOut, LogIn, Clock } from 'lucide-react';
+import { QrCode, MapPin, Loader2, Camera, Image as ImageIcon, User as UserIcon, Clock, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
@@ -44,7 +43,7 @@ export default function PublicAttendanceScanner() {
         },
         (err) => toast({ 
           title: "GPS Requerido", 
-          description: "La terminal institucional requiere acceso al GPS para validar la ubicación de la sede.",
+          description: "La terminal institucional requiere acceso al GPS.",
           variant: "destructive" 
         }),
         { enableHighAccuracy: true }
@@ -67,18 +66,37 @@ export default function PublicAttendanceScanner() {
   }, [mode]);
 
   useEffect(() => {
-    if (mode === 'camera' && hasCameraPermission) {
-      html5QrCode.current = new Html5Qrcode(qrRegionId);
-      const config = { fps: 15, qrbox: { width: 250, height: 250 } };
-      html5QrCode.current.start({ facingMode: "environment" }, config, (decodedText) => handleScanSuccess(decodedText), () => {}).catch(() => {});
-      return () => { if (html5QrCode.current?.isScanning) html5QrCode.current.stop().catch(() => {}); };
+    // Solo iniciar el escáner si estamos en modo cámara, tenemos permiso y NO estamos mostrando un éxito
+    if (mode === 'camera' && hasCameraPermission && !lastScannedUser) {
+      const startScanner = async () => {
+        try {
+          html5QrCode.current = new Html5Qrcode(qrRegionId);
+          const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+          await html5QrCode.current.start(
+            { facingMode: "environment" }, 
+            config, 
+            (decodedText) => handleScanSuccess(decodedText), 
+            () => {}
+          );
+        } catch (err) {
+          console.error("Scanner start error:", err);
+        }
+      };
+
+      startScanner();
+      
+      return () => { 
+        if (html5QrCode.current?.isScanning) {
+          html5QrCode.current.stop().catch(() => {}); 
+        }
+      };
     }
-  }, [mode, hasCameraPermission]);
+  }, [mode, hasCameraPermission, lastScannedUser]);
 
   const handleScanSuccess = async (userId: string) => {
     if (isProcessing.current || !db) return;
     if (!locationRef.current) {
-       toast({ variant: "destructive", title: "GPS Requerido", description: "Esperando validación de ubicación." });
+       toast({ variant: "destructive", title: "GPS Requerido", description: "Validando ubicación..." });
        return;
     }
 
@@ -89,7 +107,7 @@ export default function PublicAttendanceScanner() {
       const userRef = doc(db, 'userProfiles', userId);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
-        toast({ variant: "destructive", title: "Personal No Encontrado", description: "El QR no pertenece a un miembro registrado." });
+        toast({ variant: "destructive", title: "No Encontrado", description: "QR no registrado." });
         setTimeout(() => { isProcessing.current = false; setScanning(false); }, 3000);
         return;
       }
@@ -100,15 +118,12 @@ export default function PublicAttendanceScanner() {
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
 
-      // DETECCIÓN DE JORNADA
       let activeShift: Shift | null = null;
       if (userData.shiftIds && userData.shiftIds.length > 0) {
-        const shiftsCol = collection(db, 'shifts');
-        const shiftsSnap = await getDocs(shiftsCol);
+        const shiftsSnap = await getDocs(collection(db, 'shifts'));
         const userShifts = shiftsSnap.docs
           .map(d => ({ id: d.id, ...d.data() } as Shift))
           .filter(s => userData.shiftIds.includes(s.id));
-        
         activeShift = userShifts.find(s => s.days?.includes(dayName)) || null;
       }
 
@@ -122,7 +137,7 @@ export default function PublicAttendanceScanner() {
           const lastRecord = querySnap.docs[0].data();
           if (lastRecord.date === dateStr) recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
         }
-      } catch (e) { /* default to entry */ }
+      } catch (e) {}
 
       const recordId = `${userId}_${now.getTime()}_terminal`;
       const recordData = {
@@ -143,13 +158,27 @@ export default function PublicAttendanceScanner() {
         setDoc(doc(db, 'globalAttendanceRecords', recordId), recordData)
       ]);
 
-      setLastScannedUser({ name: userData.name, photo: userData.avatarUrl, time: timeStr, type: recordType, shift: activeShift?.name });
-      toast({ title: recordType === 'entry' ? "¡Bienvenido!" : "¡Hasta pronto!", description: `Registro de ${recordType === 'entry' ? 'Ingreso' : 'Salida'} procesado.` });
+      setLastScannedUser({ 
+        name: userData.name, 
+        photo: userData.avatarUrl, 
+        time: timeStr, 
+        type: recordType, 
+        shift: activeShift?.name 
+      });
 
-      setTimeout(() => { setLastScannedUser(null); setScanning(false); isProcessing.current = false; }, 4000);
+      toast({ title: recordType === 'entry' ? "¡Bienvenido!" : "¡Hasta pronto!" });
+
+      // Reinicio automático después de 4 segundos
+      setTimeout(() => { 
+        setLastScannedUser(null); 
+        setScanning(false); 
+        isProcessing.current = false; 
+      }, 4000);
+      
     } catch (err: any) {
-      setScanning(false); isProcessing.current = false;
-      toast({ variant: "destructive", title: "Error de Terminal", description: "No se pudo sincronizar el registro." });
+      setScanning(false); 
+      isProcessing.current = false;
+      toast({ variant: "destructive", title: "Error", description: "No se pudo procesar." });
     }
   };
 
@@ -161,7 +190,7 @@ export default function PublicAttendanceScanner() {
       const decodedText = await scanner.scanFile(file, true);
       handleScanSuccess(decodedText);
     } catch (err) {
-      toast({ variant: "destructive", title: "Error de Lectura", description: "QR no detectado en la imagen." });
+      toast({ variant: "destructive", title: "Error", description: "QR no detectado." });
     }
   };
 
@@ -174,7 +203,6 @@ export default function PublicAttendanceScanner() {
 
         <Card className="border-none shadow-[0_32px_64px_-15px_rgba(0,0,0,0.2)] overflow-hidden rounded-[3rem] bg-white">
           <CardHeader className="bg-primary text-white text-center py-12 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
             <CardTitle className="text-3xl font-black">Terminal de Asistencia</CardTitle>
             <CardDescription className="text-primary-foreground/90 font-bold text-base mt-2">CIUDAD DON BOSCO</CardDescription>
           </CardHeader>

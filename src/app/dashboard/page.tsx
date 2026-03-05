@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect } from 'react';
@@ -11,6 +12,7 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AttendanceRecord, Announcement } from '@/lib/types';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -27,7 +29,7 @@ export default function DashboardPage() {
 
   const announcementsQuery = useMemoFirebase(() => {
     if (!db) return null;
-    return query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(15));
+    return query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(20));
   }, [db]);
 
   const { data: recordsRaw, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
@@ -35,7 +37,7 @@ export default function DashboardPage() {
 
   const records = useMemo(() => recordsRaw || [], [recordsRaw]);
   const activeAnnouncements = useMemo(() => {
-    return (annRaw || []).filter(a => a.status === 'active').slice(0, 10);
+    return (annRaw || []).filter(a => a.status === 'active');
   }, [annRaw]);
 
   useEffect(() => {
@@ -111,21 +113,27 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="shadow-2xl border-none bg-white rounded-[2.5rem] overflow-hidden">
-          <CardHeader className="border-b bg-gray-50/50 p-8"><CardTitle className="flex items-center gap-3 text-xl font-black"><Megaphone className="w-5 h-5 text-primary" /> Muro de Anuncios</CardTitle></CardHeader>
+          <CardHeader className="border-b bg-gray-50/50 p-8">
+            <CardTitle className="flex items-center gap-3 text-xl font-black"><Megaphone className="w-5 h-5 text-primary" /> Muro de Anuncios</CardTitle>
+          </CardHeader>
           <CardContent className="p-0">
-            {annLoading ? <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto opacity-10" /></div> : (
-              <div className="divide-y divide-gray-50">
-                {activeAnnouncements.length > 0 ? activeAnnouncements.map((ann) => (
-                  <div key={ann.id} className="p-8 hover:bg-gray-50/50 transition-all group">
-                    <Badge className={cn("text-[8px] font-black mb-2 px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>{ann.priority === 'high' ? 'IMPORTANTE' : 'ANUNCIO'}</Badge>
-                    <h4 className="font-black text-base group-hover:text-primary transition-colors">{ann.title}</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed mt-2 line-clamp-3">{ann.content}</p>
-                    <div className="mt-4 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest">Publicado por {ann.authorName}</div>
-                  </div>
-                )) : (
-                  <div className="py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20 italic">No hay comunicados activos.</div>
-                )}
-              </div>
+            {annLoading ? (
+              <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto opacity-10" /></div>
+            ) : (
+              <ScrollArea className="h-[450px]">
+                <div className="divide-y divide-gray-50">
+                  {activeAnnouncements.length > 0 ? activeAnnouncements.map((ann) => (
+                    <div key={ann.id} className="p-8 hover:bg-gray-50/50 transition-all group">
+                      <Badge className={cn("text-[8px] font-black mb-2 px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>{ann.priority === 'high' ? 'IMPORTANTE' : 'ANUNCIO'}</Badge>
+                      <h4 className="font-black text-base group-hover:text-primary transition-colors">{ann.title}</h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed mt-2 line-clamp-3">{ann.content}</p>
+                      <div className="mt-4 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest">Publicado por {ann.authorName}</div>
+                    </div>
+                  )) : (
+                    <div className="py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20 italic">No hay comunicados activos.</div>
+                  )}
+                </div>
+              </ScrollArea>
             )}
           </CardContent>
         </Card>

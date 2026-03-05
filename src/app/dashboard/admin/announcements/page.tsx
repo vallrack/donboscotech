@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Announcement } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function AnnouncementManagementPage() {
   const { user } = useAuth();
@@ -120,7 +121,7 @@ export default function AnnouncementManagementPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Formulario */}
-        <Card className="lg:col-span-5 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden h-fit">
+        <Card className="lg:col-span-5 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden h-fit sticky top-24">
           <form onSubmit={handleSave}>
             <CardHeader className="bg-gray-50/50 p-8 border-b">
               <CardTitle className="text-xl font-black flex items-center gap-2">
@@ -179,52 +180,54 @@ export default function AnnouncementManagementPage() {
           <h2 className="text-xl font-black text-gray-800 ml-4 flex items-center gap-2">
             <Megaphone className="w-5 h-5 text-primary" /> Historial de Comunicaciones
           </h2>
-          <div className="grid gap-4">
-            {loading ? <Loader2 className="w-10 h-10 animate-spin mx-auto opacity-10" /> : announcements?.map(ann => (
-              <Card key={ann.id} className={cn(
-                "border-none shadow-xl rounded-[2rem] overflow-hidden bg-white transition-all hover:scale-[1.01]",
-                ann.status === 'inactive' && "opacity-60 grayscale"
-              )}>
-                <CardContent className="p-8">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="space-y-3 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Badge className={cn("text-[8px] font-black px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>
-                          {ann.priority === 'high' ? 'IMPORTANTE' : 'ESTÁNDAR'}
-                        </Badge>
-                        <Badge variant="outline" className={cn("text-[8px] font-black px-3 py-1", ann.status === 'active' ? "text-green-600 border-green-200 bg-green-50" : "text-gray-400 border-gray-200")}>
-                          {ann.status === 'active' ? 'VISIBLE' : 'OCULTO'}
-                        </Badge>
+          <ScrollArea className="h-[800px] pr-4">
+            <div className="grid gap-4">
+              {loading ? <Loader2 className="w-10 h-10 animate-spin mx-auto opacity-10" /> : announcements?.map(ann => (
+                <Card key={ann.id} className={cn(
+                  "border-none shadow-xl rounded-[2rem] overflow-hidden bg-white transition-all hover:scale-[1.01]",
+                  ann.status === 'inactive' && "opacity-60 grayscale"
+                )}>
+                  <CardContent className="p-8">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="space-y-3 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge className={cn("text-[8px] font-black px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>
+                            {ann.priority === 'high' ? 'IMPORTANTE' : 'ESTÁNDAR'}
+                          </Badge>
+                          <Badge variant="outline" className={cn("text-[8px] font-black px-3 py-1", ann.status === 'active' ? "text-green-600 border-green-200 bg-green-50" : "text-gray-400 border-gray-200")}>
+                            {ann.status === 'active' ? 'VISIBLE' : 'OCULTO'}
+                          </Badge>
+                        </div>
+                        <h3 className="text-lg font-black text-gray-800">{ann.title}</h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{ann.content}</p>
+                        <div className="flex items-center gap-3 pt-2 text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest">
+                           <span>Por {ann.authorName}</span>
+                           <span>•</span>
+                           <span>{ann.createdAt?.toDate?.() ? ann.createdAt.toDate().toLocaleDateString() : 'Pendiente'}</span>
+                        </div>
                       </div>
-                      <h3 className="text-lg font-black text-gray-800">{ann.title}</h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{ann.content}</p>
-                      <div className="flex items-center gap-3 pt-2 text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest">
-                         <span>Por {ann.authorName}</span>
-                         <span>•</span>
-                         <span>{ann.createdAt?.toDate?.() ? ann.createdAt.toDate().toLocaleDateString() : 'Pendiente'}</span>
+                      <div className="flex flex-col gap-2">
+                        <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-primary hover:bg-primary/5" onClick={() => handleEdit(ann)}>
+                          <Edit3 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-muted-foreground" onClick={() => handleToggleStatus(ann)}>
+                          {ann.status === 'active' ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </Button>
+                        <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-destructive hover:bg-destructive/5" onClick={() => handleDelete(ann.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-primary hover:bg-primary/5" onClick={() => handleEdit(ann)}>
-                        <Edit3 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-muted-foreground" onClick={() => handleToggleStatus(ann)}>
-                        {ann.status === 'active' ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-destructive hover:bg-destructive/5" onClick={() => handleDelete(ann.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            {!loading && announcements?.length === 0 && (
-              <div className="py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20 italic">
-                No hay anuncios registrados.
-              </div>
-            )}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {!loading && announcements?.length === 0 && (
+                <div className="py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20 italic">
+                  No hay anuncios registrados.
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </div>
       </div>
     </div>
