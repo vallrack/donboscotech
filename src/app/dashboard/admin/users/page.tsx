@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon 
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon, UserCheck, ShieldAlert
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -86,6 +86,11 @@ export default function UserManagementPage() {
     );
   }, [users, searchTerm]);
 
+  const resetForm = useCallback(() => {
+    setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftIds: [], role: 'docent' });
+    setEditingUser(null);
+  }, []);
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || isSaving) return;
@@ -116,7 +121,7 @@ export default function UserManagementPage() {
 
       if (formData.role !== 'docent') {
         const col = formData.role === 'admin' ? 'roles_admins' : formData.role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
-        await setDoc(doc(db, col, newUserId), { email: formData.email });
+        await setDoc(doc(db, col, newUserId), { email: formData.email, assignedAt: new Date().toISOString() });
       }
 
       toast({ title: "Personal Registrado Exitosamente" });
@@ -168,7 +173,7 @@ export default function UserManagementPage() {
         for (const col of rolesCols) await deleteDoc(doc(db, col, editingUser.id));
         if (formData.role !== 'docent') {
           const col = formData.role === 'admin' ? 'roles_admins' : formData.role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
-          await setDoc(doc(db, col, editingUser.id), { email: formData.email });
+          await setDoc(doc(db, col, editingUser.id), { email: formData.email, assignedAt: new Date().toISOString() });
         }
       }
 
@@ -194,10 +199,15 @@ export default function UserManagementPage() {
     }
   };
 
-  const resetForm = () => {
-    setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftIds: [], role: 'docent' });
-    setEditingUser(null);
-  };
+  if (currentUser?.role !== 'admin' && currentUser?.role !== 'coordinator') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+        <ShieldAlert className="w-16 h-16 text-destructive mb-4 opacity-20" />
+        <h2 className="text-2xl font-bold text-destructive">Acceso Denegado</h2>
+        <p className="text-muted-foreground mt-2">Solo personal administrativo puede gestionar usuarios.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -310,7 +320,49 @@ export default function UserManagementPage() {
                     <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
                   </div>
                 </div>
-                {/* ... Rest of fields similarly ... */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede</Label>
+                    <Select value={formData.campus || undefined} onValueChange={(val) => updateFormField('campus', val)}>
+                      <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Sede" /></SelectTrigger>
+                      <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold">{c.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa</Label>
+                    <Select value={formData.program || undefined} onValueChange={(val) => updateFormField('program', val)}>
+                      <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Programa" /></SelectTrigger>
+                      <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas</Label>
+                  <Select onValueChange={(val) => toggleShift(val)}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
+                      <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada</span></div>
+                    </SelectTrigger>
+                    <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id} className="font-bold py-3">{s.name} ({s.startTime} - {s.endTime})</SelectItem>)}</SelectContent>
+                  </Select>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.shiftIds.map(id => {
+                      const s = shifts.find(sh => sh.id === id);
+                      return <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">{s?.name}<Trash className="w-3 h-3 cursor-pointer" onClick={() => toggleShift(id)} /></Badge>
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-4 pt-4 border-t">
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Rol</Label>
+                  <Select value={formData.role} onValueChange={(val: UserRole) => updateFormField('role', val)}>
+                    <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
+                      <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
+                      <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
+                      <SelectItem value="admin" className="font-bold py-3 text-primary">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isSaving}>
                   {isSaving ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <Save className="w-6 h-6 mr-2" />}
                   Guardar Cambios

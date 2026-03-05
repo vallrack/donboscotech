@@ -29,6 +29,7 @@ function calculateHoursDecimal(start: string | null, end: string | null): number
   try {
     const [h1, m1] = start.split(':').map(Number);
     const [h2, m2] = end.split(':').map(Number);
+    if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return 0;
     const totalMinutes = (h2 * 60 + m2) - (h1 * 60 + m1);
     return Math.max(0, totalMinutes / 60);
   } catch (e) { return 0; }
@@ -61,7 +62,6 @@ export default function ReportsPage() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
-  // Consultas memorizadas para evitar bucles infinitos
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return (isDocent || (selectedDocent !== 'all' && !isDocent))
@@ -70,7 +70,6 @@ export default function ReportsPage() {
   }, [db, user?.id, isDocent, selectedDocent]);
 
   const profilesQuery = useMemoFirebase(() => db ? query(collection(db, 'userProfiles'), orderBy('name')) : null, [db]);
-  const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
   const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
 
@@ -78,7 +77,6 @@ export default function ReportsPage() {
   const { data: profilesRaw } = useCollection<User>(profilesQuery);
   const { data: campusesRaw } = useCollection<Campus>(campusesQuery);
   const { data: programsRaw } = useCollection<Program>(programsQuery);
-  const { data: allShiftsRaw } = useCollection<Shift>(shiftsQuery);
 
   const records = useMemo(() => recordsRaw || [], [recordsRaw]);
   const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
@@ -92,7 +90,6 @@ export default function ReportsPage() {
     records.forEach(r => {
       const uData = userMap.get(r.userId);
       
-      // Filtros del lado del cliente para flexibilidad administrativa
       if (!isDocent) {
         if (selectedDocent !== 'all' && r.userId !== selectedDocent) return;
         if (selectedCampus !== 'all' && uData?.campus !== selectedCampus) return;
@@ -108,6 +105,7 @@ export default function ReportsPage() {
           date: r.date, 
           entry: null, 
           exit: null,
+          shiftId: r.shiftId,
           shiftName: r.shiftName || 'N/A',
           program: uData?.program || 'N/A',
           campus: uData?.campus || 'N/A',
@@ -163,7 +161,7 @@ export default function ReportsPage() {
   }, [dailyReports]);
 
   const handleExportExcel = () => {
-    const BOM = "\uFEFF"; // Previene errores de caracteres extraños en Excel (tildes, etc.)
+    const BOM = "\uFEFF";
     const sep = ";";
     const headers = ["Personal", "Cédula", "Sede", "Programa", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Validación Digital"];
     
@@ -190,7 +188,6 @@ export default function ReportsPage() {
       "SINC"
     ]);
 
-    // Fila de sumatoria total
     rows.push([]);
     rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", "", formatDuration(totalTimeHours), "Validado"]);
 
@@ -223,7 +220,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-      {/* Cabecera de Impresión */}
       <div className="hidden print:flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
         <div className="flex items-center gap-4">
            <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl text-white font-black text-2xl">DB</div>
@@ -388,7 +384,6 @@ export default function ReportsPage() {
                         </td>
                       </tr>
                     ))}
-                    {/* Fila de Sumatoria Total en la Tabla */}
                     <tr className="bg-gray-50/50">
                       <td colSpan={4} className="px-8 py-6 text-right font-black text-xs uppercase tracking-widest">Suma Total del Periodo</td>
                       <td className="px-8 py-6 text-center">
@@ -407,7 +402,6 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {/* Bloque de Firma para PDF */}
       <div className="hidden print:flex flex-col items-end mt-20 pr-12">
         <div className="w-64 text-center space-y-4">
           <div className="border-b-2 border-gray-300 pb-2 min-h-[100px] flex items-center justify-center">
