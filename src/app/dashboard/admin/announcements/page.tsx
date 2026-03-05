@@ -32,7 +32,6 @@ export default function AnnouncementManagementPage() {
     status: 'active' as 'active' | 'inactive'
   });
 
-  // Consulta estabilizada para prevenir el Spinner infinito
   const announcementsQuery = useMemoFirebase(() => 
     db ? query(collection(db, 'announcements'), orderBy('createdAt', 'desc')) : null, 
     [db]
@@ -120,7 +119,7 @@ export default function AnnouncementManagementPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Comunicación Institucional</h1>
-          <p className="text-muted-foreground font-medium">Gestiona los avisos y anuncios para el personal de Ciudad Don Bosco.</p>
+          <p className="text-muted-foreground font-medium">Gestiona los avisos para Ciudad Don Bosco.</p>
         </div>
       </div>
 
@@ -135,32 +134,26 @@ export default function AnnouncementManagementPage() {
             </CardHeader>
             <CardContent className="p-8 space-y-6">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Título del Aviso</Label>
-                <Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-12 rounded-xl font-bold border-gray-100 bg-gray-50/50" placeholder="Ej: Cambio de Horarios" required />
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Título</Label>
+                <Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-12 rounded-xl bg-gray-50 font-bold" required />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Contenido del Mensaje</Label>
-                <Textarea value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} className="min-h-[150px] rounded-xl font-bold border-gray-100 bg-gray-50/50" placeholder="Escribe aquí el detalle del anuncio..." required />
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Mensaje</Label>
+                <Textarea value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} className="min-h-[150px] rounded-xl bg-gray-50 font-bold" required />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Prioridad</Label>
                   <Select value={formData.priority} onValueChange={(val: any) => setFormData({...formData, priority: val})}>
-                    <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="high">Importante (Rojo)</SelectItem>
-                    </SelectContent>
+                    <SelectTrigger className="h-12 rounded-xl bg-gray-50 font-bold"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="normal">Normal</SelectItem><SelectItem value="high">Importante</SelectItem></SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Estado</Label>
                   <Select value={formData.status} onValueChange={(val: any) => setFormData({...formData, status: val})}>
-                    <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 border-gray-100 font-bold"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Activo (Visible)</SelectItem>
-                      <SelectItem value="inactive">Inactivo (Oculto)</SelectItem>
-                    </SelectContent>
+                    <SelectTrigger className="h-12 rounded-xl bg-gray-50 font-bold"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="active">Visible</SelectItem><SelectItem value="inactive">Oculto</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>
@@ -170,11 +163,6 @@ export default function AnnouncementManagementPage() {
                 {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                 {editingId ? 'Guardar Cambios' : 'Publicar Aviso'}
               </Button>
-              {editingId && (
-                <Button variant="outline" className="h-14 w-14 rounded-2xl border-gray-200" onClick={() => { setEditingId(null); setFormData({title:'', content:'', priority:'normal', status:'active'}); }}>
-                  <X className="w-6 h-6" />
-                </Button>
-              )}
             </CardFooter>
           </form>
         </Card>
@@ -190,20 +178,13 @@ export default function AnnouncementManagementPage() {
                     <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin opacity-20" /></div>
                   ) : announcements && announcements.length > 0 ? (
                     announcements.map(ann => (
-                      <Card key={ann.id} className={cn(
-                        "border-none shadow-md rounded-[2rem] overflow-hidden bg-white transition-all hover:scale-[1.01] border border-gray-50",
-                        ann.status === 'inactive' && "opacity-60 grayscale"
-                      )}>
+                      <Card key={ann.id} className={cn("border-none shadow-md rounded-[2rem] bg-white transition-all hover:scale-[1.01] border border-gray-50", ann.status === 'inactive' && "opacity-60 grayscale")}>
                         <CardContent className="p-6">
                           <div className="flex justify-between items-start gap-4">
                             <div className="space-y-3 flex-1">
                               <div className="flex items-center gap-2">
-                                <Badge className={cn("text-[8px] font-black px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>
-                                  {ann.priority === 'high' ? 'IMPORTANTE' : 'ESTÁNDAR'}
-                                </Badge>
-                                <Badge variant="outline" className={cn("text-[8px] font-black px-3 py-1", ann.status === 'active' ? "text-green-600 border-green-200 bg-green-50" : "text-gray-400 border-gray-200")}>
-                                  {ann.status === 'active' ? 'VISIBLE' : 'OCULTO'}
-                                </Badge>
+                                <Badge className={cn("text-[8px] font-black px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>{ann.priority === 'high' ? 'IMPORTANTE' : 'ESTÁNDAR'}</Badge>
+                                <Badge variant="outline" className="text-[8px] font-black px-3 py-1">{ann.status === 'active' ? 'VISIBLE' : 'OCULTO'}</Badge>
                               </div>
                               <h3 className="text-lg font-black text-gray-800">{ann.title}</h3>
                               <p className="text-sm text-muted-foreground leading-relaxed mt-2">{ann.content}</p>
@@ -214,24 +195,15 @@ export default function AnnouncementManagementPage() {
                               </div>
                             </div>
                             <div className="flex flex-col gap-2">
-                              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-primary hover:bg-primary/5" onClick={() => handleEdit(ann)}>
-                                <Edit3 className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-muted-foreground" onClick={() => handleToggleStatus(ann)}>
-                                {ann.status === 'active' ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </Button>
-                              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-destructive hover:bg-destructive/5" onClick={() => handleDelete(ann.id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-primary" onClick={() => handleEdit(ann)}><Edit3 className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-destructive" onClick={() => handleDelete(ann.id)}><Trash2 className="w-4 h-4" /></Button>
                             </div>
                           </div>
                         </CardContent>
                       </Card>
                     ))
                   ) : (
-                    <div className="py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20 italic">
-                      No hay anuncios registrados.
-                    </div>
+                    <div className="py-20 text-center text-muted-foreground font-black opacity-20 italic">No hay registros.</div>
                   )}
                 </div>
              </ScrollArea>

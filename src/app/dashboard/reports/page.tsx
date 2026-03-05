@@ -56,7 +56,6 @@ export default function ReportsPage() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
-  // Queries estabilizadas con useMemoFirebase para prevenir bucles infinitos
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return (isDocent || (selectedDocent !== 'all' && !isDocent))
@@ -88,7 +87,6 @@ export default function ReportsPage() {
   const programs = useMemo(() => programsRaw || [], [programsRaw]);
   const allShifts = useMemo(() => allShiftsRaw || [], [allShiftsRaw]);
 
-  // Lógica de filtrado y agrupación dinámica
   const dailyReports = useMemo(() => {
     const userMap = new Map(profiles.map(p => [p.id, p]));
     const grouped = new Map<string, any>();
@@ -96,7 +94,6 @@ export default function ReportsPage() {
     records.forEach(r => {
       const uData = userMap.get(r.userId);
       
-      // Filtros administrativos
       if (!isDocent) {
         if (selectedDocent !== 'all' && r.userId !== selectedDocent) return;
         if (selectedCampus !== 'all' && uData?.campus !== selectedCampus) return;
@@ -147,6 +144,10 @@ export default function ReportsPage() {
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [records, profiles, selectedDocent, selectedCampus, selectedProgram, selectedShift, period, isDocent]);
 
+  const totalTimeHours = useMemo(() => {
+    return dailyReports.reduce((acc, r) => acc + r.hours, 0);
+  }, [dailyReports]);
+
   const chartData = useMemo(() => {
     const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
     const counts: Record<string, number> = {};
@@ -171,6 +172,7 @@ export default function ReportsPage() {
       ["CIUDAD DON BOSCO - REPORTE OFICIAL DE ASISTENCIA"],
       [`Periodo: ${period}`],
       [`Filtro Sede: ${selectedCampus === 'all' ? 'Todas' : selectedCampus}`],
+      [`Total Acumulado: ${formatDuration(totalTimeHours)}`],
       [`Generado por: ${user?.name} (${user?.role})`],
       [`Fecha de generación: ${new Date().toLocaleString()}`],
       [],
@@ -187,14 +189,17 @@ export default function ReportsPage() {
       r.entry || "--:--",
       r.exit || "--:--",
       formatDuration(r.hours),
-      "Firma Sincronizada"
+      "Sincronizado"
     ]);
+
+    rows.push([]);
+    rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", "", formatDuration(totalTimeHours), "Validado"]);
 
     const csvContent = metaData.concat(rows).map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Reporte_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Auditoria_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -219,29 +224,28 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-      {/* Header Institucional para Impresión */}
       <div className="hidden print:flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
         <div className="flex items-center gap-4">
            <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl text-white font-black text-2xl">DB</div>
            <div>
              <h1 className="text-2xl font-black text-primary uppercase">Ciudad Don Bosco</h1>
-             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Informe Oficial de Auditoría de Asistencia</p>
+             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Informe Oficial de Auditoría</p>
            </div>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Fecha de Reporte</p>
-          <p className="text-sm font-black">{new Date().toLocaleDateString()}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Tiempo Total del Reporte</p>
+          <p className="text-xl font-black text-primary">{formatDuration(totalTimeHours)}</p>
         </div>
       </div>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
-          <p className="text-muted-foreground font-medium italic">Sincronización en tiempo real de presencia y jornadas.</p>
+          <p className="text-muted-foreground font-medium italic">Sincronización en tiempo real de presencia.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="rounded-xl font-black gap-2 h-11" onClick={handleExportExcel}>
-            <Download className="w-4 h-4 text-green-600" /> Exportar Excel
+            <Download className="w-4 h-4 text-green-600" /> Excel con Totales
           </Button>
           <Button onClick={() => window.print()} className="rounded-xl font-black gap-2 h-11 px-6 shadow-md">
             <Printer className="w-4 h-4" /> Imprimir PDF
@@ -249,66 +253,50 @@ export default function ReportsPage() {
         </div>
       </div>
       
-      {/* Panel de Filtros */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-[2rem] shadow-xl no-print">
-        <div className="space-y-1">
-          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Periodo</p>
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Semana Actual">Semana Actual</SelectItem>
-              <SelectItem value="Mes Actual">Mes Actual</SelectItem>
-              <SelectItem value="Todo el Historial">Todo el Historial</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {!isDocent && (
-          <>
-            <div className="space-y-1">
-              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Personal</p>
-              <Select value={selectedDocent} onValueChange={setSelectedDocent}>
-                <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Docente" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los Miembros</SelectItem>
-                  {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Sede</p>
-              <Select value={selectedCampus} onValueChange={setSelectedCampus}>
-                <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Sede" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las Sedes</SelectItem>
-                  {campuses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Programa</p>
-              <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-                <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Programa" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los Programas</SelectItem>
-                  {programs.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Jornada</p>
-              <Select value={selectedShift} onValueChange={setSelectedShift}>
-                <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Jornada" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las Jornadas</SelectItem>
-                  {allShifts.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 no-print">
+        <Card className="md:col-span-3 bg-white p-4 rounded-[2rem] shadow-xl flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[150px] space-y-1">
+            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Periodo</p>
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Semana Actual">Semana Actual</SelectItem>
+                <SelectItem value="Mes Actual">Mes Actual</SelectItem>
+                <SelectItem value="Todo el Historial">Todo el Historial</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {!isDocent && (
+            <>
+              <div className="flex-1 min-w-[150px] space-y-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Personal</p>
+                <Select value={selectedDocent} onValueChange={setSelectedDocent}>
+                  <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Docente" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 min-w-[150px] space-y-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Sede</p>
+                <Select value={selectedCampus} onValueChange={setSelectedCampus}>
+                  <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Sede" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {campuses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </Card>
+        <Card className="bg-primary text-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center p-6 transition-transform hover:scale-105">
+           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Tiempo Total</p>
+           <h3 className="text-3xl font-black">{formatDuration(totalTimeHours)}</h3>
+        </Card>
       </div>
 
-      {/* Visualización Gráfica y IA */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 no-print">
         <Card className="lg:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
           <CardHeader className="p-8 border-b bg-gray-50/30">
@@ -333,12 +321,12 @@ export default function ReportsPage() {
         
         <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden flex flex-col">
           <CardHeader className="p-8">
-            <CardTitle className="text-2xl font-black flex items-center gap-3"><Sparkles className="w-6 h-6" /> Resumen IA</CardTitle>
-            <CardDescription className="text-white/70 font-bold">Análisis inteligente del periodo seleccionado.</CardDescription>
+            <CardTitle className="text-2xl font-black flex items-center gap-3"><Sparkles className="w-6 h-6" /> Auditor IA</CardTitle>
+            <CardDescription className="text-white/70 font-bold">Análisis del periodo seleccionado.</CardDescription>
           </CardHeader>
           <CardContent className="p-8 pt-0 flex-1">
             {aiSummary ? (
-              <div className="bg-white/10 p-6 rounded-[2rem] text-sm font-bold animate-in zoom-in h-full max-h-[250px] overflow-y-auto">
+              <div className="bg-white/10 p-6 rounded-[2rem] text-sm font-bold animate-in zoom-in h-full max-h-[250px] overflow-y-auto leading-relaxed">
                 "{aiSummary.summary}"
               </div>
             ) : (
@@ -346,7 +334,7 @@ export default function ReportsPage() {
                 <div className="p-4 rounded-full bg-white/10"><TrendingUp className="w-10 h-10" /></div>
                 <Button onClick={handleGenerateAiSummary} disabled={generatingAi || dailyReports.length === 0} variant="secondary" className="w-full h-14 rounded-2xl font-black text-primary shadow-xl">
                   {generatingAi ? <Loader2 className="animate-spin mr-2" /> : <Sparkles className="mr-2" />} 
-                  Generar Auditoría IA
+                  Generar Informe IA
                 </Button>
               </div>
             )}
@@ -354,10 +342,12 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Tabla de Desglose Institucional */}
       <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden print:shadow-none print:border print:rounded-none">
-        <CardHeader className="border-b bg-gray-50/50 p-8">
-          <CardTitle className="text-xl font-black">Desglose Institucional</CardTitle>
+        <CardHeader className="border-b bg-gray-50/50 p-8 flex flex-row items-center justify-between">
+          <CardTitle className="text-xl font-black">Desglose de Jornadas</CardTitle>
+          <div className="bg-primary/5 px-4 py-2 rounded-xl text-primary font-black text-xs">
+            {dailyReports.length} Registros Encontrados
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -375,28 +365,38 @@ export default function ReportsPage() {
                 {recordsLoading ? (
                   <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20" /></td></tr>
                 ) : dailyReports.length > 0 ? (
-                  dailyReports.map((r, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 transition-all">
-                      <td className="px-8 py-6">
-                        <div className="font-black text-sm">{r.userName}</div>
-                        <div className="text-[10px] text-muted-foreground font-bold">{r.campus} • {r.program}</div>
-                      </td>
-                      <td className="px-8 py-6 font-bold text-xs">{r.date}</td>
-                      <td className="px-8 py-6">
-                        <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter">
-                          {r.shiftName}
-                        </Badge>
-                      </td>
-                      <td className="px-8 py-6 text-xs font-bold text-gray-600">
-                        {r.entry || '--:--'} → {r.exit || '--:--'}
-                      </td>
+                  <>
+                    {dailyReports.map((r, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50 transition-all">
+                        <td className="px-8 py-6">
+                          <div className="font-black text-sm">{r.userName}</div>
+                          <div className="text-[10px] text-muted-foreground font-bold">{r.campus} • {r.program}</div>
+                        </td>
+                        <td className="px-8 py-6 font-bold text-xs">{r.date}</td>
+                        <td className="px-8 py-6">
+                          <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter">
+                            {r.shiftName}
+                          </Badge>
+                        </td>
+                        <td className="px-8 py-6 text-xs font-bold text-gray-600">
+                          {r.entry || '--:--'} → {r.exit || '--:--'}
+                        </td>
+                        <td className="px-8 py-6 text-center">
+                          <Badge className="font-black bg-green-500 text-white rounded-lg px-3 py-1">
+                            {formatDuration(r.hours)}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-50/50">
+                      <td colSpan={4} className="px-8 py-6 text-right font-black text-xs uppercase tracking-widest">Suma Total del Periodo</td>
                       <td className="px-8 py-6 text-center">
-                        <Badge className="font-black bg-green-500 text-white rounded-lg px-3 py-1">
-                          {formatDuration(r.hours)}
+                        <Badge className="font-black bg-primary text-white rounded-lg px-4 py-2 text-sm shadow-lg">
+                          {formatDuration(totalTimeHours)}
                         </Badge>
                       </td>
                     </tr>
-                  ))
+                  </>
                 ) : (
                   <tr><td colSpan={5} className="py-20 text-center text-muted-foreground font-bold italic">No se encontraron registros para este criterio.</td></tr>
                 )}
@@ -406,7 +406,6 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {/* Sello de Firma al final del Reporte */}
       <div className="hidden print:flex flex-col items-end mt-20 pr-12">
         <div className="w-64 text-center space-y-4">
           <div className="border-b-2 border-gray-300 pb-2 min-h-[100px] flex items-center justify-center">
@@ -439,8 +438,6 @@ export default function ReportsPage() {
           .sidebar, header, nav { display: none !important; }
           main { padding: 0 !important; margin: 0 !important; }
           .print-force-visible { display: block !important; visibility: visible !important; opacity: 1 !important; }
-          img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .max-h-7xl { max-width: 100% !important; }
         }
       `}</style>
     </div>
