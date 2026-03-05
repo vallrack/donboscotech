@@ -32,7 +32,7 @@ export default function AnnouncementManagementPage() {
     status: 'active' as 'active' | 'inactive'
   });
 
-  // Consulta estabilizada para prevenir el Spinner infinito y bucles de renderizado
+  // Consulta estabilizada para prevenir el Spinner infinito
   const announcementsQuery = useMemoFirebase(() => 
     db ? query(collection(db, 'announcements'), orderBy('createdAt', 'desc')) : null, 
     [db]
@@ -206,7 +206,7 @@ export default function AnnouncementManagementPage() {
                                 </Badge>
                               </div>
                               <h3 className="text-lg font-black text-gray-800">{ann.title}</h3>
-                              <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{ann.content}</p>
+                              <p className="text-sm text-muted-foreground leading-relaxed mt-2">{ann.content}</p>
                               <div className="flex items-center gap-3 pt-2 text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest">
                                  <span>Por {ann.authorName}</span>
                                  <span>•</span>
