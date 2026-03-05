@@ -66,7 +66,6 @@ export default function PublicAttendanceScanner() {
   }, [mode]);
 
   useEffect(() => {
-    // Solo iniciar el escáner si estamos en modo cámara, tenemos permiso y NO estamos mostrando un éxito
     if (mode === 'camera' && hasCameraPermission && !lastScannedUser) {
       const startScanner = async () => {
         try {
@@ -108,7 +107,7 @@ export default function PublicAttendanceScanner() {
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
         toast({ variant: "destructive", title: "No Encontrado", description: "QR no registrado." });
-        setTimeout(() => { isProcessing.current = false; setScanning(false); }, 3000);
+        setTimeout(() => { isProcessing.current = false; setScanning(false); }, 2000);
         return;
       }
 
@@ -168,12 +167,12 @@ export default function PublicAttendanceScanner() {
 
       toast({ title: recordType === 'entry' ? "¡Bienvenido!" : "¡Hasta pronto!" });
 
-      // Reinicio automático después de 4 segundos
+      // Reinicio automático después de 2 segundos (ajustado de 4 a 2 por petición del usuario)
       setTimeout(() => { 
         setLastScannedUser(null); 
         setScanning(false); 
         isProcessing.current = false; 
-      }, 4000);
+      }, 2000);
       
     } catch (err: any) {
       setScanning(false); 

@@ -29,6 +29,7 @@ export default function AttendanceScanPage() {
   const qrRegionId = "qr-reader";
   const html5QrCode = useRef<Html5Qrcode | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const isProcessing = useRef(false);
 
   useEffect(() => {
     const getCameraPermission = async () => {
@@ -88,12 +89,13 @@ export default function AttendanceScanPage() {
   }, [toast]);
 
   const registerAttendance = async (token: string) => {
-    if (!db || !user || success || scanning) return;
+    if (!db || !user || success || scanning || isProcessing.current) return;
     if (!locationRef.current) {
        toast({ variant: "destructive", title: "Esperando GPS" });
        return;
     };
 
+    isProcessing.current = true;
     setScanning(true);
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
@@ -141,15 +143,22 @@ export default function AttendanceScanPage() {
       setSuccess({ type: recordType, time: timeStr, shift: activeShift?.name });
       toast({ title: "Registro Sincronizado" });
 
+      // Reinicio automático después de 2 segundos para permitir escaneo continuo
+      setTimeout(() => {
+        setSuccess(null);
+        isProcessing.current = false;
+      }, 2000);
+
     } catch (err: any) {
       setScanning(false);
+      isProcessing.current = false;
       toast({ variant: "destructive", title: "Error" });
     }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !db) return;
+    if (!file || !db || isProcessing.current) return;
     const scanner = new Html5Qrcode(qrRegionId);
     try {
       const decodedText = await scanner.scanFile(file, true);
@@ -171,7 +180,7 @@ export default function AttendanceScanPage() {
           <p className="text-lg font-black text-primary">{success.shift || 'Fuera de Horario'}</p>
           <p className="text-[10px] font-bold text-gray-400">{success.type === 'entry' ? 'Ingreso' : 'Salida'} a las {success.time}</p>
         </div>
-        <Button className="mt-8 h-12 rounded-xl font-bold px-8 shadow-lg" onClick={() => setSuccess(null)}>Escanear otro</Button>
+        <p className="mt-6 text-xs font-bold text-muted-foreground animate-pulse">Reiniciando cámara en 2s...</p>
       </div>
     );
   }
