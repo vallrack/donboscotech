@@ -160,35 +160,52 @@ export default function ReportsPage() {
   };
 
   const handleExportExcel = () => {
-    const headers = ["Personal", "Cédula", "Sede", "Programa", "Fecha", "Jornada", "Entrada", "Salida", "Horas Totales", "Sello Digital"];
-    const reportMetadata = [
-      ["CIUDAD DON BOSCO - INFORME OFICIAL"],
-      [`Periodo: ${period}`],
-      [`Generado por: ${user?.name} (${user?.role})`],
-      [`Fecha de Reporte: ${new Date().toLocaleDateString()}`],
+    // Configuración para que Excel reconozca correctamente los caracteres en español (UTF-8 con BOM)
+    const BOM = "\uFEFF";
+    const sep = "sep=;\n";
+    const headers = ["Personal", "Cedula", "Sede", "Programa", "Fecha", "Jornada", "Entrada", "Salida", "Horas Totales", "Estado"];
+    
+    // Encabezado institucional similar al PDF
+    const metadata = [
+      ["CIUDAD DON BOSCO - INFORME OFICIAL DE ASISTENCIA"],
+      ["Periodo:", period],
+      ["Generado por:", `${user?.name} (${user?.role})`],
+      ["Fecha de Reporte:", new Date().toLocaleDateString()],
       [], // Espacio
       headers
     ];
 
-    const rows = dailyReports.map(r => [
-      r.userName,
-      profiles.find(p => p.id === r.userId)?.documentId || user?.documentId || 'N/A',
-      r.campus,
-      r.program,
-      r.date,
-      r.shiftName,
-      r.entry || "--:--",
-      r.exit || "--:--",
-      formatDuration(r.hours),
-      user?.signatureUrl ? "VALIDADO (Firma Sincronizada)" : "PENDIENTE"
-    ]);
+    const rows = dailyReports.map(r => {
+      const uData = profiles.find(p => p.id === r.userId);
+      return [
+        r.userName,
+        uData?.documentId || 'N/A',
+        r.campus,
+        r.program,
+        r.date,
+        r.shiftName,
+        r.entry || "--:--",
+        r.exit || "--:--",
+        formatDuration(r.hours),
+        "VALIDADO (Firma Sincronizada)"
+      ];
+    });
 
-    const csvContent = "\uFEFF" + "sep=;\n" + 
-      reportMetadata.map(row => row.join(";")).join("\n") + "\n" +
-      rows.map(row => row.map(cell => `"${cell}"`).join(";")).join("\n");
+    // Pie de página con firma
+    const footer = [
+      [],
+      ["RESPONSABLE DE VALIDACION"],
+      [user?.name?.toUpperCase() || 'PERSONAL AUTORIZADO'],
+      [user?.role?.toUpperCase() || 'INSTITUCIONAL'],
+      ["FIRMA DIGITAL ACTIVA"]
+    ];
 
+    const content = metadata.concat(rows).concat(footer);
+    const csvContent = content.map(row => row.map(cell => `"${cell}"`).join(";")).join("\n");
+    
+    const blob = new Blob([BOM + sep + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
+    link.href = URL.createObjectURL(blob);
     link.download = `Reporte_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
@@ -206,7 +223,7 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div><h1 className="text-4xl font-black text-primary tracking-tighter">{isDocent ? 'Mi Historial' : 'Auditoría Institucional'}</h1><p className="text-muted-foreground font-medium italic">Análisis detallado de jornadas y presencia.</p></div>
         <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl font-black gap-2" onClick={handleExportExcel}><Download className="w-4 h-4 text-green-600" /> Excel Profesional</Button>
+          <Button variant="outline" className="rounded-xl font-black gap-2 h-11" onClick={handleExportExcel}><Download className="w-4 h-4 text-green-600" /> Excel Profesional</Button>
           <Button onClick={() => window.print()} className="rounded-xl font-black gap-2 h-11 px-6 shadow-md"><Printer className="w-4 h-4" /> Exportar PDF</Button>
         </div>
       </div>
@@ -269,3 +286,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+

@@ -32,6 +32,7 @@ export default function AnnouncementManagementPage() {
     status: 'active' as 'active' | 'inactive'
   });
 
+  // Consulta estabilizada para prevenir el Spinner infinito y bucles de renderizado
   const announcementsQuery = useMemoFirebase(() => 
     db ? query(collection(db, 'announcements'), orderBy('createdAt', 'desc')) : null, 
     [db]
@@ -166,7 +167,7 @@ export default function AnnouncementManagementPage() {
             </CardContent>
             <CardFooter className="bg-gray-50/50 p-8 border-t flex gap-3">
               <Button type="submit" className="flex-1 h-14 rounded-2xl font-black gap-2 shadow-lg" disabled={saving}>
-                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : editingId ? <Save className="w-5 h-5" /> : <Megaphone className="w-5 h-5" />}
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                 {editingId ? 'Guardar Cambios' : 'Publicar Aviso'}
               </Button>
               {editingId && (
