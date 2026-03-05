@@ -62,11 +62,11 @@ export default function AnnouncementManagementPage() {
         await updateDoc(docRef, payload);
       }
 
-      toast({ title: editingId ? "Anuncio Actualizado" : "Anuncio Publicado" });
+      toast({ title: editingId ? "Actualizado" : "Publicado" });
       setEditingId(null);
       setFormData({ title: '', content: '', priority: 'normal', status: 'active' });
     } catch (error) {
-      toast({ variant: "destructive", title: "Error al guardar" });
+      toast({ variant: "destructive", title: "Error" });
     } finally {
       setSaving(false);
     }
@@ -74,57 +74,30 @@ export default function AnnouncementManagementPage() {
 
   const handleEdit = (ann: Announcement) => {
     setEditingId(ann.id);
-    setFormData({
-      title: ann.title,
-      content: ann.content,
-      priority: ann.priority,
-      status: ann.status
-    });
+    setFormData({ title: ann.title, content: ann.content, priority: ann.priority, status: ann.status });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleToggleStatus = async (ann: Announcement) => {
-    if (!db) return;
-    const newStatus = ann.status === 'active' ? 'inactive' : 'active';
-    try {
-      await updateDoc(doc(db, 'announcements', ann.id), { status: newStatus });
-      toast({ title: newStatus === 'active' ? "Anuncio Activado" : "Anuncio Inactivado" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
   const handleDelete = async (id: string) => {
-    if (!db || !confirm('¿Eliminar permanentemente este anuncio?')) return;
+    if (!db || !confirm('¿Eliminar anuncio?')) return;
     try {
       await deleteDoc(doc(db, 'announcements', id));
-      toast({ title: "Anuncio Eliminado" });
+      toast({ title: "Eliminado" });
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
     }
   };
 
-  if (!user || (user.role !== 'admin' && user.role !== 'coordinator' && user.role !== 'secretary')) {
-    return (
-      <div className="p-20 text-center bg-gray-50 rounded-3xl">
-        <ShieldAlert className="w-16 h-16 text-destructive mx-auto opacity-20 mb-4" />
-        <h2 className="text-2xl font-black text-destructive">Acceso Restringido</h2>
-        <p className="text-muted-foreground font-bold">Solo personal administrativo puede gestionar la comunicación.</p>
-      </div>
-    );
-  }
+  if (!user || (user.role === 'docent')) return null;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-black text-primary tracking-tighter">Comunicación Institucional</h1>
-          <p className="text-muted-foreground font-medium">Gestiona los avisos para Ciudad Don Bosco.</p>
-        </div>
+        <h1 className="text-4xl font-black text-primary tracking-tighter">Comunicación Institucional</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <Card className="lg:col-span-5 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden h-fit sticky top-24">
+        <Card className="lg:col-span-5 border-none shadow-2xl rounded-[2.5rem] bg-white h-fit sticky top-24">
           <form onSubmit={handleSave}>
             <CardHeader className="bg-gray-50/50 p-8 border-b">
               <CardTitle className="text-xl font-black flex items-center gap-2">
@@ -133,29 +106,17 @@ export default function AnnouncementManagementPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-8 space-y-6">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Título</Label>
-                <Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-12 rounded-xl bg-gray-50 font-bold" required />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Mensaje</Label>
-                <Textarea value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} className="min-h-[150px] rounded-xl bg-gray-50 font-bold" required />
-              </div>
+              <div className="space-y-2"><Label className="text-[10px] font-black uppercase">Título</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-12 bg-gray-50 font-bold" required /></div>
+              <div className="space-y-2"><Label className="text-[10px] font-black uppercase">Mensaje</Label><Textarea value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} className="min-h-[150px] bg-gray-50 font-bold" required /></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Prioridad</Label>
-                  <Select value={formData.priority} onValueChange={(val: any) => setFormData({...formData, priority: val})}>
-                    <SelectTrigger className="h-12 rounded-xl bg-gray-50 font-bold"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="normal">Normal</SelectItem><SelectItem value="high">Importante</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Estado</Label>
-                  <Select value={formData.status} onValueChange={(val: any) => setFormData({...formData, status: val})}>
-                    <SelectTrigger className="h-12 rounded-xl bg-gray-50 font-bold"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="active">Visible</SelectItem><SelectItem value="inactive">Oculto</SelectItem></SelectContent>
-                  </Select>
-                </div>
+                <Select value={formData.priority} onValueChange={(val: any) => setFormData({...formData, priority: val})}>
+                  <SelectTrigger className="h-12 bg-gray-50 font-bold"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="normal">Normal</SelectItem><SelectItem value="high">Importante</SelectItem></SelectContent>
+                </Select>
+                <Select value={formData.status} onValueChange={(val: any) => setFormData({...formData, status: val})}>
+                  <SelectTrigger className="h-12 bg-gray-50 font-bold"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="active">Visible</SelectItem><SelectItem value="inactive">Oculto</SelectItem></SelectContent>
+                </Select>
               </div>
             </CardContent>
             <CardFooter className="bg-gray-50/50 p-8 border-t flex gap-3">
@@ -178,25 +139,17 @@ export default function AnnouncementManagementPage() {
                     <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin opacity-20" /></div>
                   ) : announcements && announcements.length > 0 ? (
                     announcements.map(ann => (
-                      <Card key={ann.id} className={cn("border-none shadow-md rounded-[2rem] bg-white transition-all hover:scale-[1.01] border border-gray-50", ann.status === 'inactive' && "opacity-60 grayscale")}>
+                      <Card key={ann.id} className={cn("border-none shadow-md rounded-[2rem] bg-white border border-gray-50", ann.status === 'inactive' && "opacity-60 grayscale")}>
                         <CardContent className="p-6">
                           <div className="flex justify-between items-start gap-4">
                             <div className="space-y-3 flex-1">
-                              <div className="flex items-center gap-2">
-                                <Badge className={cn("text-[8px] font-black px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>{ann.priority === 'high' ? 'IMPORTANTE' : 'ESTÁNDAR'}</Badge>
-                                <Badge variant="outline" className="text-[8px] font-black px-3 py-1">{ann.status === 'active' ? 'VISIBLE' : 'OCULTO'}</Badge>
-                              </div>
+                              <Badge className={cn("text-[8px] font-black px-3 py-1", ann.priority === 'high' ? "bg-red-500" : "bg-primary")}>{ann.priority === 'high' ? 'IMPORTANTE' : 'ESTÁNDAR'}</Badge>
                               <h3 className="text-lg font-black text-gray-800">{ann.title}</h3>
-                              <p className="text-sm text-muted-foreground leading-relaxed mt-2">{ann.content}</p>
-                              <div className="flex items-center gap-3 pt-2 text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest">
-                                 <span>Por {ann.authorName}</span>
-                                 <span>•</span>
-                                 <span>{ann.createdAt?.toDate?.() ? ann.createdAt.toDate().toLocaleDateString() : 'Reciente'}</span>
-                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">{ann.content}</p>
                             </div>
                             <div className="flex flex-col gap-2">
-                              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-primary" onClick={() => handleEdit(ann)}><Edit3 className="w-4 h-4" /></Button>
-                              <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-destructive" onClick={() => handleDelete(ann.id)}><Trash2 className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(ann)}><Edit3 className="w-4 h-4 text-primary" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleDelete(ann.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                             </div>
                           </div>
                         </CardContent>

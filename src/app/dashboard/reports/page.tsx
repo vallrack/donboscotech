@@ -20,8 +20,10 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { AttendanceRecord, User, Campus, Program, Shift } from '@/lib/types';
-import Image from 'next/image';
 
+/**
+ * Calcula las horas decimales a partir de strings de tiempo.
+ */
 function calculateHoursDecimal(start: string | null, end: string | null): number {
   if (!start || !end) return 0;
   try {
@@ -32,9 +34,12 @@ function calculateHoursDecimal(start: string | null, end: string | null): number
   } catch (e) { return 0; }
 }
 
+/**
+ * Formatea una duración decimal en un string amigable (ej. 11 min, 5h 20m).
+ */
 function formatDuration(decimalHours: number): string {
   const totalMinutes = Math.round(decimalHours * 60);
-  if (totalMinutes === 0) return '--';
+  if (totalMinutes === 0) return '0 min';
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
   if (h === 0) return `${m} min`;
@@ -56,6 +61,7 @@ export default function ReportsPage() {
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
+  // Consultas memorizadas para evitar bucles infinitos
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return (isDocent || (selectedDocent !== 'all' && !isDocent))
@@ -63,17 +69,10 @@ export default function ReportsPage() {
       : query(collection(db, 'globalAttendanceRecords'), orderBy('date', 'desc'));
   }, [db, user?.id, isDocent, selectedDocent]);
 
-  const profilesQuery = useMemoFirebase(() => 
-    db ? query(collection(db, 'userProfiles'), orderBy('name')) : null, [db]);
-
-  const shiftsQuery = useMemoFirebase(() => 
-    db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
-
-  const campusesQuery = useMemoFirebase(() => 
-    db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
-
-  const programsQuery = useMemoFirebase(() => 
-    db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
+  const profilesQuery = useMemoFirebase(() => db ? query(collection(db, 'userProfiles'), orderBy('name')) : null, [db]);
+  const shiftsQuery = useMemoFirebase(() => db ? query(collection(db, 'shifts'), orderBy('name')) : null, [db]);
+  const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
+  const programsQuery = useMemoFirebase(() => db ? query(collection(db, 'programs'), orderBy('name')) : null, [db]);
 
   const { data: recordsRaw, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: profilesRaw } = useCollection<User>(profilesQuery);
@@ -85,7 +84,6 @@ export default function ReportsPage() {
   const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
   const campuses = useMemo(() => campusesRaw || [], [campusesRaw]);
   const programs = useMemo(() => programsRaw || [], [programsRaw]);
-  const allShifts = useMemo(() => allShiftsRaw || [], [allShiftsRaw]);
 
   const dailyReports = useMemo(() => {
     const userMap = new Map(profiles.map(p => [p.id, p]));
@@ -94,6 +92,7 @@ export default function ReportsPage() {
     records.forEach(r => {
       const uData = userMap.get(r.userId);
       
+      // Filtros del lado del cliente para flexibilidad administrativa
       if (!isDocent) {
         if (selectedDocent !== 'all' && r.userId !== selectedDocent) return;
         if (selectedCampus !== 'all' && uData?.campus !== selectedCampus) return;
@@ -164,17 +163,16 @@ export default function ReportsPage() {
   }, [dailyReports]);
 
   const handleExportExcel = () => {
-    const BOM = "\uFEFF";
+    const BOM = "\uFEFF"; // Previene errores de caracteres extraños en Excel (tildes, etc.)
     const sep = ";";
     const headers = ["Personal", "Cédula", "Sede", "Programa", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Validación Digital"];
     
     const metaData = [
       ["CIUDAD DON BOSCO - REPORTE OFICIAL DE ASISTENCIA"],
       [`Periodo: ${period}`],
-      [`Filtro Sede: ${selectedCampus === 'all' ? 'Todas' : selectedCampus}`],
-      [`Total Acumulado: ${formatDuration(totalTimeHours)}`],
+      [`Sede: ${selectedCampus === 'all' ? 'Todas' : selectedCampus}`],
       [`Generado por: ${user?.name} (${user?.role})`],
-      [`Fecha de generación: ${new Date().toLocaleString()}`],
+      [`Fecha: ${new Date().toLocaleString()}`],
       [],
       headers
     ];
@@ -189,9 +187,10 @@ export default function ReportsPage() {
       r.entry || "--:--",
       r.exit || "--:--",
       formatDuration(r.hours),
-      "Sincronizado"
+      "SINC"
     ]);
 
+    // Fila de sumatoria total
     rows.push([]);
     rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", "", formatDuration(totalTimeHours), "Validado"]);
 
@@ -199,7 +198,7 @@ export default function ReportsPage() {
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Auditoria_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Reporte_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -224,6 +223,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+      {/* Cabecera de Impresión */}
       <div className="hidden print:flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
         <div className="flex items-center gap-4">
            <div className="w-16 h-16 bg-primary flex items-center justify-center rounded-2xl text-white font-black text-2xl">DB</div>
@@ -292,7 +292,7 @@ export default function ReportsPage() {
           )}
         </Card>
         <Card className="bg-primary text-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center p-6 transition-transform hover:scale-105">
-           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Tiempo Total</p>
+           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Total Acumulado</p>
            <h3 className="text-3xl font-black">{formatDuration(totalTimeHours)}</h3>
         </Card>
       </div>
@@ -300,7 +300,7 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 no-print">
         <Card className="lg:col-span-2 border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
           <CardHeader className="p-8 border-b bg-gray-50/30">
-            <CardTitle className="text-xl font-black">Tendencia de Presencia (Horas)</CardTitle>
+            <CardTitle className="text-xl font-black">Tendencia de Presencia</CardTitle>
           </CardHeader>
           <CardContent className="pt-10 h-[350px]">
             {recordsLoading ? (
@@ -322,7 +322,7 @@ export default function ReportsPage() {
         <Card className="border-none shadow-2xl rounded-[2.5rem] bg-primary text-white overflow-hidden flex flex-col">
           <CardHeader className="p-8">
             <CardTitle className="text-2xl font-black flex items-center gap-3"><Sparkles className="w-6 h-6" /> Auditor IA</CardTitle>
-            <CardDescription className="text-white/70 font-bold">Análisis del periodo seleccionado.</CardDescription>
+            <CardDescription className="text-white/70 font-bold">Resumen inteligente del periodo.</CardDescription>
           </CardHeader>
           <CardContent className="p-8 pt-0 flex-1">
             {aiSummary ? (
@@ -334,7 +334,7 @@ export default function ReportsPage() {
                 <div className="p-4 rounded-full bg-white/10"><TrendingUp className="w-10 h-10" /></div>
                 <Button onClick={handleGenerateAiSummary} disabled={generatingAi || dailyReports.length === 0} variant="secondary" className="w-full h-14 rounded-2xl font-black text-primary shadow-xl">
                   {generatingAi ? <Loader2 className="animate-spin mr-2" /> : <Sparkles className="mr-2" />} 
-                  Generar Informe IA
+                  Generar Resumen IA
                 </Button>
               </div>
             )}
@@ -346,7 +346,7 @@ export default function ReportsPage() {
         <CardHeader className="border-b bg-gray-50/50 p-8 flex flex-row items-center justify-between">
           <CardTitle className="text-xl font-black">Desglose de Jornadas</CardTitle>
           <div className="bg-primary/5 px-4 py-2 rounded-xl text-primary font-black text-xs">
-            {dailyReports.length} Registros Encontrados
+            {dailyReports.length} Registros
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -388,6 +388,7 @@ export default function ReportsPage() {
                         </td>
                       </tr>
                     ))}
+                    {/* Fila de Sumatoria Total en la Tabla */}
                     <tr className="bg-gray-50/50">
                       <td colSpan={4} className="px-8 py-6 text-right font-black text-xs uppercase tracking-widest">Suma Total del Periodo</td>
                       <td className="px-8 py-6 text-center">
@@ -398,7 +399,7 @@ export default function ReportsPage() {
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground font-bold italic">No se encontraron registros para este criterio.</td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground font-bold italic">Sin registros para estos filtros.</td></tr>
                 )}
               </tbody>
             </table>
@@ -406,6 +407,7 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
+      {/* Bloque de Firma para PDF */}
       <div className="hidden print:flex flex-col items-end mt-20 pr-12">
         <div className="w-64 text-center space-y-4">
           <div className="border-b-2 border-gray-300 pb-2 min-h-[100px] flex items-center justify-center">

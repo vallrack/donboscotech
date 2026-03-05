@@ -37,9 +37,7 @@ export default function AttendanceScanPage() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         setHasCameraPermission(true);
         if (videoRef.current) videoRef.current.srcObject = stream;
-      } catch (error) {
-        setHasCameraPermission(false);
-      }
+      } catch (error) { setHasCameraPermission(false); }
     };
     if (mode === 'camera') getCameraPermission();
   }, [mode]);
@@ -49,23 +47,16 @@ export default function AttendanceScanPage() {
       const startScanner = async () => {
         try {
           html5QrCode.current = new Html5Qrcode(qrRegionId);
-          const config = { fps: 10, qrbox: { width: 250, height: 250 } };
           await html5QrCode.current.start(
             { facingMode: "environment" }, 
-            config, 
+            { fps: 10, qrbox: { width: 250, height: 250 } }, 
             (decodedText) => registerAttendance(decodedText), 
             () => {}
           );
         } catch (err) {}
       };
-
       startScanner();
-
-      return () => { 
-        if (html5QrCode.current?.isScanning) {
-          html5QrCode.current.stop().catch(() => {}); 
-        }
-      };
+      return () => { if (html5QrCode.current?.isScanning) html5QrCode.current.stop().catch(() => {}); };
     }
   }, [mode, hasCameraPermission, success]);
 
@@ -78,22 +69,16 @@ export default function AttendanceScanPage() {
           locationRef.current = coords;
           setLocationLoading(false);
         },
-        (err) => {
-          setLocationLoading(false);
-          toast({ title: "GPS Requerido", variant: "destructive" });
-        },
+        (err) => { setLocationLoading(false); toast({ title: "GPS Requerido", variant: "destructive" }); },
         { enableHighAccuracy: true }
       );
-      return () => navigator.geolocation.watchPosition(watchId);
+      return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [toast]);
 
   const registerAttendance = async (token: string) => {
     if (!db || !user || success || scanning || isProcessing.current) return;
-    if (!locationRef.current) {
-       toast({ variant: "destructive", title: "Esperando GPS" });
-       return;
-    };
+    if (!locationRef.current) { toast({ variant: "destructive", title: "Esperando GPS" }); return; };
 
     isProcessing.current = true;
     setScanning(true);
@@ -106,31 +91,20 @@ export default function AttendanceScanPage() {
       let activeShift: Shift | null = null;
       if (user.shiftIds && user.shiftIds.length > 0) {
         const shiftsSnap = await getDocs(collection(db, 'shifts'));
-        const availableShifts = shiftsSnap.docs
+        activeShift = shiftsSnap.docs
           .map(d => ({ id: d.id, ...d.data() } as Shift))
-          .filter(s => user.shiftIds?.includes(s.id));
-        activeShift = availableShifts.find(s => s.days?.includes(dayName)) || null;
+          .find(s => user.shiftIds?.includes(s.id) && s.days?.includes(dayName)) || null;
       }
 
       const q = query(collection(db, 'userProfiles', user.id, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(1));
       const querySnap = await getDocs(q);
-      let recordType: 'entry' | 'exit' = 'entry';
-      if (!querySnap.empty) {
-        const lastRecord = querySnap.docs[0].data();
-        if (lastRecord.date === dateStr) recordType = lastRecord.type === 'entry' ? 'exit' : 'entry';
-      }
+      const recordType = !querySnap.empty && querySnap.docs[0].data().date === dateStr && querySnap.docs[0].data().type === 'entry' ? 'exit' : 'entry';
 
       const recordId = `${user.id}_${now.getTime()}_mobile`;
       const recordData = {
-        userId: user.id,
-        userName: user.name,
-        date: dateStr,
-        time: timeStr,
-        type: recordType,
-        method: 'QR',
-        shiftId: activeShift?.id || 'none',
-        shiftName: activeShift?.name || 'Fuera de Horario',
-        location: { lat: locationRef.current.lat, lng: locationRef.current.lng, address: 'Sede Ciudad Don Bosco' },
+        userId: user.id, userName: user.name, date: dateStr, time: timeStr, type: recordType,
+        method: 'QR', shiftId: activeShift?.id || 'none', shiftName: activeShift?.name || 'Fuera de Horario',
+        location: { lat: locationRef.current.lat, lng: locationRef.current.lng, address: 'Ciudad Don Bosco' },
         createdAt: serverTimestamp()
       };
 
@@ -141,31 +115,14 @@ export default function AttendanceScanPage() {
 
       setScanning(false);
       setSuccess({ type: recordType, time: timeStr, shift: activeShift?.name });
-      toast({ title: "Registro Sincronizado" });
-
-      // Reinicio automático después de 2 segundos exactos
+      
+      // REINICIO AUTOMÁTICO EN 2 SEGUNDOS
       setTimeout(() => {
         setSuccess(null);
         isProcessing.current = false;
       }, 2000);
 
-    } catch (err: any) {
-      setScanning(false);
-      isProcessing.current = false;
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !db || isProcessing.current) return;
-    const scanner = new Html5Qrcode(qrRegionId);
-    try {
-      const decodedText = await scanner.scanFile(file, true);
-      registerAttendance(decodedText);
-    } catch (err) {
-      toast({ variant: "destructive", title: "QR No Detectado" });
-    }
+    } catch (err: any) { setScanning(false); isProcessing.current = false; }
   };
 
   if (success) {
@@ -175,12 +132,11 @@ export default function AttendanceScanPage() {
           <CheckCircle2 className={cn("w-16 h-16", success.type === 'entry' ? "text-green-500" : "text-blue-500")} />
         </div>
         <h2 className="text-3xl font-black">{success.type === 'entry' ? "¡Bienvenido!" : "¡Buen Turno!"}</h2>
-        <div className="bg-gray-50 p-6 rounded-3xl mt-6 space-y-1">
-          <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">Jornada Registrada</p>
+        <div className="bg-gray-50 p-6 rounded-3xl mt-6">
           <p className="text-lg font-black text-primary">{success.shift || 'Fuera de Horario'}</p>
-          <p className="text-[10px] font-bold text-gray-400">{success.type === 'entry' ? 'Ingreso' : 'Salida'} a las {success.time}</p>
+          <p className="text-[10px] font-bold text-gray-400">Registrado a las {success.time}</p>
         </div>
-        <p className="mt-6 text-xs font-bold text-muted-foreground animate-pulse">Reinicio automático en 2s...</p>
+        <p className="mt-6 text-xs font-bold text-muted-foreground animate-pulse">Siguiente registro en 2s...</p>
       </div>
     );
   }
@@ -188,29 +144,12 @@ export default function AttendanceScanPage() {
   return (
     <div className="max-w-xl mx-auto py-4 animate-in fade-in duration-500">
       <Card className="border-none shadow-2xl overflow-hidden rounded-[2.5rem] bg-white">
-        <CardHeader className="bg-primary text-white text-center py-10 relative overflow-hidden">
-          <CardTitle className="text-3xl font-black">Registro Personal</CardTitle>
-          <CardDescription className="text-primary-foreground/80 font-bold mt-2">Sincroniza tu jornada con el QR de la sede</CardDescription>
-        </CardHeader>
+        <CardHeader className="bg-primary text-white text-center py-10"><CardTitle className="text-3xl font-black">Registro Personal</CardTitle></CardHeader>
         <CardContent className="p-8 space-y-8">
-          <div className="flex p-1.5 bg-gray-100 rounded-2xl">
-            <Button variant={mode === 'camera' ? 'default' : 'ghost'} className={cn("flex-1 rounded-xl font-black h-11", mode === 'camera' && "shadow-md")} onClick={() => setMode('camera')}>Cámara</Button>
-            <Button variant={mode === 'file' ? 'default' : 'ghost'} className={cn("flex-1 rounded-xl font-black h-11", mode === 'file' && "shadow-md")} onClick={() => setMode('file')}>Imagen</Button>
-          </div>
-          <div id={qrRegionId} className={cn("w-full aspect-square bg-gray-50 rounded-[2rem] overflow-hidden border-4 border-dashed border-gray-200 shadow-inner", mode === 'file' && "hidden")} />
-          {mode === 'file' && (
-            <div className="w-full aspect-square bg-gray-50 rounded-[2rem] flex flex-col items-center justify-center border-4 border-dashed border-gray-200 p-8 text-center space-y-4">
-              <ImageIcon className="w-16 h-16 text-primary opacity-20" />
-              <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" id="qr-upload" />
-              <Button asChild className="rounded-xl font-black h-12 px-10"><label htmlFor="qr-upload" className="cursor-pointer">SELECCIONAR FOTO</label></Button>
-            </div>
-          )}
+          <div id={qrRegionId} className="w-full aspect-square bg-gray-50 rounded-[2rem] overflow-hidden border-4 border-dashed border-gray-200" />
           <div className="p-5 bg-gray-50 rounded-3xl border border-gray-100 flex items-center gap-5">
-            <div className={cn("p-3 rounded-2xl", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>{locationLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}</div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Geolocalización</p>
-              <p className="text-xs font-black text-gray-700">{location ? "Sede Validada" : "Ubicando..."}</p>
-            </div>
+            <div className={cn("p-3 rounded-2xl", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}><MapPin className="w-5 h-5" /></div>
+            <div><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Geolocalización</p><p className="text-xs font-black text-gray-700">{location ? "Sede Validada" : "Ubicando..."}</p></div>
             {scanning && <Loader2 className="w-5 h-5 animate-spin text-primary ml-auto" />}
           </div>
         </CardContent>
