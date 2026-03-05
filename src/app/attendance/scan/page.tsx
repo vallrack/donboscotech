@@ -4,8 +4,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { QrCode, MapPin, Loader2, Camera, Image as ImageIcon, User as UserIcon, Clock, ArrowLeft } from 'lucide-react';
@@ -167,7 +165,7 @@ export default function PublicAttendanceScanner() {
 
       toast({ title: recordType === 'entry' ? "¡Bienvenido!" : "¡Hasta pronto!" });
 
-      // Reinicio automático después de 2 segundos para permitir escaneo continuo
+      // Reinicio automático después de 2 segundos exactos
       setTimeout(() => { 
         setLastScannedUser(null); 
         setScanning(false); 

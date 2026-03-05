@@ -61,7 +61,7 @@ export default function ReportsPage() {
     return isDocent 
       ? query(collection(db, 'userProfiles', user.id, 'attendanceRecords'), orderBy('date', 'desc'))
       : query(collection(db, 'globalAttendanceRecords'), orderBy('date', 'desc'));
-  }, [db, user?.id, user?.role, isDocent]);
+  }, [db, user?.id, isDocent]);
 
   const profilesQuery = useMemoFirebase(() => {
     if (!db || isDocent) return null;
@@ -74,14 +74,14 @@ export default function ReportsPage() {
   }, [db]);
 
   const campusesQuery = useMemoFirebase(() => {
-    if (!db || isDocent) return null;
+    if (!db) return null;
     return query(collection(db, 'campuses'), orderBy('name'));
-  }, [db, isDocent]);
+  }, [db]);
 
   const programsQuery = useMemoFirebase(() => {
-    if (!db || isDocent) return null;
+    if (!db) return null;
     return query(collection(db, 'programs'), orderBy('name'));
-  }, [db, isDocent]);
+  }, [db]);
 
   const { data: recordsRaw } = useCollection<AttendanceRecord>(recordsQuery);
   const { data: profilesRaw } = useCollection<User>(profilesQuery);
@@ -113,6 +113,7 @@ export default function ReportsPage() {
           userId: r.userId, userName: r.userName, date: r.date, entry: null, exit: null,
           shiftName: r.shiftName || 'N/A',
           program: uData?.program || user?.program || 'N/A',
+          campus: uData?.campus || user?.campus || 'N/A'
         });
       }
       const dayData = grouped.get(key);
@@ -158,6 +159,40 @@ export default function ReportsPage() {
     finally { setGeneratingAi(false); }
   };
 
+  const handleExportExcel = () => {
+    const headers = ["Personal", "Cédula", "Sede", "Programa", "Fecha", "Jornada", "Entrada", "Salida", "Horas Totales", "Sello Digital"];
+    const reportMetadata = [
+      ["CIUDAD DON BOSCO - INFORME OFICIAL"],
+      [`Periodo: ${period}`],
+      [`Generado por: ${user?.name} (${user?.role})`],
+      [`Fecha de Reporte: ${new Date().toLocaleDateString()}`],
+      [], // Espacio
+      headers
+    ];
+
+    const rows = dailyReports.map(r => [
+      r.userName,
+      profiles.find(p => p.id === r.userId)?.documentId || user?.documentId || 'N/A',
+      r.campus,
+      r.program,
+      r.date,
+      r.shiftName,
+      r.entry || "--:--",
+      r.exit || "--:--",
+      formatDuration(r.hours),
+      user?.signatureUrl ? "VALIDADO (Firma Sincronizada)" : "PENDIENTE"
+    ]);
+
+    const csvContent = "\uFEFF" + "sep=;\n" + 
+      reportMetadata.map(row => row.join(";")).join("\n") + "\n" +
+      rows.map(row => row.map(cell => `"${cell}"`).join(";")).join("\n");
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
+    link.download = `Reporte_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
       <div className="hidden print:flex items-center justify-between border-b-2 border-primary pb-6 mb-8">
@@ -171,14 +206,7 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div><h1 className="text-4xl font-black text-primary tracking-tighter">{isDocent ? 'Mi Historial' : 'Auditoría Institucional'}</h1><p className="text-muted-foreground font-medium italic">Análisis detallado de jornadas y presencia.</p></div>
         <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl font-black gap-2" onClick={() => {
-            const headers = ["Personal", "Fecha", "Jornada", "Entrada", "Salida", "Horas", "Sello Digital"];
-            const csv = "\uFEFF" + "sep=;\n" + headers.join(";") + "\n" + dailyReports.map(r => `"${r.userName}";"${r.date}";"${r.shiftName}";"${r.entry || "--"}";"${r.exit || "--"}";"${formatDuration(r.hours)}";"${user?.signatureUrl ? 'SINC' : 'PEND'}"`).join("\n");
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-            link.download = `Reporte_${user?.name.replace(' ', '_')}.csv`;
-            link.click();
-          }}><Download className="w-4 h-4 text-green-600" /> Excel</Button>
+          <Button variant="outline" className="rounded-xl font-black gap-2" onClick={handleExportExcel}><Download className="w-4 h-4 text-green-600" /> Excel Profesional</Button>
           <Button onClick={() => window.print()} className="rounded-xl font-black gap-2 h-11 px-6 shadow-md"><Printer className="w-4 h-4" /> Exportar PDF</Button>
         </div>
       </div>

@@ -143,7 +143,7 @@ export default function AttendanceScanPage() {
       setSuccess({ type: recordType, time: timeStr, shift: activeShift?.name });
       toast({ title: "Registro Sincronizado" });
 
-      // Reinicio automático después de 2 segundos para permitir escaneo continuo
+      // Reinicio automático después de 2 segundos exactos
       setTimeout(() => {
         setSuccess(null);
         isProcessing.current = false;
@@ -180,7 +180,7 @@ export default function AttendanceScanPage() {
           <p className="text-lg font-black text-primary">{success.shift || 'Fuera de Horario'}</p>
           <p className="text-[10px] font-bold text-gray-400">{success.type === 'entry' ? 'Ingreso' : 'Salida'} a las {success.time}</p>
         </div>
-        <p className="mt-6 text-xs font-bold text-muted-foreground animate-pulse">Reiniciando cámara en 2s...</p>
+        <p className="mt-6 text-xs font-bold text-muted-foreground animate-pulse">Reinicio automático en 2s...</p>
       </div>
     );
   }
