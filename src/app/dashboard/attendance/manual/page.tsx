@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, doc, setDoc, serverTimestamp, query, where } from 'firebase/firestore';
@@ -10,7 +11,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Search, UserCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { Search, UserCheck, AlertCircle, Loader2, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 
@@ -21,6 +22,22 @@ export default function ManualAttendancePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [markedUsers, setMarkedUsers] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const locationRef = useRef<{ lat: number, lng: number } | null>(null);
+
+  // Capturar ubicación del coordinador para el registro manual
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocation(coords);
+          locationRef.current = coords;
+        },
+        () => toast({ title: "GPS Recomendado", description: "La ubicación ayuda a validar el registro manual.", variant: "default" })
+      );
+    }
+  }, [toast]);
 
   const docentsQuery = useMemo(() => {
     if (!db) return null;
@@ -56,7 +73,7 @@ export default function ManualAttendancePage() {
 
     const savePromises = Array.from(markedUsers).map(userId => {
       const docent = allDocents.find(d => (d as any).id === userId);
-      const recordId = `${userId}_${now.getTime()}_manual`;
+      const recordId = `${userId}_${now.getTime()}_manual_admin`;
       
       const recordData = {
         userId,
@@ -65,7 +82,13 @@ export default function ManualAttendancePage() {
         time: timeStr,
         type: 'entry',
         method: 'Manual',
-        location: { lat: 0, lng: 0, address: 'Registro Manual por Coordinador' },
+        location: { 
+          lat: locationRef.current?.lat || 0, 
+          lng: locationRef.current?.lng || 0, 
+          address: locationRef.current 
+            ? `Validado por Coord: ${locationRef.current.lat.toFixed(6)}, ${locationRef.current.lng.toFixed(6)}` 
+            : 'Registro Manual Administrativo' 
+        },
         registeredBy: currentUser?.id,
         createdAt: serverTimestamp()
       };
@@ -101,11 +124,16 @@ export default function ManualAttendancePage() {
           <h1 className="text-3xl font-bold tracking-tight text-primary">Marcaje Manual</h1>
           <p className="text-muted-foreground text-sm">Validación administrativa de asistencia para docentes.</p>
         </div>
-        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex items-center gap-3 max-w-md shadow-sm">
-          <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0" />
-          <p className="text-[11px] text-yellow-800 font-semibold leading-relaxed">
-            Esta acción queda registrada con su firma digital y será auditada en el cierre de nómina.
-          </p>
+        <div className="flex items-center gap-3">
+          <div className={cn("px-4 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold", location ? "bg-green-50 text-green-700 border-green-100" : "bg-gray-50 text-gray-500 border-gray-100")}>
+            <MapPin className="w-3.5 h-3.5" /> {location ? "GPS Activo" : "GPS Inactivo"}
+          </div>
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex items-center gap-3 max-w-md shadow-sm">
+            <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0" />
+            <p className="text-[11px] text-yellow-800 font-semibold leading-relaxed">
+              Esta acción queda registrada con su sello digital y será auditada en el cierre de nómina.
+            </p>
+          </div>
         </div>
       </div>
 

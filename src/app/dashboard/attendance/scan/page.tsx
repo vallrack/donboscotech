@@ -30,25 +30,27 @@ export default function AttendanceScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const isProcessing = useRef(false);
 
-  // 1. Geolocalización en tiempo real
+  // 1. Geolocalización robusta
   useEffect(() => {
     if ("geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setLocation(coords);
-          locationRef.current = coords;
+          if (pos.coords.latitude !== 0) {
+            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setLocation(coords);
+            locationRef.current = coords;
+          }
         },
         (err) => { 
-          toast({ title: "GPS Requerido", description: "Por favor activa tu ubicación.", variant: "destructive" }); 
+          toast({ title: "GPS Requerido", description: "Activa tu ubicación para poder marcar asistencia.", variant: "destructive" }); 
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [toast]);
 
-  // 2. Permisos y pre-carga de cámara para móviles
+  // 2. Permisos y pre-carga de cámara
   useEffect(() => {
     const getCameraPermission = async () => {
       try {
@@ -66,7 +68,7 @@ export default function AttendanceScanPage() {
     getCameraPermission();
   }, []);
 
-  // 3. Inicialización del Escáner QR
+  // 3. Escáner QR
   useEffect(() => {
     if (hasCameraPermission && !success && !isProcessing.current) {
       const startScanner = async () => {
@@ -80,9 +82,7 @@ export default function AttendanceScanPage() {
             (decodedText) => registerAttendance(decodedText), 
             () => {}
           );
-        } catch (err) {
-          console.error("Scanner error:", err);
-        }
+        } catch (err) {}
       };
       startScanner();
       return () => { 
@@ -95,8 +95,10 @@ export default function AttendanceScanPage() {
 
   const registerAttendance = async (token: string, method: 'QR' | 'Manual' = 'QR') => {
     if (!db || !user || success || isProcessing.current) return;
-    if (!locationRef.current) { 
-      toast({ variant: "destructive", title: "Esperando GPS", description: "Ubícate en una zona con señal." }); 
+    
+    // Validación crítica de GPS para evitar 0,0
+    if (!locationRef.current || locationRef.current.lat === 0) { 
+      toast({ variant: "destructive", title: "GPS no disponible", description: "Buscando señal satelital... espera un momento." }); 
       return; 
     };
 
@@ -110,7 +112,6 @@ export default function AttendanceScanPage() {
     const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
     
     try {
-      // Determinar Jornada Activa
       let activeShift: Shift | null = null;
       if (user.shiftIds && user.shiftIds.length > 0) {
         const shiftsSnap = await getDocs(collection(db, 'shifts'));
@@ -119,7 +120,6 @@ export default function AttendanceScanPage() {
           .find(s => user.shiftIds?.includes(s.id) && s.days?.includes(dayName)) || null;
       }
 
-      // Determinar si es Entrada o Salida
       const q = query(collection(db, 'userProfiles', user.id, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(1));
       const querySnap = await getDocs(q);
       const recordType = !querySnap.empty && querySnap.docs[0].data().date === dateStr && querySnap.docs[0].data().type === 'entry' ? 'exit' : 'entry';
@@ -137,7 +137,7 @@ export default function AttendanceScanPage() {
         location: { 
           lat: locationRef.current.lat, 
           lng: locationRef.current.lng, 
-          address: `Lat: ${locationRef.current.lat.toFixed(4)}, Lng: ${locationRef.current.lng.toFixed(4)}` 
+          address: `Lat: ${locationRef.current.lat.toFixed(6)}, Lng: ${locationRef.current.lng.toFixed(6)}` 
         },
         createdAt: serverTimestamp()
       };
@@ -151,7 +151,7 @@ export default function AttendanceScanPage() {
       setManualSaving(false);
       setSuccess({ type: recordType, time: timeStr, shift: activeShift?.name });
       
-      // REINICIO AUTOMÁTICO EN 2 SEGUNDOS
+      // Reinicio en 2 segundos como solicitaste
       setTimeout(() => {
         setSuccess(null);
         isProcessing.current = false;
@@ -161,7 +161,7 @@ export default function AttendanceScanPage() {
       setScanning(false); 
       setManualSaving(false);
       isProcessing.current = false; 
-      toast({ variant: "destructive", title: "Error al registrar", description: err.message });
+      toast({ variant: "destructive", title: "Error", description: err.message });
     }
   };
 
@@ -190,31 +190,28 @@ export default function AttendanceScanPage() {
           <p className="text-primary-foreground/80 text-xs font-bold uppercase tracking-widest mt-2">Ciudad Don Bosco</p>
         </CardHeader>
         <CardContent className="p-8 space-y-8">
-          {/* Contenedor del Lector QR */}
           <div className="relative group">
              <div id={qrRegionId} className="w-full aspect-square bg-gray-50 rounded-[2.5rem] overflow-hidden border-4 border-dashed border-gray-100 shadow-inner" />
              {!hasCameraPermission && hasCameraPermission !== null && (
                <div className="absolute inset-0 bg-gray-50/90 rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center gap-4">
                   <Camera className="w-12 h-12 text-muted-foreground opacity-20" />
-                  <p className="text-sm font-black text-gray-400 leading-tight">La cámara no está disponible en este dispositivo.</p>
+                  <p className="text-sm font-black text-gray-400 leading-tight">Acceso a cámara requerido para escaneo.</p>
                </div>
              )}
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {/* Status de GPS */}
             <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center gap-5">
-              <div className={cn("p-4 rounded-2xl shadow-sm", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>
+              <div className={cn("p-4 rounded-2xl shadow-sm transition-colors", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>
                 <MapPin className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Geolocalización</p>
-                <p className="text-xs font-black text-gray-700">{location ? "Zona Institucional Validada" : "Ubicando GPS..."}</p>
+                <p className="text-xs font-black text-gray-700">{location ? "Punto Exacto Detectado" : "Buscando ubicación..."}</p>
               </div>
               {scanning && <Loader2 className="w-6 h-6 animate-spin text-primary ml-auto" />}
             </div>
 
-            {/* Marcaje Manual Alternativo */}
             <div className="pt-4 border-t border-dashed">
                <Button 
                 variant="outline" 
@@ -223,28 +220,17 @@ export default function AttendanceScanPage() {
                 className="w-full h-16 rounded-[1.5rem] border-2 border-primary/20 bg-white text-primary font-black gap-3 hover:bg-primary hover:text-white transition-all shadow-lg"
                >
                  {manualSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <HandHelping className="w-6 h-6" />}
-                 Marcaje Manual de Emergencia
+                 {location ? "Marcaje Manual de Emergencia" : "Esperando Ubicación..."}
                </Button>
                <p className="text-[9px] text-center mt-3 text-muted-foreground font-bold italic">
-                 Usa esta opción si tienes problemas persistentes con el escáner QR.
+                 Válido solo si el GPS confirma tu presencia en la institución.
                </p>
             </div>
           </div>
         </CardContent>
       </Card>
       
-      {/* Video oculto para forzar inicialización de cámara en móviles */}
       <video ref={videoRef} className="hidden" autoPlay muted playsInline />
-
-      <div className="bg-yellow-50 border border-yellow-100 rounded-[2rem] p-6 flex items-start gap-4">
-        <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-black text-yellow-800 uppercase mb-1">Nota de Seguridad</p>
-          <p className="text-[10px] text-yellow-700/80 font-bold leading-relaxed">
-            Tu ubicación geográfica se registra en cada marcaje para auditoría institucional. Asegúrate de tener el GPS activo.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

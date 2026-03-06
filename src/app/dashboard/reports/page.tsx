@@ -12,14 +12,12 @@ import {
   MapPin, BookOpen, Clock, FilterX,
   Download, PenTool, ShieldCheck, ExternalLink
 } from 'lucide-react';
-import { summarizeAttendanceReport, AiReportSummaryOutput } from '@/ai/flows/ai-report-summary';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { AttendanceRecord, User, Campus, Program, Shift } from '@/lib/types';
+import { AttendanceRecord, User, Campus, Program } from '@/lib/types';
 
 /**
  * Calcula las horas decimales a partir de strings de tiempo.
@@ -57,10 +55,6 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState('Mes Actual');
   const [selectedDocent, setSelectedDocent] = useState('all');
   const [selectedCampus, setSelectedCampus] = useState('all');
-  const [selectedProgram, setSelectedProgram] = useState('all');
-  const [selectedShift, setSelectedShift] = useState('all');
-  const [generatingAi, setGeneratingAi] = useState(false);
-  const [aiSummary, setAiSummary] = useState<AiReportSummaryOutput | null>(null);
 
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -90,7 +84,6 @@ export default function ReportsPage() {
       if (!isDocent) {
         if (selectedDocent !== 'all' && r.userId !== selectedDocent) return;
         if (selectedCampus !== 'all' && uData?.campus !== selectedCampus) return;
-        if (selectedShift !== 'all' && r.shiftId !== selectedShift) return;
       }
 
       const key = `${r.userId}_${r.date}_${r.shiftId || 'none'}`;
@@ -101,9 +94,7 @@ export default function ReportsPage() {
           date: r.date, 
           entry: null, 
           exit: null,
-          shiftId: r.shiftId,
           shiftName: r.shiftName || 'N/A',
-          program: uData?.program || 'N/A',
           campus: uData?.campus || 'N/A',
           documentId: uData?.documentId || 'N/A',
           location: r.location || { lat: 0, lng: 0 }
@@ -136,7 +127,7 @@ export default function ReportsPage() {
       }
       return true;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [records, profiles, selectedDocent, selectedCampus, selectedShift, period, isDocent]);
+  }, [records, profiles, selectedDocent, selectedCampus, period, isDocent]);
 
   const totalTimeHours = useMemo(() => {
     return dailyReports.reduce((acc, r) => acc + r.hours, 0);
@@ -145,7 +136,7 @@ export default function ReportsPage() {
   const handleExportExcel = () => {
     const BOM = "\uFEFF";
     const sep = ";";
-    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "GPS", "Validación"];
+    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "GPS Exacto", "Validación"];
     
     const metaData = [
       ["CIUDAD DON BOSCO - REPORTE OFICIAL DE ASISTENCIA"],
@@ -166,12 +157,12 @@ export default function ReportsPage() {
       r.entry || "--:--",
       r.exit || "--:--",
       formatDuration(r.hours),
-      `${r.location?.lat}, ${r.location?.lng}`,
-      "SINC"
+      r.location?.lat !== 0 ? `${r.location?.lat}, ${r.location?.lng}` : "No GPS",
+      "Validado por Sello Digital"
     ]);
 
     rows.push([]);
-    rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", "", formatDuration(totalTimeHours), "Validado"]);
+    rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", "", formatDuration(totalTimeHours), "SINC"]);
 
     const csvContent = metaData.concat(rows).map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -237,7 +228,7 @@ export default function ReportsPage() {
           )}
         </Card>
         <Card className="bg-primary text-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center p-6 transition-transform hover:scale-105">
-           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Total Tiempo</p>
+           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Tiempo Acumulado</p>
            <h3 className="text-3xl font-black">{formatDuration(totalTimeHours)}</h3>
         </Card>
       </div>
@@ -257,7 +248,7 @@ export default function ReportsPage() {
                   <th className="px-8 py-6">Personal</th>
                   <th className="px-8 py-6">Fecha/Jornada</th>
                   <th className="px-8 py-6">Horario</th>
-                  <th className="px-8 py-6">Ubicación</th>
+                  <th className="px-8 py-6">Ubicación GPS</th>
                   <th className="px-8 py-6 text-center">Duración</th>
                 </tr>
               </thead>
@@ -282,13 +273,18 @@ export default function ReportsPage() {
                           {r.entry || '--:--'} → {r.exit || '--:--'}
                         </td>
                         <td className="px-8 py-6">
-                           <a 
-                            href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`}
-                            target="_blank"
-                            className="flex items-center gap-1.5 text-[9px] font-black text-primary hover:underline"
-                           >
-                             <MapPin className="w-3 h-3" /> Ver GPS <ExternalLink className="w-2.5 h-2.5" />
-                           </a>
+                           {r.location?.lat !== 0 ? (
+                             <a 
+                              href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`}
+                              target="_blank"
+                              className="flex items-center gap-1.5 text-[9px] font-black text-primary hover:underline group"
+                             >
+                               <MapPin className="w-3.5 h-3.5 group-hover:scale-125 transition-transform" />
+                               Ver Punto Exacto <ExternalLink className="w-2.5 h-2.5" />
+                             </a>
+                           ) : (
+                             <span className="text-[9px] text-muted-foreground italic">GPS no capturado</span>
+                           )}
                         </td>
                         <td className="px-8 py-6 text-center">
                           <Badge className="font-black bg-green-500 text-white rounded-lg px-3 py-1">
@@ -298,7 +294,7 @@ export default function ReportsPage() {
                       </tr>
                     ))}
                     <tr className="bg-gray-50/50">
-                      <td colSpan={4} className="px-8 py-6 text-right font-black text-xs uppercase tracking-widest">Suma Total</td>
+                      <td colSpan={4} className="px-8 py-6 text-right font-black text-xs uppercase tracking-widest">Suma Total del Periodo</td>
                       <td className="px-8 py-6 text-center">
                         <Badge className="font-black bg-primary text-white rounded-lg px-4 py-2 text-sm shadow-lg">
                           {formatDuration(totalTimeHours)}
@@ -307,7 +303,7 @@ export default function ReportsPage() {
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground font-bold italic">Sin registros.</td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground font-bold italic">Sin registros para estos criterios.</td></tr>
                 )}
               </tbody>
             </table>
