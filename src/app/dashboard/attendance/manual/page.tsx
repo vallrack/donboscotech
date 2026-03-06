@@ -3,18 +3,16 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Search, UserCheck, AlertCircle, Loader2, MapPin } from 'lucide-react';
+import { Search, UserCheck, Loader2, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { Shift } from '@/lib/types';
+import { Shift, User } from '@/lib/types';
 
 export default function ManualAttendancePage() {
   const { user: currentUser } = useAuth();
@@ -27,7 +25,7 @@ export default function ManualAttendancePage() {
   const locationRef = useRef<{ lat: number, lng: number } | null>(null);
 
   useEffect(() => {
-    if ("geolocation" in navigator) {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -35,31 +33,34 @@ export default function ManualAttendancePage() {
           locationRef.current = coords;
         },
         null,
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
   }, []);
 
-  const docentsQuery = useMemo(() => {
+  const docentsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(collection(db, 'userProfiles'), where('role', '==', 'docent'));
   }, [db]);
 
-  const { data: allDocents, loading } = useCollection(docentsQuery as any);
+  const { data: allDocents, loading } = useCollection<User>(docentsQuery as any);
 
   const filteredDocents = useMemo(() => {
+    const search = searchTerm.toLowerCase();
     return (allDocents || []).filter(u => 
-      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      u.name?.toLowerCase().includes(search) || 
+      u.email?.toLowerCase().includes(search)
     );
   }, [allDocents, searchTerm]);
 
   const toggleUser = (userId: string) => {
-    const newMarked = new Set(markedUsers);
-    if (newMarked.has(userId)) newMarked.delete(userId);
-    else newMarked.add(userId);
-    setMarkedUsers(newMarked);
+    setMarkedUsers(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -81,10 +82,9 @@ export default function ManualAttendancePage() {
       let blocked = 0;
 
       for (const userId of Array.from(markedUsers)) {
-        const docent = allDocents.find(d => (d as any).id === userId);
+        const docent = allDocents.find(d => d.id === userId);
         if (!docent) continue;
 
-        // Validar Jornada del Docente
         const todayShifts = allShifts.filter(s => 
           docent.shiftIds?.includes(s.id) && s.days?.includes(dayName)
         );
@@ -108,14 +108,24 @@ export default function ManualAttendancePage() {
         const currentLoc = locationRef.current || { lat: 0, lng: 0 };
         
         const recordData = {
-          userId, userName: docent.name, date: dateStr, time: timeStr, type: 'entry',
-          method: 'Manual', shiftId: activeShift.id, shiftName: activeShift.name,
-          location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `Validado por Admin en Punto: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
-          registeredBy: currentUser?.id, createdAt: serverTimestamp()
+          userId, 
+          userName: docent.name, 
+          date: dateStr, 
+          time: timeStr, 
+          type: 'entry',
+          method: 'Manual', 
+          shiftId: activeShift.id, 
+          shiftName: activeShift.name,
+          location: { 
+            lat: currentLoc.lat, 
+            lng: currentLoc.lng, 
+            address: `Validado por Admin en Punto: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` 
+          },
+          registeredBy: currentUser?.id, 
+          createdAt: serverTimestamp()
         };
 
-        const userRecordRef = doc(db, 'userProfiles', userId, 'attendanceRecords', recordId);
-        await setDoc(userRecordRef, recordData);
+        await setDoc(doc(db, 'userProfiles', userId, 'attendanceRecords', recordId), recordData);
         await setDoc(doc(db, 'globalAttendanceRecords', recordId), recordData);
         processed++;
       }
@@ -126,7 +136,7 @@ export default function ManualAttendancePage() {
       });
       setMarkedUsers(new Set());
     } catch (error) {
-      toast({ variant: "destructive", title: "Error" });
+      toast({ variant: "destructive", title: "Error en el registro" });
     } finally {
       setSaving(false);
     }
@@ -140,8 +150,8 @@ export default function ManualAttendancePage() {
           <p className="text-muted-foreground text-sm">Validación institucional con verificación de jornada.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className={cn("px-4 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all", location ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-500 border-gray-100")}>
-            <MapPin className="w-3.5 h-3.5" /> GPS Alta Precisión Activo
+          <div className="px-4 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold bg-gray-50 text-gray-500 border-gray-100">
+            <MapPin className="w-3.5 h-3.5" /> GPS Activo
           </div>
         </div>
       </div>
@@ -164,14 +174,14 @@ export default function ManualAttendancePage() {
               <thead>
                 <tr className="bg-gray-50/50 border-b text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   <th className="px-6 py-4">Docente</th>
-                  <th className="px-6 py-4">Validación Jornada</th>
+                  <th className="px-6 py-4">Estado</th>
                   <th className="px-6 py-4 text-center">Registrar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr><td colSpan={3} className="py-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto opacity-20" /></td></tr>
-                ) : (
+                ) : filteredDocents.length > 0 ? (
                   filteredDocents.map((docent) => (
                     <tr key={docent.id} className="hover:bg-gray-50/30 transition-colors">
                       <td className="px-6 py-4">
@@ -179,7 +189,7 @@ export default function ManualAttendancePage() {
                         <div className="text-[11px] text-muted-foreground">{docent.email}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant="outline" className="text-[10px] uppercase">Verificando en tiempo real...</Badge>
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold">Sin marcaje hoy</Badge>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center">
@@ -191,6 +201,8 @@ export default function ManualAttendancePage() {
                       </td>
                     </tr>
                   ))
+                ) : (
+                  <tr><td colSpan={3} className="py-20 text-center text-muted-foreground italic">No se encontraron docentes.</td></tr>
                 )}
               </tbody>
             </table>
@@ -212,4 +224,3 @@ export default function ManualAttendancePage() {
     </div>
   );
 }
-
