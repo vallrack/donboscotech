@@ -25,19 +25,23 @@ export default function ManualAttendancePage() {
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
   const locationRef = useRef<{ lat: number, lng: number } | null>(null);
 
-  // Capturar ubicación del coordinador para el registro manual
+  // Capturar ubicación del coordinador para el registro manual (punto exacto)
   useEffect(() => {
     if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
+      const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLocation(coords);
           locationRef.current = coords;
         },
-        () => toast({ title: "GPS Recomendado", description: "La ubicación ayuda a validar el registro manual.", variant: "default" })
+        () => {
+          console.warn("GPS no disponible para marcaje manual");
+        },
+        { enableHighAccuracy: true }
       );
+      return () => navigator.geolocation.clearWatch(watchId);
     }
-  }, [toast]);
+  }, []);
 
   const docentsQuery = useMemo(() => {
     if (!db) return null;
@@ -75,6 +79,8 @@ export default function ManualAttendancePage() {
       const docent = allDocents.find(d => (d as any).id === userId);
       const recordId = `${userId}_${now.getTime()}_manual_admin`;
       
+      const currentLoc = locationRef.current || { lat: 0, lng: 0 };
+      
       const recordData = {
         userId,
         userName: docent?.name || 'Docente',
@@ -83,10 +89,10 @@ export default function ManualAttendancePage() {
         type: 'entry',
         method: 'Manual',
         location: { 
-          lat: locationRef.current?.lat || 0, 
-          lng: locationRef.current?.lng || 0, 
-          address: locationRef.current 
-            ? `Validado por Coord: ${locationRef.current.lat.toFixed(6)}, ${locationRef.current.lng.toFixed(6)}` 
+          lat: currentLoc.lat, 
+          lng: currentLoc.lng, 
+          address: currentLoc.lat !== 0 
+            ? `Punto Validado: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` 
             : 'Registro Manual Administrativo' 
         },
         registeredBy: currentUser?.id,
@@ -125,13 +131,13 @@ export default function ManualAttendancePage() {
           <p className="text-muted-foreground text-sm">Validación administrativa de asistencia para docentes.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className={cn("px-4 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold", location ? "bg-green-50 text-green-700 border-green-100" : "bg-gray-50 text-gray-500 border-gray-100")}>
-            <MapPin className="w-3.5 h-3.5" /> {location ? "GPS Activo" : "GPS Inactivo"}
+          <div className={cn("px-4 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all", location ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-500 border-gray-100")}>
+            <MapPin className="w-3.5 h-3.5" /> {location ? "GPS Activo" : "Capturando GPS..."}
           </div>
           <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex items-center gap-3 max-w-md shadow-sm">
             <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0" />
             <p className="text-[11px] text-yellow-800 font-semibold leading-relaxed">
-              Esta acción queda registrada con su sello digital y será auditada en el cierre de nómina.
+              Esta acción quedará georreferenciada con su ubicación actual para auditoría de nómina.
             </p>
           </div>
         </div>
@@ -201,7 +207,7 @@ export default function ManualAttendancePage() {
           size="lg" 
           disabled={markedUsers.size === 0 || saving}
           onClick={handleSave}
-          className="px-12 h-14 text-lg font-bold shadow-xl"
+          className="px-12 h-14 text-lg font-bold shadow-xl rounded-2xl"
         >
           {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserCheck className="w-5 h-5 mr-2" />}
           Confirmar {markedUsers.size} registros

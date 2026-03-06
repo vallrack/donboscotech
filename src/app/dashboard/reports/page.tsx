@@ -34,7 +34,7 @@ function calculateHoursDecimal(start: string | null, end: string | null): number
 }
 
 /**
- * Formatea una duración decimal en un string amigable (ej. 11 min, 5h 20m).
+ * Formatea una duración decimal en un string amigable (ej. 11 min, 5h 29m).
  */
 function formatDuration(decimalHours: number): string {
   const totalMinutes = Math.round(decimalHours * 60);
@@ -56,6 +56,7 @@ export default function ReportsPage() {
   const [selectedDocent, setSelectedDocent] = useState('all');
   const [selectedCampus, setSelectedCampus] = useState('all');
 
+  // Consulta estabilizada en tiempo real
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return (isDocent || (selectedDocent !== 'all' && !isDocent))
@@ -74,6 +75,7 @@ export default function ReportsPage() {
   const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
   const campuses = useMemo(() => campusesRaw || [], [campusesRaw]);
 
+  // Lógica de reportes diarios agrupados y filtrados
   const dailyReports = useMemo(() => {
     const userMap = new Map(profiles.map(p => [p.id, p]));
     const grouped = new Map<string, any>();
@@ -129,21 +131,24 @@ export default function ReportsPage() {
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [records, profiles, selectedDocent, selectedCampus, period, isDocent]);
 
+  // Sumatoria total de tiempos
   const totalTimeHours = useMemo(() => {
     return dailyReports.reduce((acc, r) => acc + r.hours, 0);
   }, [dailyReports]);
 
+  // Exportación a Excel con metadatos y sumatoria
   const handleExportExcel = () => {
-    const BOM = "\uFEFF";
+    const BOM = "\uFEFF"; // Byte Order Mark para asegurar tildes en Excel
     const sep = ";";
-    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "GPS Exacto", "Validación"];
+    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Punto GPS", "Validación"];
     
     const metaData = [
-      ["CIUDAD DON BOSCO - REPORTE OFICIAL DE ASISTENCIA"],
+      ["CIUDAD DON BOSCO - INFORME OFICIAL DE ASISTENCIA"],
       [`Periodo: ${period}`],
-      [`Sede: ${selectedCampus === 'all' ? 'Todas' : selectedCampus}`],
-      [`Generado por: ${user?.name}`],
-      [`Fecha: ${new Date().toLocaleString()}`],
+      [`Filtro Personal: ${selectedDocent === 'all' ? 'Todos' : profiles.find(p => p.id === selectedDocent)?.name}`],
+      [`Filtro Sede: ${selectedCampus === 'all' ? 'Todas' : selectedCampus}`],
+      [`Generado por: ${user?.name} (${user?.role})`],
+      [`Fecha de Generación: ${new Date().toLocaleString()}`],
       [],
       headers
     ];
@@ -157,18 +162,19 @@ export default function ReportsPage() {
       r.entry || "--:--",
       r.exit || "--:--",
       formatDuration(r.hours),
-      r.location?.lat !== 0 ? `${r.location?.lat}, ${r.location?.lng}` : "No GPS",
-      "Validado por Sello Digital"
+      r.location?.lat !== 0 ? `${r.location?.lat}, ${r.location?.lng}` : "No Capturado",
+      "Sello Digital Sincronizado"
     ]);
 
+    // Fila de sumatoria total al final del Excel
     rows.push([]);
-    rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", "", formatDuration(totalTimeHours), "SINC"]);
+    rows.push(["TOTAL TIEMPO ACUMULADO", "", "", "", "", "", "", formatDuration(totalTimeHours), "", "Validación Don Bosco Track"]);
 
     const csvContent = metaData.concat(rows).map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Reporte_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Reporte_Auditoria_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -180,11 +186,11 @@ export default function ReportsPage() {
           <p className="text-muted-foreground font-medium italic">Sincronización geográfica en tiempo real.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl font-black gap-2 h-11" onClick={handleExportExcel}>
-            <Download className="w-4 h-4 text-green-600" /> Excel
+          <Button variant="outline" className="rounded-xl font-black gap-2 h-11 border-green-200 text-green-700 hover:bg-green-50 shadow-sm" onClick={handleExportExcel}>
+            <Download className="w-4 h-4" /> Excel Oficial
           </Button>
           <Button onClick={() => window.print()} className="rounded-xl font-black gap-2 h-11 px-6 shadow-md">
-            <Printer className="w-4 h-4" /> PDF
+            <Printer className="w-4 h-4" /> PDF Institucional
           </Button>
         </div>
       </div>
@@ -194,7 +200,7 @@ export default function ReportsPage() {
           <div className="flex-1 min-w-[150px] space-y-1">
             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Periodo</p>
             <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none h-12 shadow-inner"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Semana Actual">Semana Actual</SelectItem>
                 <SelectItem value="Mes Actual">Mes Actual</SelectItem>
@@ -207,9 +213,9 @@ export default function ReportsPage() {
               <div className="flex-1 min-w-[150px] space-y-1">
                 <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Personal</p>
                 <Select value={selectedDocent} onValueChange={setSelectedDocent}>
-                  <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Docente" /></SelectTrigger>
+                  <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none h-12 shadow-inner"><SelectValue placeholder="Docente" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="all">Todos los Miembros</SelectItem>
                     {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -217,9 +223,9 @@ export default function ReportsPage() {
               <div className="flex-1 min-w-[150px] space-y-1">
                 <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Sede</p>
                 <Select value={selectedCampus} onValueChange={setSelectedCampus}>
-                  <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none"><SelectValue placeholder="Sede" /></SelectTrigger>
+                  <SelectTrigger className="rounded-xl font-bold bg-gray-50 border-none h-12 shadow-inner"><SelectValue placeholder="Sede" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="all">Todas las Sedes</SelectItem>
                     {campuses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -228,7 +234,7 @@ export default function ReportsPage() {
           )}
         </Card>
         <Card className="bg-primary text-white rounded-[2rem] shadow-xl flex flex-col items-center justify-center p-6 transition-transform hover:scale-105">
-           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Tiempo Acumulado</p>
+           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Total Tiempo Acumulado</p>
            <h3 className="text-3xl font-black">{formatDuration(totalTimeHours)}</h3>
         </Card>
       </div>
@@ -237,7 +243,7 @@ export default function ReportsPage() {
         <CardHeader className="border-b bg-gray-50/50 p-8 flex flex-row items-center justify-between">
           <CardTitle className="text-xl font-black">Registros Georreferenciados</CardTitle>
           <div className="bg-primary/5 px-4 py-2 rounded-xl text-primary font-black text-xs">
-            {dailyReports.length} Registros
+            {dailyReports.length} Registros Activos
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -246,8 +252,8 @@ export default function ReportsPage() {
               <thead>
                 <tr className="bg-gray-50/20 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                   <th className="px-8 py-6">Personal</th>
-                  <th className="px-8 py-6">Fecha/Jornada</th>
-                  <th className="px-8 py-6">Horario</th>
+                  <th className="px-8 py-6">Fecha / Jornada</th>
+                  <th className="px-8 py-6">Entrada → Salida</th>
                   <th className="px-8 py-6">Ubicación GPS</th>
                   <th className="px-8 py-6 text-center">Duración</th>
                 </tr>
@@ -258,52 +264,58 @@ export default function ReportsPage() {
                 ) : dailyReports.length > 0 ? (
                   <>
                     {dailyReports.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50 transition-all">
+                      <tr key={idx} className="hover:bg-gray-50 transition-all group">
                         <td className="px-8 py-6">
-                          <div className="font-black text-sm">{r.userName}</div>
-                          <div className="text-[10px] text-muted-foreground font-bold">{r.campus}</div>
+                          <div className="font-black text-sm text-gray-800">{r.userName}</div>
+                          <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight">{r.campus} • {r.documentId}</div>
                         </td>
                         <td className="px-8 py-6">
                           <div className="text-xs font-bold">{r.date}</div>
-                          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest h-5">
+                          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest h-5 mt-1 border-primary/20 text-primary">
                             {r.shiftName}
                           </Badge>
                         </td>
                         <td className="px-8 py-6 text-xs font-bold text-gray-600">
-                          {r.entry || '--:--'} → {r.exit || '--:--'}
+                          <div className="flex items-center gap-2">
+                             <span className="text-green-600">{r.entry || '--:--'}</span>
+                             <span className="opacity-30">→</span>
+                             <span className="text-primary">{r.exit || '--:--'}</span>
+                          </div>
                         </td>
                         <td className="px-8 py-6">
                            {r.location?.lat !== 0 ? (
                              <a 
                               href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`}
                               target="_blank"
-                              className="flex items-center gap-1.5 text-[9px] font-black text-primary hover:underline group"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-[9px] font-black text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-all"
                              >
-                               <MapPin className="w-3.5 h-3.5 group-hover:scale-125 transition-transform" />
+                               <MapPin className="w-3.5 h-3.5" />
                                Ver Punto Exacto <ExternalLink className="w-2.5 h-2.5" />
                              </a>
                            ) : (
-                             <span className="text-[9px] text-muted-foreground italic">GPS no capturado</span>
+                             <span className="text-[9px] text-muted-foreground italic opacity-50">GPS no capturado</span>
                            )}
                         </td>
                         <td className="px-8 py-6 text-center">
-                          <Badge className="font-black bg-green-500 text-white rounded-lg px-3 py-1">
+                          <Badge className="font-black bg-green-500 text-white rounded-lg px-3 py-1.5 shadow-sm">
                             {formatDuration(r.hours)}
                           </Badge>
                         </td>
                       </tr>
                     ))}
-                    <tr className="bg-gray-50/50">
-                      <td colSpan={4} className="px-8 py-6 text-right font-black text-xs uppercase tracking-widest">Suma Total del Periodo</td>
-                      <td className="px-8 py-6 text-center">
-                        <Badge className="font-black bg-primary text-white rounded-lg px-4 py-2 text-sm shadow-lg">
+                    {/* Fila de Sumatoria Total al Final de la Tabla */}
+                    <tr className="bg-primary/5">
+                      <td colSpan={4} className="px-8 py-8 text-right font-black text-xs uppercase tracking-widest text-primary">Sumatoria Total del Periodo</td>
+                      <td className="px-8 py-8 text-center">
+                        <Badge className="font-black bg-primary text-white rounded-xl px-5 py-2.5 text-sm shadow-xl animate-in fade-in zoom-in duration-500">
                           {formatDuration(totalTimeHours)}
                         </Badge>
                       </td>
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground font-bold italic">Sin registros para estos criterios.</td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground font-bold italic">No se encontraron registros activos para estos criterios.</td></tr>
                 )}
               </tbody>
             </table>
@@ -311,15 +323,23 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      <div className="hidden print:flex flex-col items-end mt-20 pr-12">
-        <div className="w-64 text-center space-y-4">
-          <div className="border-b-2 border-gray-300 pb-2 min-h-[100px] flex items-center justify-center">
-            {user?.signatureUrl && <img src={user.signatureUrl} alt="Firma" className="max-h-24 mx-auto object-contain mb-2 print-force-visible" />}
+      {/* Sello de Firma al Final para PDF/Impresión */}
+      <div className="hidden print:flex flex-col items-end mt-24 pr-12">
+        <div className="w-72 text-center space-y-4">
+          <div className="border-b-2 border-gray-300 pb-2 min-h-[120px] flex items-center justify-center bg-gray-50/50 rounded-t-xl overflow-hidden">
+            {user?.signatureUrl ? (
+              <img src={user.signatureUrl} alt="Firma Digital" className="max-h-24 mx-auto object-contain mb-2 mix-blend-multiply" />
+            ) : (
+              <p className="text-[10px] text-muted-foreground italic uppercase tracking-widest opacity-30">Pendiente de Firma</p>
+            )}
           </div>
-          <p className="text-sm font-black uppercase text-gray-800">{user?.name}</p>
-          <div className="flex items-center justify-center gap-1.5 text-primary">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span className="text-[8px] font-black uppercase tracking-[0.3em]">Validación Don Bosco Track</span>
+          <div className="space-y-1">
+            <p className="text-sm font-black uppercase text-gray-800">{user?.name}</p>
+            <p className="text-[9px] font-black text-primary uppercase tracking-widest">{user?.role === 'docent' ? 'Docente Titular' : user?.role === 'coordinator' ? 'Coordinador Institucional' : user?.role}</p>
+          </div>
+          <div className="flex items-center justify-center gap-2 text-primary/40 pt-2">
+            <ShieldCheck className="w-4 h-4" />
+            <span className="text-[8px] font-black uppercase tracking-[0.4em]">Validado: Don Bosco Track Sinc</span>
           </div>
         </div>
       </div>

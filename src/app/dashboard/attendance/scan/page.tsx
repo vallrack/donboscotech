@@ -30,27 +30,25 @@ export default function AttendanceScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const isProcessing = useRef(false);
 
-  // 1. Geolocalización robusta
+  // Geolocalización dinámica: Captura el punto exacto cuando esté disponible
   useEffect(() => {
     if ("geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          if (pos.coords.latitude !== 0) {
-            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            setLocation(coords);
-            locationRef.current = coords;
-          }
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocation(coords);
+          locationRef.current = coords;
         },
         (err) => { 
-          toast({ title: "GPS Requerido", description: "Activa tu ubicación para poder marcar asistencia.", variant: "destructive" }); 
+          console.warn("Error capturando GPS:", err.message);
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
-  }, [toast]);
+  }, []);
 
-  // 2. Permisos y pre-carga de cámara
+  // Permisos de cámara optimizados para móviles
   useEffect(() => {
     const getCameraPermission = async () => {
       try {
@@ -68,7 +66,7 @@ export default function AttendanceScanPage() {
     getCameraPermission();
   }, []);
 
-  // 3. Escáner QR
+  // Escáner QR con reinicio automático de 2 segundos
   useEffect(() => {
     if (hasCameraPermission && !success && !isProcessing.current) {
       const startScanner = async () => {
@@ -96,12 +94,6 @@ export default function AttendanceScanPage() {
   const registerAttendance = async (token: string, method: 'QR' | 'Manual' = 'QR') => {
     if (!db || !user || success || isProcessing.current) return;
     
-    // Validación crítica de GPS para evitar 0,0
-    if (!locationRef.current || locationRef.current.lat === 0) { 
-      toast({ variant: "destructive", title: "GPS no disponible", description: "Buscando señal satelital... espera un momento." }); 
-      return; 
-    };
-
     isProcessing.current = true;
     if (method === 'Manual') setManualSaving(true);
     else setScanning(true);
@@ -125,6 +117,10 @@ export default function AttendanceScanPage() {
       const recordType = !querySnap.empty && querySnap.docs[0].data().date === dateStr && querySnap.docs[0].data().type === 'entry' ? 'exit' : 'entry';
 
       const recordId = `${user.id}_${now.getTime()}_${method.toLowerCase()}`;
+      
+      // Captura el punto exacto si existe, de lo contrario guarda 0,0 para auditoría
+      const currentLoc = locationRef.current || { lat: 0, lng: 0 };
+
       const recordData = {
         userId: user.id, 
         userName: user.name, 
@@ -135,9 +131,9 @@ export default function AttendanceScanPage() {
         shiftId: activeShift?.id || 'none', 
         shiftName: activeShift?.name || 'Fuera de Horario',
         location: { 
-          lat: locationRef.current.lat, 
-          lng: locationRef.current.lng, 
-          address: `Lat: ${locationRef.current.lat.toFixed(6)}, Lng: ${locationRef.current.lng.toFixed(6)}` 
+          lat: currentLoc.lat, 
+          lng: currentLoc.lng, 
+          address: currentLoc.lat !== 0 ? `Punto Exacto: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` : 'Ubicación no capturada'
         },
         createdAt: serverTimestamp()
       };
@@ -151,7 +147,7 @@ export default function AttendanceScanPage() {
       setManualSaving(false);
       setSuccess({ type: recordType, time: timeStr, shift: activeShift?.name });
       
-      // Reinicio en 2 segundos como solicitaste
+      // Reinicio ultrarrápido en 2 segundos solicitado
       setTimeout(() => {
         setSuccess(null);
         isProcessing.current = false;
@@ -161,7 +157,7 @@ export default function AttendanceScanPage() {
       setScanning(false); 
       setManualSaving(false);
       isProcessing.current = false; 
-      toast({ variant: "destructive", title: "Error", description: err.message });
+      toast({ variant: "destructive", title: "Error de Registro", description: err.message });
     }
   };
 
@@ -176,6 +172,11 @@ export default function AttendanceScanPage() {
           <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">Jornada Detectada</p>
           <p className="text-xl font-black text-primary mb-1">{success.shift || 'Fuera de Horario'}</p>
           <p className="text-sm font-bold text-gray-400">Registrado: {success.time}</p>
+          {location && (
+            <div className="mt-4 pt-4 border-t flex items-center justify-center gap-2 text-[10px] font-black text-green-600 uppercase">
+              <MapPin className="w-3 h-3" /> Punto Georreferenciado
+            </div>
+          )}
         </div>
         <p className="mt-8 text-xs font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Siguiente registro en 2s...</p>
       </div>
@@ -216,14 +217,14 @@ export default function AttendanceScanPage() {
                <Button 
                 variant="outline" 
                 onClick={() => registerAttendance('manual', 'Manual')}
-                disabled={manualSaving || !location}
+                disabled={manualSaving}
                 className="w-full h-16 rounded-[1.5rem] border-2 border-primary/20 bg-white text-primary font-black gap-3 hover:bg-primary hover:text-white transition-all shadow-lg"
                >
                  {manualSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <HandHelping className="w-6 h-6" />}
-                 {location ? "Marcaje Manual de Emergencia" : "Esperando Ubicación..."}
+                 Marcaje Manual de Emergencia
                </Button>
                <p className="text-[9px] text-center mt-3 text-muted-foreground font-bold italic">
-                 Válido solo si el GPS confirma tu presencia en la institución.
+                 Válido si el GPS confirma tu presencia o mediante auditoría administrativa.
                </p>
             </div>
           </div>
