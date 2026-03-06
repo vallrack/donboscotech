@@ -7,7 +7,7 @@ import { useFirestore } from '@/firebase';
 import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Loader2, MapPin, Camera, QrCode, AlertCircle, HandHelping, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, MapPin, Camera, QrCode, AlertCircle, HandHelping, XCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
@@ -32,18 +32,15 @@ export default function AttendanceScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const isProcessing = useRef(false);
 
-  // Geolocalización de alta precisión continua
   useEffect(() => {
-    if ("geolocation" in navigator) {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLocation(coords);
           locationRef.current = coords;
         },
-        (err) => { 
-          console.warn("Precisión GPS:", err.message);
-        },
+        null,
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
@@ -100,7 +97,6 @@ export default function AttendanceScanPage() {
     const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
     
     try {
-      // 1. Obtener jornadas del usuario
       const shiftsSnap = await getDocs(collection(db, 'shifts'));
       const allShifts = shiftsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Shift));
       
@@ -108,9 +104,8 @@ export default function AttendanceScanPage() {
         user.shiftIds?.includes(s.id) && s.days?.includes(dayName)
       );
 
-      // 2. Validar si está dentro de alguna jornada
       let activeShift: Shift | null = null;
-      let isWithinTime = false;
+      let isWithinTimeRange = false;
 
       for (const s of todayShifts) {
         const [startH, startM] = s.startTime.split(':').map(Number);
@@ -118,45 +113,48 @@ export default function AttendanceScanPage() {
         const startTotal = startH * 60 + startM;
         const endTotal = endH * 60 + endM;
 
-        if (currTotalMinutes >= startTotal && currTotalMinutes <= endTotal) {
+        // Permitimos marcar si estamos en el rango de la jornada
+        if (currTotalMinutes >= (startTotal - 30) && currTotalMinutes <= (endTotal + 60)) {
           activeShift = s;
-          isWithinTime = true;
+          isWithinTimeRange = true;
           break;
         }
       }
 
-      if (!isWithinTime) {
+      if (!isWithinTimeRange) {
         setTimeError(todayShifts.length > 0 
-          ? `Tu horario hoy es de ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}. Intenta marcar dentro de ese rango.`
-          : "No tienes una jornada laboral asignada para el día de hoy."
+          ? `Tu jornada hoy es de ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}. No estás en horario permitido.`
+          : "No tienes una jornada laboral asignada para hoy."
         );
-        setScanning(false);
-        setManualSaving(false);
-        isProcessing.current = false;
+        setScanning(false); setManualSaving(false); isProcessing.current = false;
         return;
       }
 
+      // Determinar si es entrada o salida
       const q = query(collection(db, 'userProfiles', user.id, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(1));
       const querySnap = await getDocs(q);
-      const recordType = !querySnap.empty && querySnap.docs[0].data().date === dateStr && querySnap.docs[0].data().type === 'entry' ? 'exit' : 'entry';
+      const lastRecord = !querySnap.empty ? querySnap.docs[0].data() : null;
+      const recordType = lastRecord && lastRecord.date === dateStr && lastRecord.type === 'entry' ? 'exit' : 'entry';
+
+      // VALIDACIÓN ESTRICTA DE SALIDA: No antes de la hora de fin
+      if (recordType === 'exit' && activeShift) {
+        const [endH, endM] = activeShift.endTime.split(':').map(Number);
+        const endTotal = endH * 60 + endM;
+        
+        if (currTotalMinutes < endTotal) {
+          setTimeError(`Restricción Institucional: Tu jornada finaliza a las ${activeShift.endTime}. No puedes registrar salida anticipada.`);
+          setScanning(false); setManualSaving(false); isProcessing.current = false;
+          return;
+        }
+      }
 
       const recordId = `${user.id}_${now.getTime()}_${method.toLowerCase()}`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
 
       const recordData = {
-        userId: user.id, 
-        userName: user.name, 
-        date: dateStr, 
-        time: timeStr, 
-        type: recordType,
-        method: method, 
-        shiftId: activeShift?.id, 
-        shiftName: activeShift?.name,
-        location: { 
-          lat: currentLoc.lat, 
-          lng: currentLoc.lng, 
-          address: `Punto Preciso: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}`
-        },
+        userId: user.id, userName: user.name, date: dateStr, time: timeStr, type: recordType,
+        method: method, shiftId: activeShift?.id, shiftName: activeShift?.name,
+        location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `Punto GPS: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
         createdAt: serverTimestamp()
       };
 
@@ -172,12 +170,10 @@ export default function AttendanceScanPage() {
       setTimeout(() => {
         setSuccess(null);
         isProcessing.current = false;
-      }, 2000);
+      }, 2000); // REINICIO EN 2 SEGUNDOS
 
     } catch (err: any) { 
-      setScanning(false); 
-      setManualSaving(false);
-      isProcessing.current = false; 
+      setScanning(false); setManualSaving(false); isProcessing.current = false; 
       toast({ variant: "destructive", title: "Error", description: err.message });
     }
   };
@@ -190,11 +186,11 @@ export default function AttendanceScanPage() {
         </div>
         <h2 className="text-4xl font-black text-gray-800">{success.type === 'entry' ? "¡Bienvenido!" : "¡Buen Turno!"}</h2>
         <div className="bg-white shadow-xl border border-gray-100 p-8 rounded-[2.5rem] mt-8 w-full max-w-sm">
-          <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">Jornada Validada</p>
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">Jornada Sincronizada</p>
           <p className="text-xl font-black text-primary mb-1">{success.shift}</p>
           <p className="text-sm font-bold text-gray-400">Hora: {success.time}</p>
         </div>
-        <p className="mt-8 text-xs font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Reactivando en 2s...</p>
+        <p className="mt-8 text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Listo para el siguiente en 2s...</p>
       </div>
     );
   }
@@ -204,15 +200,15 @@ export default function AttendanceScanPage() {
       <Card className="border-none shadow-2xl overflow-hidden rounded-[3rem] bg-white">
         <CardHeader className="bg-primary text-white text-center py-10">
           <CardTitle className="text-3xl font-black tracking-tight">Don Bosco Track</CardTitle>
-          <p className="text-primary-foreground/80 text-xs font-bold uppercase tracking-widest mt-1">Sincronización de Asistencia</p>
+          <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-widest mt-1">Sincronización GPS Institucional</p>
         </CardHeader>
         <CardContent className="p-8 space-y-6">
           {timeError && (
             <Alert variant="destructive" className="rounded-2xl border-2">
               <XCircle className="h-5 w-5" />
-              <AlertTitle className="font-black">Fuera de Horario</AlertTitle>
+              <AlertTitle className="font-black">Restricción de Jornada</AlertTitle>
               <AlertDescription className="text-xs font-bold">{timeError}</AlertDescription>
-              <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl" onClick={() => setTimeError(null)}>Intentar de nuevo</Button>
+              <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl" onClick={() => setTimeError(null)}>Entendido</Button>
             </Alert>
           )}
 
@@ -222,7 +218,7 @@ export default function AttendanceScanPage() {
                {!hasCameraPermission && hasCameraPermission !== null && (
                  <div className="absolute inset-0 bg-gray-50/90 rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center gap-4">
                     <Camera className="w-12 h-12 text-muted-foreground opacity-20" />
-                    <p className="text-sm font-black text-gray-400">Cámara requerida para escaneo.</p>
+                    <p className="text-sm font-black text-gray-400">Activa la cámara para escanear tu carnet.</p>
                  </div>
                )}
             </div>
@@ -234,8 +230,8 @@ export default function AttendanceScanPage() {
                 <MapPin className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localización Alta Precisión</p>
-                <p className="text-xs font-black text-gray-700">{location ? "Punto Georreferenciado" : "Sincronizando GPS..."}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localización de Alta Precisión</p>
+                <p className="text-xs font-black text-gray-700">{location ? "Punto Georreferenciado" : "Buscando señal GPS..."}</p>
               </div>
               {scanning && <Loader2 className="w-6 h-6 animate-spin text-primary ml-auto" />}
             </div>
@@ -258,4 +254,3 @@ export default function AttendanceScanPage() {
     </div>
   );
 }
-

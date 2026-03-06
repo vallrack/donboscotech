@@ -4,9 +4,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, MapPin, Loader2, Camera, User as UserIcon, Clock, ArrowLeft, XCircle } from 'lucide-react';
+import { QrCode, MapPin, Loader2, Camera, User as UserIcon, XCircle, ArrowLeft, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
@@ -87,9 +87,8 @@ export default function PublicAttendanceScanner() {
       const userRef = doc(db, 'userProfiles', userId);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
-        toast({ variant: "destructive", title: "QR Inválido" });
-        isProcessing.current = false; setScanning(false);
-        return;
+        toast({ variant: "destructive", title: "Código Inválido" });
+        isProcessing.current = false; setScanning(false); return;
       }
 
       const userData = userSnap.data();
@@ -99,7 +98,7 @@ export default function PublicAttendanceScanner() {
       const currTotal = currH * 60 + currM;
       const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
 
-      // Validación de Horario
+      // VALIDACIÓN DE JORNADA
       const shiftsSnap = await getDocs(collection(db, 'shifts'));
       const todayShifts = shiftsSnap.docs
         .map(d => ({ id: d.id, ...d.data() } as Shift))
@@ -111,7 +110,8 @@ export default function PublicAttendanceScanner() {
       for (const s of todayShifts) {
         const [sh, sm] = s.startTime.split(':').map(Number);
         const [eh, em] = s.endTime.split(':').map(Number);
-        if (currTotal >= (sh * 60 + sm) && currTotal <= (eh * 60 + em)) {
+        // Permitimos marcar si estamos en el rango del turno
+        if (currTotal >= (sh * 60 + sm - 30) && currTotal <= (eh * 60 + em + 60)) {
           activeShift = s;
           isWithinTime = true;
           break;
@@ -120,18 +120,27 @@ export default function PublicAttendanceScanner() {
 
       if (!isWithinTime) {
         setErrorInfo(todayShifts.length > 0 
-          ? `Horario asignado hoy: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}`
-          : "No tiene jornada asignada para hoy."
+          ? `Horario de hoy: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}`
+          : "No tiene jornada laboral asignada para hoy."
         );
-        setScanning(false);
-        isProcessing.current = false;
-        return;
+        setScanning(false); isProcessing.current = false; return;
       }
 
+      // Determinar entrada/salida
       const dateStr = now.toISOString().split('T')[0];
       const q = query(collection(db, 'userProfiles', userId, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(1));
       const querySnap = await getDocs(q);
-      const recordType = !querySnap.empty && querySnap.docs[0].data().date === dateStr && querySnap.docs[0].data().type === 'entry' ? 'exit' : 'entry';
+      const lastRec = !querySnap.empty ? querySnap.docs[0].data() : null;
+      const recordType = lastRec && lastRec.date === dateStr && lastRec.type === 'entry' ? 'exit' : 'entry';
+
+      // RESTRICCIÓN DE SALIDA ANTICIPADA
+      if (recordType === 'exit' && activeShift) {
+        const [eh, em] = activeShift.endTime.split(':').map(Number);
+        if (currTotal < (eh * 60 + em)) {
+          setErrorInfo(`Jornada incompleta: La salida es a las ${activeShift.endTime}.`);
+          setScanning(false); isProcessing.current = false; return;
+        }
+      }
 
       const recordId = `${userId}_${now.getTime()}_terminal`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
@@ -149,7 +158,7 @@ export default function PublicAttendanceScanner() {
       ]);
 
       setLastScannedUser({ name: userData.name, photo: userData.avatarUrl, time: timeStr, type: recordType, shift: activeShift?.name });
-      setTimeout(() => { setLastScannedUser(null); setScanning(false); isProcessing.current = false; }, 2000);
+      setTimeout(() => { setLastScannedUser(null); setScanning(false); isProcessing.current = false; }, 2000); // 2 SEGUNDOS
       
     } catch (err) { setScanning(false); isProcessing.current = false; }
   };
@@ -169,10 +178,10 @@ export default function PublicAttendanceScanner() {
               <div className="animate-in zoom-in duration-300 text-center space-y-6">
                 <div className="w-24 h-24 rounded-full bg-red-100 flex items-center justify-center mx-auto"><XCircle className="w-12 h-12 text-red-500" /></div>
                 <div>
-                  <h3 className="text-2xl font-black text-red-600">Acceso Denegado</h3>
+                  <h3 className="text-2xl font-black text-red-600">Marcaje Denegado</h3>
                   <p className="text-muted-foreground font-bold mt-2">{errorInfo}</p>
                 </div>
-                <Button className="w-full h-14 rounded-2xl font-black" onClick={() => setErrorInfo(null)}>Reintentar</Button>
+                <Button className="w-full h-14 rounded-2xl font-black" onClick={() => setErrorInfo(null)}>Reintentar Escaneo</Button>
               </div>
             ) : lastScannedUser ? (
               <div className="flex flex-col items-center py-10 animate-in zoom-in duration-300 text-center">
@@ -191,8 +200,8 @@ export default function PublicAttendanceScanner() {
                 <div className="p-5 bg-gray-50 rounded-3xl border border-gray-100 flex items-center gap-5">
                   <div className={cn("p-3 rounded-2xl shadow-sm", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}><MapPin className="w-6 h-6" /></div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localización Alta Precisión</p>
-                    <p className="text-sm font-black text-gray-700">{location ? "Punto Sincronizado" : "Capturando GPS..."}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localización de Alta Precisión</p>
+                    <p className="text-sm font-black text-gray-700">{location ? "Punto Georreferenciado" : "Buscando GPS..."}</p>
                   </div>
                 </div>
               </>
@@ -204,4 +213,3 @@ export default function PublicAttendanceScanner() {
     </div>
   );
 }
-
