@@ -4,14 +4,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Loader2, MapPin, Camera, QrCode, AlertCircle, HandHelping } from 'lucide-react';
+import { CheckCircle2, Loader2, MapPin, Camera, QrCode, AlertCircle, HandHelping, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
 import { Shift } from '@/lib/types';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function AttendanceScanPage() {
   const { user } = useAuth();
@@ -24,13 +25,14 @@ export default function AttendanceScanPage() {
   const [scanning, setScanning] = useState(false);
   const [success, setSuccess] = useState<any>(null);
   const [manualSaving, setManualSaving] = useState(false);
+  const [timeError, setTimeError] = useState<string | null>(null);
   
   const qrRegionId = "qr-reader";
   const html5QrCode = useRef<Html5Qrcode | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isProcessing = useRef(false);
 
-  // Geolocalización dinámica: Captura el punto exacto cuando esté disponible
+  // Geolocalización de alta precisión continua
   useEffect(() => {
     if ("geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
@@ -40,15 +42,14 @@ export default function AttendanceScanPage() {
           locationRef.current = coords;
         },
         (err) => { 
-          console.warn("Error capturando GPS:", err.message);
+          console.warn("Precisión GPS:", err.message);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
   }, []);
 
-  // Permisos de cámara optimizados para móviles
   useEffect(() => {
     const getCameraPermission = async () => {
       try {
@@ -56,23 +57,17 @@ export default function AttendanceScanPage() {
           video: { facingMode: "environment" } 
         });
         setHasCameraPermission(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (error) { 
-        setHasCameraPermission(false); 
-      }
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      } catch (error) { setHasCameraPermission(false); }
     };
     getCameraPermission();
   }, []);
 
-  // Escáner QR con reinicio automático de 2 segundos
   useEffect(() => {
-    if (hasCameraPermission && !success && !isProcessing.current) {
+    if (hasCameraPermission && !success && !isProcessing.current && !timeError) {
       const startScanner = async () => {
         try {
           if (html5QrCode.current?.isScanning) return;
-          
           html5QrCode.current = new Html5Qrcode(qrRegionId);
           await html5QrCode.current.start(
             { facingMode: "environment" }, 
@@ -84,32 +79,61 @@ export default function AttendanceScanPage() {
       };
       startScanner();
       return () => { 
-        if (html5QrCode.current?.isScanning) {
-          html5QrCode.current.stop().catch(() => {});
-        }
+        if (html5QrCode.current?.isScanning) html5QrCode.current.stop().catch(() => {});
       };
     }
-  }, [hasCameraPermission, success]);
+  }, [hasCameraPermission, success, timeError]);
 
   const registerAttendance = async (token: string, method: 'QR' | 'Manual' = 'QR') => {
     if (!db || !user || success || isProcessing.current) return;
     
     isProcessing.current = true;
+    setTimeError(null);
     if (method === 'Manual') setManualSaving(true);
     else setScanning(true);
 
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const [currH, currM] = timeStr.split(':').map(Number);
+    const currTotalMinutes = currH * 60 + currM;
     const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
     
     try {
+      // 1. Obtener jornadas del usuario
+      const shiftsSnap = await getDocs(collection(db, 'shifts'));
+      const allShifts = shiftsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Shift));
+      
+      const todayShifts = allShifts.filter(s => 
+        user.shiftIds?.includes(s.id) && s.days?.includes(dayName)
+      );
+
+      // 2. Validar si está dentro de alguna jornada
       let activeShift: Shift | null = null;
-      if (user.shiftIds && user.shiftIds.length > 0) {
-        const shiftsSnap = await getDocs(collection(db, 'shifts'));
-        activeShift = shiftsSnap.docs
-          .map(d => ({ id: d.id, ...d.data() } as Shift))
-          .find(s => user.shiftIds?.includes(s.id) && s.days?.includes(dayName)) || null;
+      let isWithinTime = false;
+
+      for (const s of todayShifts) {
+        const [startH, startM] = s.startTime.split(':').map(Number);
+        const [endH, endM] = s.endTime.split(':').map(Number);
+        const startTotal = startH * 60 + startM;
+        const endTotal = endH * 60 + endM;
+
+        if (currTotalMinutes >= startTotal && currTotalMinutes <= endTotal) {
+          activeShift = s;
+          isWithinTime = true;
+          break;
+        }
+      }
+
+      if (!isWithinTime) {
+        setTimeError(todayShifts.length > 0 
+          ? `Tu horario hoy es de ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}. Intenta marcar dentro de ese rango.`
+          : "No tienes una jornada laboral asignada para el día de hoy."
+        );
+        setScanning(false);
+        setManualSaving(false);
+        isProcessing.current = false;
+        return;
       }
 
       const q = query(collection(db, 'userProfiles', user.id, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(1));
@@ -117,8 +141,6 @@ export default function AttendanceScanPage() {
       const recordType = !querySnap.empty && querySnap.docs[0].data().date === dateStr && querySnap.docs[0].data().type === 'entry' ? 'exit' : 'entry';
 
       const recordId = `${user.id}_${now.getTime()}_${method.toLowerCase()}`;
-      
-      // Captura el punto exacto si existe, de lo contrario guarda 0,0 para auditoría
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
 
       const recordData = {
@@ -128,12 +150,12 @@ export default function AttendanceScanPage() {
         time: timeStr, 
         type: recordType,
         method: method, 
-        shiftId: activeShift?.id || 'none', 
-        shiftName: activeShift?.name || 'Fuera de Horario',
+        shiftId: activeShift?.id, 
+        shiftName: activeShift?.name,
         location: { 
           lat: currentLoc.lat, 
           lng: currentLoc.lng, 
-          address: currentLoc.lat !== 0 ? `Punto Exacto: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` : 'Ubicación no capturada'
+          address: `Punto Preciso: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}`
         },
         createdAt: serverTimestamp()
       };
@@ -147,7 +169,6 @@ export default function AttendanceScanPage() {
       setManualSaving(false);
       setSuccess({ type: recordType, time: timeStr, shift: activeShift?.name });
       
-      // Reinicio ultrarrápido en 2 segundos solicitado
       setTimeout(() => {
         setSuccess(null);
         isProcessing.current = false;
@@ -157,7 +178,7 @@ export default function AttendanceScanPage() {
       setScanning(false); 
       setManualSaving(false);
       isProcessing.current = false; 
-      toast({ variant: "destructive", title: "Error de Registro", description: err.message });
+      toast({ variant: "destructive", title: "Error", description: err.message });
     }
   };
 
@@ -169,16 +190,11 @@ export default function AttendanceScanPage() {
         </div>
         <h2 className="text-4xl font-black text-gray-800">{success.type === 'entry' ? "¡Bienvenido!" : "¡Buen Turno!"}</h2>
         <div className="bg-white shadow-xl border border-gray-100 p-8 rounded-[2.5rem] mt-8 w-full max-w-sm">
-          <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">Jornada Detectada</p>
-          <p className="text-xl font-black text-primary mb-1">{success.shift || 'Fuera de Horario'}</p>
-          <p className="text-sm font-bold text-gray-400">Registrado: {success.time}</p>
-          {location && (
-            <div className="mt-4 pt-4 border-t flex items-center justify-center gap-2 text-[10px] font-black text-green-600 uppercase">
-              <MapPin className="w-3 h-3" /> Punto Georreferenciado
-            </div>
-          )}
+          <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">Jornada Validada</p>
+          <p className="text-xl font-black text-primary mb-1">{success.shift}</p>
+          <p className="text-sm font-bold text-gray-400">Hora: {success.time}</p>
         </div>
-        <p className="mt-8 text-xs font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Siguiente registro en 2s...</p>
+        <p className="mt-8 text-xs font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Reactivando en 2s...</p>
       </div>
     );
   }
@@ -186,29 +202,40 @@ export default function AttendanceScanPage() {
   return (
     <div className="max-w-xl mx-auto py-4 space-y-6 animate-in fade-in duration-500">
       <Card className="border-none shadow-2xl overflow-hidden rounded-[3rem] bg-white">
-        <CardHeader className="bg-primary text-white text-center py-12">
-          <CardTitle className="text-3xl font-black tracking-tight">Registro de Asistencia</CardTitle>
-          <p className="text-primary-foreground/80 text-xs font-bold uppercase tracking-widest mt-2">Ciudad Don Bosco</p>
+        <CardHeader className="bg-primary text-white text-center py-10">
+          <CardTitle className="text-3xl font-black tracking-tight">Don Bosco Track</CardTitle>
+          <p className="text-primary-foreground/80 text-xs font-bold uppercase tracking-widest mt-1">Sincronización de Asistencia</p>
         </CardHeader>
-        <CardContent className="p-8 space-y-8">
-          <div className="relative group">
-             <div id={qrRegionId} className="w-full aspect-square bg-gray-50 rounded-[2.5rem] overflow-hidden border-4 border-dashed border-gray-100 shadow-inner" />
-             {!hasCameraPermission && hasCameraPermission !== null && (
-               <div className="absolute inset-0 bg-gray-50/90 rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center gap-4">
-                  <Camera className="w-12 h-12 text-muted-foreground opacity-20" />
-                  <p className="text-sm font-black text-gray-400 leading-tight">Acceso a cámara requerido para escaneo.</p>
-               </div>
-             )}
-          </div>
+        <CardContent className="p-8 space-y-6">
+          {timeError && (
+            <Alert variant="destructive" className="rounded-2xl border-2">
+              <XCircle className="h-5 w-5" />
+              <AlertTitle className="font-black">Fuera de Horario</AlertTitle>
+              <AlertDescription className="text-xs font-bold">{timeError}</AlertDescription>
+              <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl" onClick={() => setTimeError(null)}>Intentar de nuevo</Button>
+            </Alert>
+          )}
+
+          {!timeError && (
+            <div className="relative group">
+               <div id={qrRegionId} className="w-full aspect-square bg-gray-50 rounded-[2.5rem] overflow-hidden border-4 border-dashed border-gray-100 shadow-inner" />
+               {!hasCameraPermission && hasCameraPermission !== null && (
+                 <div className="absolute inset-0 bg-gray-50/90 rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center gap-4">
+                    <Camera className="w-12 h-12 text-muted-foreground opacity-20" />
+                    <p className="text-sm font-black text-gray-400">Cámara requerida para escaneo.</p>
+                 </div>
+               )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4">
             <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center gap-5">
-              <div className={cn("p-4 rounded-2xl shadow-sm transition-colors", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>
+              <div className={cn("p-4 rounded-2xl shadow-sm", location ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>
                 <MapPin className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Geolocalización</p>
-                <p className="text-xs font-black text-gray-700">{location ? "Punto Exacto Detectado" : "Buscando ubicación..."}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localización Alta Precisión</p>
+                <p className="text-xs font-black text-gray-700">{location ? "Punto Georreferenciado" : "Sincronizando GPS..."}</p>
               </div>
               {scanning && <Loader2 className="w-6 h-6 animate-spin text-primary ml-auto" />}
             </div>
@@ -217,21 +244,18 @@ export default function AttendanceScanPage() {
                <Button 
                 variant="outline" 
                 onClick={() => registerAttendance('manual', 'Manual')}
-                disabled={manualSaving}
+                disabled={manualSaving || !!timeError}
                 className="w-full h-16 rounded-[1.5rem] border-2 border-primary/20 bg-white text-primary font-black gap-3 hover:bg-primary hover:text-white transition-all shadow-lg"
                >
                  {manualSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <HandHelping className="w-6 h-6" />}
                  Marcaje Manual de Emergencia
                </Button>
-               <p className="text-[9px] text-center mt-3 text-muted-foreground font-bold italic">
-                 Válido si el GPS confirma tu presencia o mediante auditoría administrativa.
-               </p>
             </div>
           </div>
         </CardContent>
       </Card>
-      
       <video ref={videoRef} className="hidden" autoPlay muted playsInline />
     </div>
   );
 }
+
