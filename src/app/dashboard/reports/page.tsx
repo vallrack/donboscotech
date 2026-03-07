@@ -93,7 +93,7 @@ export default function ReportsPage() {
           shiftName: r.shiftName || 'N/A',
           campus: uData?.campus || 'Sede Principal',
           documentId: uData?.documentId || 'N/A',
-          docentSignature: null,
+          docentSignature: r.docentSignature || uData?.signatureUrl || null,
           isVerified: false,
           verifiedByName: '',
           verifiedBySignature: '',
@@ -107,9 +107,6 @@ export default function ReportsPage() {
       } else { 
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
-
-      if (r.docentSignature) dayData.docentSignature = r.docentSignature;
-      else if (!dayData.docentSignature && uData?.signatureUrl) dayData.docentSignature = uData.signatureUrl;
 
       if (r.isVerified === true) {
         dayData.isVerified = true;
@@ -186,12 +183,13 @@ export default function ReportsPage() {
   const handleSignAll = async () => {
     if (!db || !user || globalVerifying) return;
     
+    // Solo firmamos los que están visibles en la tabla actual según el filtro de periodo
     const pendingReports = dailyReports.filter(r => !r.isVerified && r.entry && r.exit);
     
     if (pendingReports.length === 0) {
       toast({
         title: "Sin Pendientes",
-        description: "No se encontraron registros completados que requieran tu firma en este periodo.",
+        description: "No hay registros completados pendientes de firma en el periodo seleccionado.",
         variant: "default"
       });
       return;
@@ -255,17 +253,18 @@ export default function ReportsPage() {
     if (dailyReports.length === 0) return null;
     const isSingleUser = selectedDocent !== 'all' || isDocent;
     
+    // Verificamos si hay alguna firma de coordinación en el set filtrado
     const verifiedRec = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
     const docentWithSig = dailyReports.find(r => r.docentSignature);
 
     return {
       docentName: isSingleUser ? (activeDocentProfile?.name || 'Personal') : 'Auditoría Institucional',
       docentSignature: isSingleUser ? (docentWithSig?.docentSignature || activeDocentProfile?.signatureUrl || null) : null,
-      coordinatorName: verifiedRec?.verifiedByName || user?.name || '',
+      coordinatorName: verifiedRec?.verifiedByName || (isPrivileged ? user?.name : ''),
       coordinatorSignature: verifiedRec?.verifiedBySignature || null,
       isVerified: !!verifiedRec
     };
-  }, [dailyReports, activeDocentProfile, isDocent, selectedDocent, user?.name]);
+  }, [dailyReports, activeDocentProfile, isDocent, selectedDocent, user?.name, isPrivileged]);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
