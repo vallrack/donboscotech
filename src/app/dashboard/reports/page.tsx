@@ -10,7 +10,7 @@ import {
   Loader2, Printer, 
   MapPin, Download, 
   ShieldCheck, CheckCircle2,
-  Clock, UserCheck, Check, PenTool
+  Clock, UserCheck, Check, PenTool, ShieldAlert
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
@@ -51,6 +51,7 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState('Mes Actual');
   const [selectedDocent, setSelectedDocent] = useState('all');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [globalVerifying, setGlobalVerifying] = useState(false);
 
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -180,6 +181,46 @@ export default function ReportsPage() {
     }
   };
 
+  const handleSignAll = async () => {
+    if (!db || !user || globalVerifying) return;
+    if (!user.signatureUrl && (user.role === 'admin' || user.role === 'coordinator')) {
+      toast({ variant: "destructive", title: "Firma Faltante", description: "Configura tu firma en Mi Perfil." });
+      return;
+    }
+
+    setGlobalVerifying(true);
+    try {
+      const batch = writeBatch(db);
+      const pendingReports = dailyReports.filter(r => !r.isVerified && r.entry && r.exit);
+      
+      for (const report of pendingReports) {
+        const userRecordsRef = collection(db, 'userProfiles', report.userId, 'attendanceRecords');
+        const q = query(userRecordsRef, where('date', '==', report.date));
+        const snapshot = await getDocs(q);
+        
+        snapshot.docs.forEach(docSnap => {
+          const updateData = {
+            isVerified: true,
+            verifiedBy: user.id,
+            verifiedByName: user.name,
+            verifiedBySignature: user.signatureUrl || '',
+            verifiedAt: new Date().toISOString()
+          };
+          batch.update(docSnap.ref, updateData);
+          const globalRef = doc(db, 'globalAttendanceRecords', docSnap.id);
+          batch.update(globalRef, updateData);
+        });
+      }
+
+      await batch.commit();
+      toast({ title: "Validación Global Exitosa", description: "Todos los informes del periodo han sido firmados." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error" });
+    } finally {
+      setGlobalVerifying(false);
+    }
+  };
+
   const handleExportExcel = () => {
     const BOM = "\uFEFF"; 
     const sep = ";";
@@ -219,6 +260,12 @@ export default function ReportsPage() {
           <p className="text-muted-foreground font-medium text-[10px]">Control de jornadas Ciudad Don Bosco.</p>
         </div>
         <div className="flex gap-2">
+          {isPrivileged && (
+            <Button variant="default" size="sm" onClick={handleSignAll} disabled={globalVerifying} className="rounded-xl font-black h-9 px-6 bg-primary shadow-lg gap-2">
+              {globalVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenTool className="w-4 h-4" />}
+              FIRMAR TODO EL PERIODO
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleExportExcel} className="rounded-xl font-bold border-green-200 text-green-700 h-9 px-4">
             <Download className="w-4 h-4 mr-2" /> Excel
           </Button>
@@ -275,7 +322,7 @@ export default function ReportsPage() {
                   <th className="px-10 py-6">Fecha / Jornada</th>
                   <th className="px-10 py-6">Marcaje</th>
                   <th className="px-10 py-6 text-center">Duración</th>
-                  <th className="px-10 py-6 text-center print:hidden">Validación</th>
+                  <th className="px-10 py-6 text-center print:hidden">Validación Técnica</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -322,14 +369,14 @@ export default function ReportsPage() {
                               {r.isVerified ? (
                                 <>
                                   <Badge className="bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg gap-1">
-                                    <Check className="w-3 h-3" /> VALIDADO
+                                    VALIDADO TÉCNICAMENTE
                                   </Badge>
                                   <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.verifiedByName}</span>
                                 </>
                               ) : isFulfilledByDocent ? (
                                 <>
                                   <Badge className="bg-green-500 font-black text-[8px] px-3 py-1 rounded-lg">
-                                    CUMPLIDO
+                                    CUMPLIDO POR DOCENTE
                                   </Badge>
                                   <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.userName}</span>
                                   {isPrivileged && (
@@ -345,7 +392,7 @@ export default function ReportsPage() {
                                   )}
                                 </>
                               ) : (
-                                <Badge variant="outline" className="text-[8px] font-black opacity-40">PENDIENTE</Badge>
+                                <Badge variant="outline" className="text-[8px] font-black opacity-40">EN PROCESO</Badge>
                               )}
                             </div>
                           </td>
@@ -367,8 +414,8 @@ export default function ReportsPage() {
                         <div className="grid grid-cols-3 items-end gap-10">
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
-                               {(dailyReports.find(r => r.userId === activeDocentProfile?.id)?.docentSignature || activeDocentProfile?.signatureUrl) && (
-                                 <img src={dailyReports.find(r => r.userId === activeDocentProfile?.id)?.docentSignature || activeDocentProfile?.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
+                               {activeDocentProfile?.signatureUrl && (
+                                 <img src={activeDocentProfile.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Firma del Docente</p>
@@ -376,9 +423,6 @@ export default function ReportsPage() {
                           </div>
 
                           <div className="text-center space-y-2 pb-1">
-                             <div className="w-12 h-12 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
-                               <ShieldCheck className="w-6 h-6 text-primary opacity-20 print:hidden" />
-                             </div>
                              <p className="text-[11px] font-black text-primary tracking-tighter">CIUDAD DON BOSCO</p>
                              <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Sello Digital Track Sinc</p>
                           </div>
@@ -386,14 +430,14 @@ export default function ReportsPage() {
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
                                {dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature ? (
-                                 <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
+                                 <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)!.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
-                                 <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Firma Coordinación</div>
+                                 <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Vo.Bo. Coordinación</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
                             <p className="text-[8px] font-bold text-gray-400">
-                              {dailyReports.find(r => r.isVerified)?.verifiedByName || 'Revisión Técnica / Secretaría'}
+                              {dailyReports.find(r => r.isVerified)?.verifiedByName || 'Auditoría Técnica'}
                             </p>
                           </div>
                         </div>

@@ -192,7 +192,7 @@ export default function ProfilePage() {
                         value={formData.campus || ""} 
                         onValueChange={(v) => updateField('campus', v)}
                        >
-                        <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
+                        <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-left">
                           <SelectValue placeholder="Seleccionar Sede" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
@@ -206,7 +206,7 @@ export default function ProfilePage() {
                         value={formData.program || ""} 
                         onValueChange={(v) => updateField('program', v)}
                        >
-                        <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
+                        <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold text-left">
                           <SelectValue placeholder="Seleccionar Programa" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
