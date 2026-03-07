@@ -198,7 +198,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
-      {/* Encabezado PDF Institucional */}
       <div className="hidden print:flex justify-between items-center border-b-2 border-primary pb-6 mb-8">
         <div>
            <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
@@ -277,7 +276,7 @@ export default function ReportsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10 print:hidden" /></td></tr>
                 ) : dailyReports.length > 0 ? (
                   <>
                     {dailyReports.map((r, idx) => {
@@ -360,7 +359,7 @@ export default function ReportsPage() {
 
                           <div className="text-center space-y-2 pb-1">
                              <div className="w-12 h-12 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
-                               <ShieldCheck className="w-6 h-6 text-primary opacity-20" />
+                               <ShieldCheck className="w-6 h-6 text-primary opacity-20 print:hidden" />
                              </div>
                              <p className="text-[11px] font-black text-primary tracking-tighter">CIUDAD DON BOSCO</p>
                              <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Sello Digital Track Sinc</p>
@@ -401,7 +400,7 @@ export default function ReportsPage() {
           body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           main { padding: 0 !important; margin: 0 !important; }
           .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
-          header, .sidebar-trigger, [data-sidebar="trigger"], .print-hidden, svg { display: none !important; }
+          header, .sidebar-trigger, [data-sidebar="trigger"], .print-hidden, svg, .lucide { display: none !important; }
           .print-card { border: none !important; box-shadow: none !important; }
           table { width: 100% !important; border-collapse: collapse !important; border: 1px solid #eee !important; }
           th, td { border: 1px solid #f3f4f6 !important; }

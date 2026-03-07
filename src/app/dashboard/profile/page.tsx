@@ -16,7 +16,7 @@ import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import Image from 'image';
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function ProfilePage() {
@@ -189,7 +189,7 @@ export default function ProfilePage() {
                      <div className="space-y-3">
                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede Asignada</Label>
                        <Select 
-                        value={formData.campus || undefined} 
+                        value={formData.campus || ""} 
                         onValueChange={(v) => updateField('campus', v)}
                        >
                         <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
@@ -203,7 +203,7 @@ export default function ProfilePage() {
                      <div className="space-y-3">
                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Proceso</Label>
                        <Select 
-                        value={formData.program || undefined} 
+                        value={formData.program || ""} 
                         onValueChange={(v) => updateField('program', v)}
                        >
                         <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
