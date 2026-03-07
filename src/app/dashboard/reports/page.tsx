@@ -145,7 +145,7 @@ export default function ReportsPage() {
       toast({
         variant: "destructive",
         title: "Firma Faltante",
-        description: "Debes subir tu firma digital en tu perfil para validar reportes."
+        description: "Debes subir tu firma digital en tu perfil para firmar informes."
       });
       return;
     }
@@ -172,7 +172,7 @@ export default function ReportsPage() {
       });
 
       await batch.commit();
-      toast({ title: "Jornada Validada", description: `Revisión técnica de ${report.userName} completada.` });
+      toast({ title: "Informe Firmado", description: `Validación técnica de ${report.userName} completada.` });
     } catch (e) {
       toast({ variant: "destructive", title: "Error al validar" });
     } finally {
@@ -183,7 +183,7 @@ export default function ReportsPage() {
   const handleExportExcel = () => {
     const BOM = "\uFEFF"; 
     const sep = ";";
-    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Estado", "Validado Por"];
+    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Estado", "Firmado Por"];
     const rows = dailyReports.map(r => [
       r.userName, r.documentId, r.campus, r.date, r.shiftName,
       r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours),
@@ -340,7 +340,7 @@ export default function ReportsPage() {
                                       className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] px-4 mt-1"
                                     >
                                       {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <PenTool className="w-3 h-3 mr-1" />}
-                                      VALIDAR TÉCNICAMENTE
+                                      FIRMAR Y VALIDAR
                                     </Button>
                                   )}
                                 </>
@@ -388,7 +388,7 @@ export default function ReportsPage() {
                                {dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature ? (
                                  <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
-                                 <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Validación Técnica</div>
+                                 <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Firma Coordinación</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
