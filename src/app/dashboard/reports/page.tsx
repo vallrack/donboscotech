@@ -13,7 +13,7 @@ import {
   Clock, UserCheck
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, getDocs, where, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { AttendanceRecord, User as UserType } from '@/lib/types';
@@ -106,7 +106,6 @@ export default function ReportsPage() {
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
 
-      // Si alguno de los registros está verificado, marcamos el día como verificado
       if (r.isVerified) {
         dayData.isVerified = true;
         dayData.verifiedByName = r.verifiedByName;
@@ -150,7 +149,6 @@ export default function ReportsPage() {
 
     setVerifyingId(`${report.userId}_${report.date}`);
     try {
-      // Buscamos todos los registros que coincidan con el usuario y la fecha
       const userRecordsRef = collection(db, 'userProfiles', report.userId, 'attendanceRecords');
       const q = query(userRecordsRef, where('date', '==', report.date));
       const snapshot = await getDocs(q);
@@ -165,10 +163,7 @@ export default function ReportsPage() {
           verifiedBySignature: user.signatureUrl || '',
           verifiedAt: new Date().toISOString()
         };
-        
         batch.update(docSnap.ref, updateData);
-        
-        // También actualizar en el historial global
         const globalRef = doc(db, 'globalAttendanceRecords', docSnap.id);
         batch.update(globalRef, updateData);
       });
@@ -186,13 +181,6 @@ export default function ReportsPage() {
     const BOM = "\uFEFF"; 
     const sep = ";";
     const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Estado", "Validado Por"];
-    const metaData = [
-      ["CIUDAD DON BOSCO - INFORME OFICIAL DE ASISTENCIA"],
-      [`Periodo: ${period}`],
-      [`Generado por: ${user?.name}`],
-      [],
-      headers
-    ];
     const rows = dailyReports.map(r => [
       r.userName, r.documentId, r.campus, r.date, r.shiftName,
       r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours),
@@ -200,11 +188,11 @@ export default function ReportsPage() {
     ]);
     rows.push([]);
     rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", formatDuration(totalTimeHours), "", ""]);
-    const csvContent = metaData.concat(rows).map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
+    const csvContent = headers.join(sep) + "\n" + rows.map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Reporte_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Auditoria_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -328,8 +316,8 @@ export default function ReportsPage() {
                           <td className="px-10 py-8 text-center print:hidden">
                             {r.isVerified ? (
                               <div className="flex flex-col items-center gap-1">
-                                <Badge className="bg-green-500 hover:bg-green-600 font-black text-[8px] gap-1 px-3 py-1 rounded-lg">
-                                  <CheckCircle2 className="w-3 h-3" /> CUMPLIDO
+                                <Badge className="bg-green-500 hover:bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg">
+                                  CUMPLIDO
                                 </Badge>
                                 <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.verifiedByName}</span>
                               </div>
@@ -338,10 +326,9 @@ export default function ReportsPage() {
                                 size="sm" 
                                 onClick={() => handleVerifyDay(r)}
                                 disabled={isCurrentVerifying}
-                                className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] gap-1.5 px-4"
+                                className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] px-4"
                               >
-                                {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck className="w-3 h-3" />}
-                                VALIDAR
+                                {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : "VALIDAR"}
                               </Button>
                             ) : (
                               <Badge variant="outline" className="text-[8px] font-black opacity-40">PENDIENTE</Badge>
@@ -358,24 +345,19 @@ export default function ReportsPage() {
                       <td className="print:hidden"></td>
                     </tr>
                     
-                    {/* SECCIÓN DE FIRMAS PARA PDF */}
                     <tr className="hidden print:table-row">
                       <td colSpan={5} className="pt-32 pb-16 px-10">
                         <div className="grid grid-cols-3 items-end gap-10">
-                          {/* Firma Docente */}
                           <div className="space-y-4 text-center">
                             <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
-                               {activeDocentProfile?.signatureUrl ? (
+                               {activeDocentProfile?.signatureUrl && (
                                  <img src={activeDocentProfile.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
-                               ) : (
-                                 <div className="text-[8px] font-bold text-gray-300 italic">Sello Biométrico Digital</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Firma del Docente</p>
                             <p className="text-[8px] font-bold text-gray-400">{activeDocentProfile?.name || 'N/A'}</p>
                           </div>
 
-                          {/* Sello Central */}
                           <div className="text-center space-y-2 pb-1">
                              <div className="w-12 h-12 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
                                <ShieldCheck className="w-6 h-6 text-primary opacity-20" />
@@ -384,13 +366,12 @@ export default function ReportsPage() {
                              <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Sello Digital Track Sinc</p>
                           </div>
 
-                          {/* Firma Coordinación (Solo si está verificado) */}
                           <div className="space-y-4 text-center">
                             <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
                                {dailyReports.some(r => r.isVerified && r.verifiedBySignature) ? (
                                  <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
-                                 <div className="text-[8px] font-bold text-red-300 italic">PENDIENTE DE VALIDACIÓN</div>
+                                 <div className="text-[8px] font-bold text-red-300 italic">PENDIENTE</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
@@ -403,7 +384,7 @@ export default function ReportsPage() {
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No se encontraron registros bajo este criterio.</td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No hay registros.</td></tr>
                 )}
               </tbody>
             </table>
@@ -416,10 +397,10 @@ export default function ReportsPage() {
           body { background-color: white !important; }
           main { padding: 0 !important; margin: 0 !important; }
           .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
-          header, .sidebar-trigger, [data-sidebar="trigger"], .print-hidden { display: none !important; }
+          header, .sidebar-trigger, [data-sidebar="trigger"], .print-hidden, svg { display: none !important; }
           .print-card { border: none !important; box-shadow: none !important; }
-          table { width: 100% !important; border-collapse: collapse !important; }
-          th, td { border-bottom: 1px solid #f3f4f6 !important; }
+          table { width: 100% !important; border-collapse: collapse !important; border: 1px solid #eee !important; }
+          th, td { border: 1px solid #f3f4f6 !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
       `}</style>
