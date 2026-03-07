@@ -108,11 +108,12 @@ export default function ReportsPage() {
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
 
-      // La firma del docente se toma estrictamente de sus registros de salida
+      // IMPORTANTE: Captura firma docente del registro de salida o del perfil
       if (r.docentSignature) dayData.docentSignature = r.docentSignature;
-      
-      // Validación estricta: solo si fue validado por alguien DIFERENTE al docente
-      if (r.isVerified === true && r.verifiedBySignature && r.verifiedBy && r.verifiedBy !== r.userId) {
+      else if (!dayData.docentSignature && uData?.signatureUrl) dayData.docentSignature = uData.signatureUrl;
+
+      // VALIDACIÓN: Estampa firma de coordinación solo si fue verificada
+      if (r.isVerified === true && r.verifiedBySignature) {
         dayData.isVerified = true;
         dayData.verifiedByName = r.verifiedByName;
         dayData.verifiedBySignature = r.verifiedBySignature;
@@ -145,6 +146,7 @@ export default function ReportsPage() {
   const handleVerifyDay = async (report: any) => {
     if (!db || !user || verifyingId) return;
     
+    // USAR LA FIRMA ACTUAL DEL PERFIL DEL COORDINADOR
     if (!user.signatureUrl) {
       toast({
         variant: "destructive",
@@ -167,7 +169,7 @@ export default function ReportsPage() {
           isVerified: true,
           verifiedBy: user.id,
           verifiedByName: user.name,
-          verifiedBySignature: user.signatureUrl || '',
+          verifiedBySignature: user.signatureUrl, // Estampa firma actual
           verifiedAt: new Date().toISOString()
         };
         batch.update(docSnap.ref, updateData);
@@ -176,7 +178,7 @@ export default function ReportsPage() {
       });
 
       await batch.commit();
-      toast({ title: "Informe Firmado", description: `Vo.Bo. de ${user.name} aplicado correctamente.` });
+      toast({ title: "Informe Firmado", description: "Tu firma actual ha sido estampada en el registro." });
     } catch (e) {
       toast({ variant: "destructive", title: "Error al firmar" });
     } finally {
@@ -206,7 +208,7 @@ export default function ReportsPage() {
             isVerified: true,
             verifiedBy: user.id,
             verifiedByName: user.name,
-            verifiedBySignature: user.signatureUrl || '',
+            verifiedBySignature: user.signatureUrl,
             verifiedAt: new Date().toISOString()
           };
           batch.update(docSnap.ref, updateData);
@@ -216,7 +218,7 @@ export default function ReportsPage() {
       }
 
       await batch.commit();
-      toast({ title: "Firma Global Exitosa", description: "Todos los registros pendientes han sido firmados." });
+      toast({ title: "Firma Global Exitosa", description: "Todos los reportes pendientes ahora tienen tu firma digital." });
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
     } finally {
@@ -245,7 +247,7 @@ export default function ReportsPage() {
     if (dailyReports.length === 0) return null;
     const isSingleUser = selectedDocent !== 'all' || isDocent;
     
-    // Buscar un registro validado para el pie de firma de coordinación
+    // Buscar la firma de coordinación más reciente de los registros validadores
     const verifiedRec = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
     const docentWithSig = dailyReports.find(r => r.docentSignature);
 
@@ -425,7 +427,7 @@ export default function ReportsPage() {
 
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
-                               {(reportSummary?.isVerified && reportSummary?.coordinatorSignature) ? (
+                               {reportSummary?.isVerified && reportSummary?.coordinatorSignature ? (
                                  <img src={reportSummary.coordinatorSignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
                                  <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Vo.Bo. Coordinación</div>
@@ -454,7 +456,8 @@ export default function ReportsPage() {
           @page { margin: 10mm; size: portrait; }
           body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          svg, .lucide { display: none !important; }
+          svg, .lucide, button, .print-hidden { display: none !important; }
+          .no-print { display: none !important; }
         }
       `}</style>
     </div>

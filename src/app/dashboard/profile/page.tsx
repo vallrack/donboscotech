@@ -94,7 +94,7 @@ export default function ProfilePage() {
         ...formData,
         updatedAt: new Date().toISOString()
       });
-      toast({ title: "Perfil Sincronizado" });
+      toast({ title: "Perfil Sincronizado", description: "Tus datos y firma han sido actualizados en la base de datos." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al guardar" });
     } finally {
