@@ -110,11 +110,7 @@ export default function AttendanceScanPage() {
       for (const s of todayShifts) {
         const [startH, startM] = s.startTime.split(':').map(Number);
         const [endH, endM] = s.endTime.split(':').map(Number);
-        const startTotal = startH * 60 + startM;
-        const endTotal = endH * 60 + endM;
-
-        // Permitimos marcar si estamos en el rango de la jornada
-        if (currTotalMinutes >= (startTotal - 30) && currTotalMinutes <= (endTotal + 60)) {
+        if (currTotalMinutes >= (startH * 60 + startM - 30) && currTotalMinutes <= (endH * 60 + endM + 60)) {
           activeShift = s;
           isWithinTimeRange = true;
           break;
@@ -123,26 +119,22 @@ export default function AttendanceScanPage() {
 
       if (!isWithinTimeRange) {
         setTimeError(todayShifts.length > 0 
-          ? `Tu jornada hoy es de ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}. No estás en horario permitido.`
-          : "No tienes una jornada laboral asignada para hoy."
+          ? `Jornada hoy: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}.`
+          : "Sin jornada asignada para hoy."
         );
         setScanning(false); setManualSaving(false); isProcessing.current = false;
         return;
       }
 
-      // Determinar si es entrada o salida
       const q = query(collection(db, 'userProfiles', user.id, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(1));
       const querySnap = await getDocs(q);
       const lastRecord = !querySnap.empty ? querySnap.docs[0].data() : null;
       const recordType = lastRecord && lastRecord.date === dateStr && lastRecord.type === 'entry' ? 'exit' : 'entry';
 
-      // VALIDACIÓN ESTRICTA DE SALIDA: No antes de la hora de fin
       if (recordType === 'exit' && activeShift) {
         const [endH, endM] = activeShift.endTime.split(':').map(Number);
-        const endTotal = endH * 60 + endM;
-        
-        if (currTotalMinutes < endTotal) {
-          setTimeError(`Restricción Institucional: Tu jornada finaliza a las ${activeShift.endTime}. No puedes registrar salida anticipada.`);
+        if (currTotalMinutes < (endH * 60 + endM)) {
+          setTimeError(`Salida bloqueada hasta las ${activeShift.endTime}.`);
           setScanning(false); setManualSaving(false); isProcessing.current = false;
           return;
         }
@@ -151,11 +143,23 @@ export default function AttendanceScanPage() {
       const recordId = `${user.id}_${now.getTime()}_${method.toLowerCase()}`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
 
+      // AUTO-FIRMA EN SALIDA
       const recordData = {
-        userId: user.id, userName: user.name, date: dateStr, time: timeStr, type: recordType,
-        method: method, shiftId: activeShift?.id, shiftName: activeShift?.name,
+        userId: user.id, 
+        userName: user.name, 
+        date: dateStr, 
+        time: timeStr, 
+        type: recordType,
+        method: method, 
+        shiftId: activeShift?.id, 
+        shiftName: activeShift?.name,
         location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `Punto GPS: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        // Auto-verificación en salida
+        isVerified: recordType === 'exit',
+        verifiedByName: recordType === 'exit' ? user.name : null,
+        verifiedBySignature: recordType === 'exit' ? (user.signatureUrl || null) : null,
+        verifiedAt: recordType === 'exit' ? new Date().toISOString() : null
       };
 
       await Promise.all([
@@ -170,7 +174,7 @@ export default function AttendanceScanPage() {
       setTimeout(() => {
         setSuccess(null);
         isProcessing.current = false;
-      }, 2000); // REINICIO EN 2 SEGUNDOS
+      }, 2000); 
 
     } catch (err: any) { 
       setScanning(false); setManualSaving(false); isProcessing.current = false; 
@@ -184,13 +188,13 @@ export default function AttendanceScanPage() {
         <div className={cn("w-28 h-28 rounded-full flex items-center justify-center mb-8 shadow-2xl", success.type === 'entry' ? "bg-green-100" : "bg-blue-100")}>
           <CheckCircle2 className={cn("w-16 h-16", success.type === 'entry' ? "text-green-500" : "text-blue-500")} />
         </div>
-        <h2 className="text-4xl font-black text-gray-800">{success.type === 'entry' ? "¡Bienvenido!" : "¡Buen Turno!"}</h2>
+        <h2 className="text-4xl font-black text-gray-800">{success.type === 'entry' ? "¡Hola!" : "¡Buen Descanso!"}</h2>
         <div className="bg-white shadow-xl border border-gray-100 p-8 rounded-[2.5rem] mt-8 w-full max-w-sm">
-          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">Jornada Sincronizada</p>
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">Sello Digital Registrado</p>
           <p className="text-xl font-black text-primary mb-1">{success.shift}</p>
-          <p className="text-sm font-bold text-gray-400">Hora: {success.time}</p>
+          <p className="text-sm font-bold text-gray-400">{success.time}</p>
         </div>
-        <p className="mt-8 text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Listo para el siguiente en 2s...</p>
+        <p className="mt-8 text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Siguiente en 2s...</p>
       </div>
     );
   }
@@ -200,7 +204,7 @@ export default function AttendanceScanPage() {
       <Card className="border-none shadow-2xl overflow-hidden rounded-[3rem] bg-white">
         <CardHeader className="bg-primary text-white text-center py-10">
           <CardTitle className="text-3xl font-black tracking-tight">Don Bosco Track</CardTitle>
-          <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-widest mt-1">Sincronización GPS Institucional</p>
+          <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-widest mt-1">Sello Biométrico Digital</p>
         </CardHeader>
         <CardContent className="p-8 space-y-6">
           {timeError && (
@@ -208,7 +212,7 @@ export default function AttendanceScanPage() {
               <XCircle className="h-5 w-5" />
               <AlertTitle className="font-black">Restricción de Jornada</AlertTitle>
               <AlertDescription className="text-xs font-bold">{timeError}</AlertDescription>
-              <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl" onClick={() => setTimeError(null)}>Entendido</Button>
+              <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl" onClick={() => setTimeError(null)}>Reintentar</Button>
             </Alert>
           )}
 
@@ -218,7 +222,7 @@ export default function AttendanceScanPage() {
                {!hasCameraPermission && hasCameraPermission !== null && (
                  <div className="absolute inset-0 bg-gray-50/90 rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center gap-4">
                     <Camera className="w-12 h-12 text-muted-foreground opacity-20" />
-                    <p className="text-sm font-black text-gray-400">Activa la cámara para escanear tu carnet.</p>
+                    <p className="text-sm font-black text-gray-400">Activa la cámara para marcar.</p>
                  </div>
                )}
             </div>
@@ -231,7 +235,7 @@ export default function AttendanceScanPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localización de Alta Precisión</p>
-                <p className="text-xs font-black text-gray-700">{location ? "Punto Georreferenciado" : "Buscando señal GPS..."}</p>
+                <p className="text-xs font-black text-gray-700">{location ? "Punto Georreferenciado" : "Buscando GPS..."}</p>
               </div>
               {scanning && <Loader2 className="w-6 h-6 animate-spin text-primary ml-auto" />}
             </div>
@@ -244,7 +248,7 @@ export default function AttendanceScanPage() {
                 className="w-full h-16 rounded-[1.5rem] border-2 border-primary/20 bg-white text-primary font-black gap-3 hover:bg-primary hover:text-white transition-all shadow-lg"
                >
                  {manualSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <HandHelping className="w-6 h-6" />}
-                 Marcaje Manual de Emergencia
+                 Marcaje Manual (Firma Automática)
                </Button>
             </div>
           </div>

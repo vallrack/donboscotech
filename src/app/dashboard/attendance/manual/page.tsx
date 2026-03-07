@@ -64,14 +64,12 @@ export default function ManualAttendancePage() {
   };
 
   const handleSave = async () => {
-    if (markedUsers.size === 0 || !db) return;
+    if (markedUsers.size === 0 || !db || !currentUser) return;
     
     setSaving(true);
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    const [currH, currM] = timeStr.split(':').map(Number);
-    const currTotalMinutes = currH * 60 + currM;
     const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
 
     try {
@@ -89,15 +87,7 @@ export default function ManualAttendancePage() {
           docent.shiftIds?.includes(s.id) && s.days?.includes(dayName)
         );
 
-        let activeShift: Shift | null = null;
-        for (const s of todayShifts) {
-          const [sh, sm] = s.startTime.split(':').map(Number);
-          const [eh, em] = s.endTime.split(':').map(Number);
-          if (currTotalMinutes >= (sh * 60 + sm) && currTotalMinutes <= (eh * 60 + em)) {
-            activeShift = s;
-            break;
-          }
-        }
+        let activeShift = todayShifts[0] || null; // En manual permitimos si hay al menos una jornada hoy
 
         if (!activeShift) {
           blocked++;
@@ -107,6 +97,7 @@ export default function ManualAttendancePage() {
         const recordId = `${userId}_${now.getTime()}_manual_admin`;
         const currentLoc = locationRef.current || { lat: 0, lng: 0 };
         
+        // AUTO-VALIDACIÓN CON FIRMA DEL COORDINADOR
         const recordData = {
           userId, 
           userName: docent.name, 
@@ -119,10 +110,16 @@ export default function ManualAttendancePage() {
           location: { 
             lat: currentLoc.lat, 
             lng: currentLoc.lng, 
-            address: `Validado por Admin en Punto: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` 
+            address: `Validado por: ${currentUser.name}` 
           },
-          registeredBy: currentUser?.id, 
-          createdAt: serverTimestamp()
+          registeredBy: currentUser.id, 
+          createdAt: serverTimestamp(),
+          // Se agrega firma automáticamente ya que lo hace un coordinador
+          isVerified: true,
+          verifiedBy: currentUser.id,
+          verifiedByName: currentUser.name,
+          verifiedBySignature: currentUser.signatureUrl || null,
+          verifiedAt: new Date().toISOString()
         };
 
         await setDoc(doc(db, 'userProfiles', userId, 'attendanceRecords', recordId), recordData);
@@ -132,7 +129,7 @@ export default function ManualAttendancePage() {
 
       toast({
         title: "Proceso Finalizado",
-        description: `Registrados: ${processed}. Bloqueados por horario: ${blocked}.`
+        description: `Registrados y validados: ${processed}.`
       });
       setMarkedUsers(new Set());
     } catch (error) {
@@ -147,7 +144,7 @@ export default function ManualAttendancePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-primary">Marcaje Manual Administrativo</h1>
-          <p className="text-muted-foreground text-sm">Validación institucional con verificación de jornada.</p>
+          <p className="text-muted-foreground text-sm">Validación directa con firma digital automática.</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold bg-gray-50 text-gray-500 border-gray-100">
@@ -189,7 +186,7 @@ export default function ManualAttendancePage() {
                         <div className="text-[11px] text-muted-foreground">{docent.email}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant="outline" className="text-[10px] uppercase font-bold">Sin marcaje hoy</Badge>
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold">Revisión Pendiente</Badge>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center">
@@ -218,7 +215,7 @@ export default function ManualAttendancePage() {
           className="px-12 h-14 text-lg font-bold shadow-xl rounded-2xl"
         >
           {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserCheck className="w-5 h-5 mr-2" />}
-          Confirmar {markedUsers.size} registros
+          Confirmar y Firmar {markedUsers.size} registros
         </Button>
       </div>
     </div>

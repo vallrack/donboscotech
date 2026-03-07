@@ -14,7 +14,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Shift } from '@/lib/types';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function PublicAttendanceScanner() {
   const db = useFirestore();
@@ -98,7 +97,6 @@ export default function PublicAttendanceScanner() {
       const currTotal = currH * 60 + currM;
       const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
 
-      // VALIDACIÓN DE JORNADA
       const shiftsSnap = await getDocs(collection(db, 'shifts'));
       const todayShifts = shiftsSnap.docs
         .map(d => ({ id: d.id, ...d.data() } as Shift))
@@ -110,7 +108,6 @@ export default function PublicAttendanceScanner() {
       for (const s of todayShifts) {
         const [sh, sm] = s.startTime.split(':').map(Number);
         const [eh, em] = s.endTime.split(':').map(Number);
-        // Permitimos marcar si estamos en el rango del turno
         if (currTotal >= (sh * 60 + sm - 30) && currTotal <= (eh * 60 + em + 60)) {
           activeShift = s;
           isWithinTime = true;
@@ -120,20 +117,18 @@ export default function PublicAttendanceScanner() {
 
       if (!isWithinTime) {
         setErrorInfo(todayShifts.length > 0 
-          ? `Horario de hoy: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}`
-          : "No tiene jornada laboral asignada para hoy."
+          ? `Horario permitido: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}`
+          : "No tienes jornada asignada para hoy."
         );
         setScanning(false); isProcessing.current = false; return;
       }
 
-      // Determinar entrada/salida
       const dateStr = now.toISOString().split('T')[0];
       const q = query(collection(db, 'userProfiles', userId, 'attendanceRecords'), orderBy('createdAt', 'desc'), limit(1));
       const querySnap = await getDocs(q);
       const lastRec = !querySnap.empty ? querySnap.docs[0].data() : null;
       const recordType = lastRec && lastRec.date === dateStr && lastRec.type === 'entry' ? 'exit' : 'entry';
 
-      // RESTRICCIÓN DE SALIDA ANTICIPADA
       if (recordType === 'exit' && activeShift) {
         const [eh, em] = activeShift.endTime.split(':').map(Number);
         if (currTotal < (eh * 60 + em)) {
@@ -145,11 +140,23 @@ export default function PublicAttendanceScanner() {
       const recordId = `${userId}_${now.getTime()}_terminal`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
 
+      // AUTOMATIZACIÓN DE FIRMA EN SALIDA
       const recordData = {
-        userId, userName: userData.name, date: dateStr, time: timeStr, type: recordType,
-        method: 'QR Terminal', shiftId: activeShift?.id, shiftName: activeShift?.name,
+        userId, 
+        userName: userData.name, 
+        date: dateStr, 
+        time: timeStr, 
+        type: recordType,
+        method: 'QR Terminal', 
+        shiftId: activeShift?.id, 
+        shiftName: activeShift?.name,
         location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `Punto GPS: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        // Si es salida, auto-verificamos con la firma del docente
+        isVerified: recordType === 'exit',
+        verifiedByName: recordType === 'exit' ? userData.name : null,
+        verifiedBySignature: recordType === 'exit' ? (userData.signatureUrl || null) : null,
+        verifiedAt: recordType === 'exit' ? new Date().toISOString() : null
       };
 
       await Promise.all([
@@ -158,7 +165,7 @@ export default function PublicAttendanceScanner() {
       ]);
 
       setLastScannedUser({ name: userData.name, photo: userData.avatarUrl, time: timeStr, type: recordType, shift: activeShift?.name });
-      setTimeout(() => { setLastScannedUser(null); setScanning(false); isProcessing.current = false; }, 2000); // 2 SEGUNDOS
+      setTimeout(() => { setLastScannedUser(null); setScanning(false); isProcessing.current = false; }, 2000); 
       
     } catch (err) { setScanning(false); isProcessing.current = false; }
   };
