@@ -10,7 +10,7 @@ import {
   Loader2, Printer, 
   MapPin, Download, 
   ShieldCheck, CheckCircle2,
-  Clock, UserCheck, Check, PenTool, ShieldAlert
+  Clock, UserCheck, Check, PenTool, ShieldAlert, AlertCircle
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
@@ -108,16 +108,14 @@ export default function ReportsPage() {
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
 
-      // IMPORTANTE: Captura firma docente del registro de salida o del perfil
       if (r.docentSignature) dayData.docentSignature = r.docentSignature;
       else if (!dayData.docentSignature && uData?.signatureUrl) dayData.docentSignature = uData.signatureUrl;
 
-      // VALIDACIÓN: Estampa firma de coordinación solo si fue verificada
-      if (r.isVerified === true && r.verifiedBySignature) {
+      if (r.isVerified === true) {
         dayData.isVerified = true;
-        dayData.verifiedByName = r.verifiedByName;
-        dayData.verifiedBySignature = r.verifiedBySignature;
-        dayData.verifiedBy = r.verifiedBy;
+        dayData.verifiedByName = r.verifiedByName || dayData.verifiedByName;
+        dayData.verifiedBySignature = r.verifiedBySignature || dayData.verifiedBySignature;
+        dayData.verifiedBy = r.verifiedBy || dayData.verifiedBy;
       }
     });
 
@@ -146,7 +144,6 @@ export default function ReportsPage() {
   const handleVerifyDay = async (report: any) => {
     if (!db || !user || verifyingId) return;
     
-    // USAR LA FIRMA ACTUAL DEL PERFIL DEL COORDINADOR
     if (!user.signatureUrl) {
       toast({
         variant: "destructive",
@@ -169,7 +166,7 @@ export default function ReportsPage() {
           isVerified: true,
           verifiedBy: user.id,
           verifiedByName: user.name,
-          verifiedBySignature: user.signatureUrl, // Estampa firma actual
+          verifiedBySignature: user.signatureUrl,
           verifiedAt: new Date().toISOString()
         };
         batch.update(docSnap.ref, updateData);
@@ -188,6 +185,18 @@ export default function ReportsPage() {
 
   const handleSignAll = async () => {
     if (!db || !user || globalVerifying) return;
+    
+    const pendingReports = dailyReports.filter(r => !r.isVerified && r.entry && r.exit);
+    
+    if (pendingReports.length === 0) {
+      toast({
+        title: "Sin Pendientes",
+        description: "No se encontraron registros completados que requieran tu firma en este periodo.",
+        variant: "default"
+      });
+      return;
+    }
+
     if (!user.signatureUrl) {
       toast({ variant: "destructive", title: "Firma Faltante", description: "Configura tu firma en Mi Perfil." });
       return;
@@ -196,7 +205,6 @@ export default function ReportsPage() {
     setGlobalVerifying(true);
     try {
       const batch = writeBatch(db);
-      const pendingReports = dailyReports.filter(r => !r.isVerified && r.entry && r.exit);
       
       for (const report of pendingReports) {
         const userRecordsRef = collection(db, 'userProfiles', report.userId, 'attendanceRecords');
@@ -218,7 +226,7 @@ export default function ReportsPage() {
       }
 
       await batch.commit();
-      toast({ title: "Firma Global Exitosa", description: "Todos los reportes pendientes ahora tienen tu firma digital." });
+      toast({ title: "Firma Global Exitosa", description: `${pendingReports.length} jornadas han sido firmadas oficialmente.` });
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
     } finally {
@@ -247,18 +255,17 @@ export default function ReportsPage() {
     if (dailyReports.length === 0) return null;
     const isSingleUser = selectedDocent !== 'all' || isDocent;
     
-    // Buscar la firma de coordinación más reciente de los registros validadores
     const verifiedRec = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
     const docentWithSig = dailyReports.find(r => r.docentSignature);
 
     return {
       docentName: isSingleUser ? (activeDocentProfile?.name || 'Personal') : 'Auditoría Institucional',
       docentSignature: isSingleUser ? (docentWithSig?.docentSignature || activeDocentProfile?.signatureUrl || null) : null,
-      coordinatorName: verifiedRec?.verifiedByName || '',
+      coordinatorName: verifiedRec?.verifiedByName || user?.name || '',
       coordinatorSignature: verifiedRec?.verifiedBySignature || null,
       isVerified: !!verifiedRec
     };
-  }, [dailyReports, activeDocentProfile, isDocent, selectedDocent]);
+  }, [dailyReports, activeDocentProfile, isDocent, selectedDocent, user?.name]);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
@@ -280,7 +287,7 @@ export default function ReportsPage() {
         </div>
         <div className="flex gap-2">
           {isPrivileged && (
-            <Button variant="default" size="sm" onClick={handleSignAll} disabled={globalVerifying} className="rounded-xl font-black h-9 px-6 bg-primary shadow-lg gap-2">
+            <Button variant="default" size="sm" onClick={handleSignAll} disabled={globalVerifying || dailyReports.length === 0} className="rounded-xl font-black h-9 px-6 bg-primary shadow-lg gap-2">
               {globalVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenTool className="w-4 h-4" />}
               FIRMAR TODO EL PERIODO
             </Button>
