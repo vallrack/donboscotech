@@ -107,11 +107,12 @@ export default function ReportsPage() {
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
 
-      // IMPORTANTE: Solo tomar la firma del docente de sus propios registros
+      // La firma del docente se toma de los registros del propio docente
       if (r.docentSignature) dayData.docentSignature = r.docentSignature;
       
-      // IMPORTANTE: Solo marcar como verificado si el registro tiene firma de coordinador real
-      if (r.isVerified && r.verifiedBySignature) {
+      // SOLO marcar como verificado si el registro tiene firma de un coordinador real
+      // Y que esa firma no sea la del propio docente (evitar contaminación)
+      if (r.isVerified && r.verifiedBySignature && r.verifiedBy !== r.userId) {
         dayData.isVerified = true;
         dayData.verifiedByName = r.verifiedByName;
         dayData.verifiedBySignature = r.verifiedBySignature;
@@ -239,18 +240,24 @@ export default function ReportsPage() {
     link.click();
   };
 
-  // Determinar los datos para el pie de firma en el PDF
+  // Determinar los datos para el pie de firma en el PDF de forma segura
   const reportSummary = useMemo(() => {
     if (dailyReports.length === 0) return null;
-    const first = dailyReports[0];
-    const verified = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
+    
+    // Si estamos viendo a un docente específico, tomamos sus datos
+    // Si vemos a todos, solo mostramos el pie de firma si es una vista de auditoría individualizada
+    const isSingleUserReport = selectedDocent !== 'all' || isDocent;
+    
+    const verifiedRecord = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
+    
     return {
-      docentName: isDocent ? user?.name : (selectedDocent !== 'all' ? activeDocentProfile?.name : 'Personal Ciudad Don Bosco'),
-      docentSignature: isDocent ? user?.signatureUrl : (selectedDocent !== 'all' ? activeDocentProfile?.signatureUrl : null),
-      coordinatorName: verified?.verifiedByName || 'Auditoría Técnica',
-      coordinatorSignature: verified?.verifiedBySignature || null
+      docentName: isSingleUserReport ? (activeDocentProfile?.name || 'Personal Ciudad Don Bosco') : 'Auditoría Institucional',
+      docentSignature: isSingleUserReport ? (activeDocentProfile?.signatureUrl || null) : null,
+      coordinatorName: verifiedRecord?.verifiedByName || 'Auditoría Técnica',
+      coordinatorSignature: verifiedRecord?.verifiedBySignature || null,
+      isVerified: !!verifiedRecord
     };
-  }, [dailyReports, activeDocentProfile, isDocent, user, selectedDocent]);
+  }, [dailyReports, activeDocentProfile, isDocent, selectedDocent]);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
@@ -420,7 +427,7 @@ export default function ReportsPage() {
 
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
-                               {reportSummary?.coordinatorSignature ? (
+                               {(reportSummary?.isVerified && reportSummary?.coordinatorSignature) ? (
                                  <img src={reportSummary.coordinatorSignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
                                  <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Vo.Bo. Coordinación</div>
@@ -428,7 +435,7 @@ export default function ReportsPage() {
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
                             <p className="text-[8px] font-bold text-gray-400">
-                              {reportSummary?.coordinatorName}
+                              {reportSummary?.isVerified ? reportSummary?.coordinatorName : 'Pendiente Firma Técnica'}
                             </p>
                           </div>
                         </div>
