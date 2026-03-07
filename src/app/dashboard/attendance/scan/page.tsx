@@ -143,7 +143,7 @@ export default function AttendanceScanPage() {
       const recordId = `${user.id}_${now.getTime()}_${method.toLowerCase()}`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
 
-      // AUTO-FIRMA EN SALIDA
+      // AUTOMATIZACIÓN DE FIRMA DEL DOCENTE EN SALIDA
       const recordData = {
         userId: user.id, 
         userName: user.name, 
@@ -155,11 +155,10 @@ export default function AttendanceScanPage() {
         shiftName: activeShift?.name,
         location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `Punto GPS: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
         createdAt: serverTimestamp(),
-        // Auto-verificación en salida
-        isVerified: recordType === 'exit',
-        verifiedByName: recordType === 'exit' ? user.name : null,
-        verifiedBySignature: recordType === 'exit' ? (user.signatureUrl || null) : null,
-        verifiedAt: recordType === 'exit' ? new Date().toISOString() : null
+        // Firma del docente si es salida
+        docentSignature: recordType === 'exit' ? (user.signatureUrl || null) : null,
+        //isVerified queda en false hasta que el coordinador valide en el reporte
+        isVerified: false
       };
 
       await Promise.all([

@@ -52,10 +52,11 @@ export interface AttendanceRecord {
     lng: number;
     address?: string;
   };
-  isVerified?: boolean;
+  docentSignature?: string; // Firma capturada del docente
+  isVerified?: boolean; // Validación por coordinador
   verifiedBy?: string;
   verifiedByName?: string;
-  verifiedBySignature?: string;
+  verifiedBySignature?: string; // Firma del coordinador
   verifiedAt?: any;
   createdAt?: any;
 }

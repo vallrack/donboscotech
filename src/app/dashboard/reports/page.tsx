@@ -69,7 +69,8 @@ export default function ReportsPage() {
 
   const activeDocentProfile = useMemo(() => {
     if (isDocent) return user;
-    return profiles.find(p => p.id === selectedDocent);
+    if (selectedDocent !== 'all') return profiles.find(p => p.id === selectedDocent);
+    return null;
   }, [isDocent, user, selectedDocent, profiles]);
 
   const dailyReports = useMemo(() => {
@@ -93,6 +94,7 @@ export default function ReportsPage() {
           campus: uData?.campus || 'Sede Principal',
           documentId: uData?.documentId || 'N/A',
           location: r.location || { lat: 0, lng: 0 },
+          docentSignature: r.docentSignature || uData?.signatureUrl || null,
           isVerified: r.isVerified || false,
           verifiedByName: r.verifiedByName || '',
           verifiedBySignature: r.verifiedBySignature || ''
@@ -106,6 +108,7 @@ export default function ReportsPage() {
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
 
+      if (r.docentSignature) dayData.docentSignature = r.docentSignature;
       if (r.isVerified) {
         dayData.isVerified = true;
         dayData.verifiedByName = r.verifiedByName;
@@ -138,11 +141,11 @@ export default function ReportsPage() {
   const handleVerifyDay = async (report: any) => {
     if (!db || !user || verifyingId) return;
     
-    if (!user.signatureUrl && user.role !== 'admin') {
+    if (!user.signatureUrl && (user.role === 'admin' || user.role === 'coordinator')) {
       toast({
         variant: "destructive",
         title: "Firma Faltante",
-        description: "Debes subir tu firma digital en tu perfil para validar jornadas."
+        description: "Debes subir tu firma digital en tu perfil para validar reportes."
       });
       return;
     }
@@ -169,7 +172,7 @@ export default function ReportsPage() {
       });
 
       await batch.commit();
-      toast({ title: "Jornada Validada", description: `Se ha firmado el cumplimiento de ${report.userName}.` });
+      toast({ title: "Jornada Validada", description: `Revisión técnica de ${report.userName} completada.` });
     } catch (e) {
       toast({ variant: "destructive", title: "Error al validar" });
     } finally {
@@ -349,8 +352,8 @@ export default function ReportsPage() {
                         <div className="grid grid-cols-3 items-end gap-10">
                           <div className="space-y-4 text-center">
                             <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
-                               {activeDocentProfile?.signatureUrl && (
-                                 <img src={activeDocentProfile.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
+                               {(dailyReports.find(r => r.userId === activeDocentProfile?.id)?.docentSignature || activeDocentProfile?.signatureUrl) && (
+                                 <img src={dailyReports.find(r => r.userId === activeDocentProfile?.id)?.docentSignature || activeDocentProfile?.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Firma del Docente</p>
