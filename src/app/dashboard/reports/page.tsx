@@ -68,7 +68,6 @@ export default function ReportsPage() {
 
     records.forEach(r => {
       const uData = userMap.get(r.userId);
-      
       if (!isDocent && selectedDocent !== 'all' && r.userId !== selectedDocent) return;
 
       const key = `${r.userId}_${r.date}_${r.shiftId || 'none'}`;
@@ -120,7 +119,6 @@ export default function ReportsPage() {
     const BOM = "\uFEFF"; 
     const sep = ";";
     const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Validación"];
-    
     const metaData = [
       ["CIUDAD DON BOSCO - INFORME OFICIAL DE ASISTENCIA"],
       [`Periodo: ${period}`],
@@ -128,15 +126,12 @@ export default function ReportsPage() {
       [],
       headers
     ];
-
     const rows = dailyReports.map(r => [
       r.userName, r.documentId, r.campus, r.date, r.shiftName,
       r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours), "Sello Digital Track"
     ]);
-
     rows.push([]);
     rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", formatDuration(totalTimeHours), "Don Bosco Track Sinc"]);
-
     const csvContent = metaData.concat(rows).map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -146,28 +141,28 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700 pb-20">
+    <div className="space-y-4 animate-in fade-in duration-700 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
-          <p className="text-muted-foreground font-medium text-xs print:hidden">Control de jornadas y presencia Ciudad Don Bosco.</p>
+          <h1 className="text-2xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
+          <p className="text-muted-foreground font-medium text-[10px] print:hidden">Control de jornadas Ciudad Don Bosco.</p>
         </div>
         <div className="flex gap-2 print:hidden">
-          <Button variant="outline" size="sm" onClick={handleExportExcel} className="rounded-xl font-bold border-green-200 text-green-700 h-10 px-4">
+          <Button variant="outline" size="sm" onClick={handleExportExcel} className="rounded-xl font-bold border-green-200 text-green-700 h-9 px-4">
             <Download className="w-4 h-4 mr-2" /> Excel
           </Button>
-          <Button size="sm" onClick={() => window.print()} className="rounded-xl font-bold h-10 px-4 shadow-md">
+          <Button size="sm" onClick={() => window.print()} className="rounded-xl font-bold h-9 px-4 shadow-md">
             <Printer className="w-4 h-4 mr-2" /> Imprimir
           </Button>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 print:hidden items-end">
-        <Card className="md:col-span-9 bg-white p-4 rounded-2xl shadow-sm border-none flex flex-wrap gap-4 items-end">
-          <div className="flex-1 min-w-[150px] space-y-1.5">
-            <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Periodo Reporte</label>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 print:hidden items-end">
+        <Card className="md:col-span-9 bg-white p-3 rounded-xl shadow-sm border-none flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-[120px] space-y-1">
+            <label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Periodo</label>
             <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="rounded-xl font-bold bg-gray-50/50 border-none h-11 text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="rounded-lg font-bold bg-gray-50/50 border-none h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Semana Actual">Semana Actual</SelectItem>
                 <SelectItem value="Mes Actual">Mes Actual</SelectItem>
@@ -176,12 +171,12 @@ export default function ReportsPage() {
             </Select>
           </div>
           {!isDocent && (
-            <div className="flex-1 min-w-[200px] space-y-1.5">
-              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Filtrar Personal</label>
+            <div className="flex-1 min-w-[180px] space-y-1">
+              <label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Docente</label>
               <Select value={selectedDocent} onValueChange={setSelectedDocent}>
-                <SelectTrigger className="rounded-xl font-bold bg-gray-50/50 border-none h-11 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="rounded-lg font-bold bg-gray-50/50 border-none h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos los miembros</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -189,74 +184,91 @@ export default function ReportsPage() {
           )}
         </Card>
         
-        <Card className="md:col-span-3 bg-primary text-white rounded-2xl shadow-lg flex flex-col items-center justify-center p-4 border-none min-h-[84px]">
-           <p className="text-[10px] font-black uppercase opacity-70 tracking-widest mb-1">TOTAL ACUMULADO</p>
-           <h3 className="text-2xl font-black">{formatDuration(totalTimeHours)}</h3>
+        <Card className="md:col-span-3 bg-primary text-white rounded-xl shadow-md flex flex-col items-center justify-center p-3 border-none h-[64px]">
+           <p className="text-[8px] font-black uppercase opacity-70 tracking-widest">TOTAL ACUMULADO</p>
+           <h3 className="text-lg font-black">{formatDuration(totalTimeHours)}</h3>
         </Card>
       </div>
 
-      <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden print:shadow-none print:border print:rounded-none">
-        <CardHeader className="border-b bg-gray-50/50 p-6 flex flex-row items-center justify-between print:hidden">
-          <CardTitle className="text-lg font-black flex items-center gap-2 text-gray-800"><Filter className="w-5 h-5 text-primary" /> Desglose de Actividad</CardTitle>
-          <Badge className="font-black bg-primary/10 text-primary border-none px-4 py-1.5 rounded-xl">{dailyReports.length} Registros</Badge>
+      <Card className="border-none shadow-xl rounded-[2rem] bg-white overflow-hidden print:shadow-none print:border print:rounded-none">
+        <CardHeader className="border-b bg-gray-50/50 p-4 flex flex-row items-center justify-between print:hidden">
+          <CardTitle className="text-sm font-black text-gray-800">Desglose de Actividad</CardTitle>
+          <Badge className="font-black bg-primary/10 text-primary border-none px-3 py-1 rounded-lg text-[10px]">{dailyReports.length} Registros</Badge>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-gray-50/20 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-8 py-5">Personal Institucional</th>
-                  <th className="px-8 py-5">Fecha / Jornada</th>
-                  <th className="px-8 py-5">Horas de Marcaje</th>
-                  <th className="px-8 py-5 print:hidden">Ubicación</th>
-                  <th className="px-8 py-5 text-center">Duración Real</th>
+                <tr className="bg-gray-50/20 border-b text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                  <th className="px-6 py-4">Personal</th>
+                  <th className="px-6 py-4">Fecha / Jornada</th>
+                  <th className="px-6 py-4">Marcaje</th>
+                  <th className="px-6 py-4 print:hidden">Ubicación</th>
+                  <th className="px-6 py-4 text-center">Duración</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
-                  <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20 w-12 h-12" /></td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
                 ) : dailyReports.length > 0 ? (
                   <>
                     {dailyReports.map((r, idx) => (
                       <tr key={idx} className="hover:bg-gray-50/50 transition-all">
-                        <td className="px-8 py-6">
-                          <div className="font-black text-sm text-gray-800">{r.userName}</div>
-                          <div className="text-[10px] text-muted-foreground font-bold">{r.campus} • {r.documentId}</div>
+                        <td className="px-6 py-4">
+                          <div className="font-black text-[12px] text-gray-800">{r.userName}</div>
+                          <div className="text-[9px] text-muted-foreground font-bold">{r.documentId}</div>
                         </td>
-                        <td className="px-8 py-6">
-                          <div className="text-[12px] font-bold">{r.date}</div>
-                          <div className="text-[9px] font-black text-primary uppercase">{r.shiftName}</div>
+                        <td className="px-6 py-4">
+                          <div className="text-[11px] font-bold">{r.date}</div>
+                          <div className="text-[8px] font-black text-primary uppercase">{r.shiftName}</div>
                         </td>
-                        <td className="px-8 py-6 text-[12px] font-bold">
+                        <td className="px-6 py-4 text-[11px] font-bold">
                            <span className="text-green-600">{r.entry || '--:--'}</span>
-                           <span className="mx-2 opacity-30 text-gray-400">→</span>
+                           <span className="mx-1 opacity-20">→</span>
                            <span className="text-primary">{r.exit || '--:--'}</span>
                         </td>
-                        <td className="px-8 py-6 print:hidden">
+                        <td className="px-6 py-4 print:hidden">
                            {r.location?.lat !== 0 ? (
                              <a 
                                href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`} 
                                target="_blank" 
-                               className="text-[10px] font-black text-primary flex items-center gap-1.5 hover:underline bg-primary/5 px-3 py-1.5 rounded-lg w-fit"
+                               className="text-[9px] font-black text-primary flex items-center gap-1 hover:underline bg-primary/5 px-2 py-1 rounded-md w-fit"
                              >
-                               <MapPin className="w-3.5 h-3.5" /> Ver Punto Exacto
+                               <MapPin className="w-3 h-3" /> Ver GPS
                              </a>
-                           ) : <span className="text-[10px] text-muted-foreground/30 font-bold italic">Sin GPS</span>}
+                           ) : <span className="text-[8px] text-muted-foreground/30 font-bold italic">Sin GPS</span>}
                         </td>
-                        <td className="px-8 py-6 text-center">
-                          <Badge className="font-black bg-green-500 text-white text-[11px] px-4 py-1.5 rounded-xl shadow-sm border-none">{formatDuration(r.hours)}</Badge>
+                        <td className="px-6 py-4 text-center">
+                          <Badge className="font-black bg-green-500 text-white text-[10px] px-3 py-1 rounded-lg border-none">{formatDuration(r.hours)}</Badge>
                         </td>
                       </tr>
                     ))}
                     <tr className="bg-primary/5">
-                      <td colSpan={4} className="px-8 py-8 text-right font-black text-[12px] uppercase text-primary tracking-widest print:col-span-4">TOTAL TIEMPO ACUMULADO</td>
-                      <td className="px-8 py-8 text-center">
-                        <Badge className="font-black bg-primary text-white px-6 py-2.5 rounded-xl text-sm shadow-xl border-none">{formatDuration(totalTimeHours)}</Badge>
+                      <td colSpan={4} className="px-6 py-6 text-right font-black text-[10px] uppercase text-primary tracking-widest print:col-span-4">TOTAL TIEMPO ACUMULADO</td>
+                      <td className="px-6 py-6 text-center">
+                        <Badge className="font-black bg-primary text-white px-4 py-1.5 rounded-lg text-[12px] border-none">{formatDuration(totalTimeHours)}</Badge>
+                      </td>
+                    </tr>
+                    {/* Firma oficial solo para PDF */}
+                    <tr className="hidden print:table-row">
+                      <td colSpan={5} className="pt-20 pb-10 px-6">
+                        <div className="flex justify-between items-end">
+                          <div className="w-48 border-t-2 border-gray-400 pt-2">
+                            <p className="text-[10px] font-black uppercase text-gray-500">Firma del Docente</p>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-[10px] font-black text-primary">CIUDAD DON BOSCO</p>
+                             <p className="text-[8px] font-bold text-gray-400">Sello Digital Track Sinc</p>
+                          </div>
+                          <div className="w-48 border-t-2 border-gray-400 pt-2">
+                            <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No se encontraron registros para los filtros seleccionados.</td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No hay registros.</td></tr>
                 )}
               </tbody>
             </table>

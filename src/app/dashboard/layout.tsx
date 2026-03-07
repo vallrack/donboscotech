@@ -49,12 +49,12 @@ function DashboardGuard({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-gray-50/50">
-        <AppSidebar />
+        <AppSidebar className="print:hidden" />
         <SidebarInset className="flex flex-col flex-1 overflow-hidden">
           {/* Top Bar for Context & Mobile */}
-          <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-white px-6 sticky top-0 z-30 no-print">
+          <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-white px-6 sticky top-0 z-30 print:hidden">
             <div className="flex items-center gap-4">
-              <SidebarTrigger className="lg:hidden" />
+              <SidebarTrigger className="lg:hidden print:hidden" />
               <div className="lg:hidden">
                  <Image 
                     src="https://ciudaddonbosco.org/wp-content/uploads/2025/07/CIUDAD-DON-BOSCO_CABECERA-04-1024x284.png"
