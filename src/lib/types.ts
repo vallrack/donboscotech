@@ -52,6 +52,11 @@ export interface AttendanceRecord {
     lng: number;
     address?: string;
   };
+  isVerified?: boolean;
+  verifiedBy?: string;
+  verifiedByName?: string;
+  verifiedBySignature?: string;
+  verifiedAt?: any;
   createdAt?: any;
 }
 

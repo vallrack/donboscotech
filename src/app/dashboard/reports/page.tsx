@@ -9,15 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   Loader2, Printer, 
   MapPin, Download, 
-  Filter, ShieldCheck
+  ShieldCheck, CheckCircle2,
+  Clock, UserCheck
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, getDocs, where, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { AttendanceRecord, User } from '@/lib/types';
+import { AttendanceRecord, User as UserType } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
 
 function calculateHoursDecimal(start: string | null, end: string | null): number {
   if (!start || !end) return 0;
@@ -46,8 +46,11 @@ export default function ReportsPage() {
   const { toast } = useToast();
   
   const isDocent = user?.role === 'docent';
+  const isPrivileged = user?.role === 'admin' || user?.role === 'coordinator' || user?.role === 'secretary';
+  
   const [period, setPeriod] = useState('Mes Actual');
   const [selectedDocent, setSelectedDocent] = useState('all');
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -59,12 +62,11 @@ export default function ReportsPage() {
   const profilesQuery = useMemoFirebase(() => db ? query(collection(db, 'userProfiles'), orderBy('name')) : null, [db]);
 
   const { data: recordsRaw, loading: recordsLoading } = useCollection<AttendanceRecord>(recordsQuery);
-  const { data: profilesRaw } = useCollection<User>(profilesQuery);
+  const { data: profilesRaw } = useCollection<UserType>(profilesQuery);
 
   const records = useMemo(() => recordsRaw || [], [recordsRaw]);
   const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
 
-  // Identificar el docente actual para el PDF
   const activeDocentProfile = useMemo(() => {
     if (isDocent) return user;
     return profiles.find(p => p.id === selectedDocent);
@@ -86,10 +88,14 @@ export default function ReportsPage() {
           date: r.date, 
           entry: null, 
           exit: null,
+          shiftId: r.shiftId,
           shiftName: r.shiftName || 'N/A',
           campus: uData?.campus || 'Sede Principal',
           documentId: uData?.documentId || 'N/A',
-          location: r.location || { lat: 0, lng: 0 }
+          location: r.location || { lat: 0, lng: 0 },
+          isVerified: r.isVerified || false,
+          verifiedByName: r.verifiedByName || '',
+          verifiedBySignature: r.verifiedBySignature || ''
         });
       }
       
@@ -98,6 +104,13 @@ export default function ReportsPage() {
         if (!dayData.entry || r.time < dayData.entry) dayData.entry = r.time; 
       } else { 
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
+      }
+
+      // Si alguno de los registros está verificado, marcamos el día como verificado
+      if (r.isVerified) {
+        dayData.isVerified = true;
+        dayData.verifiedByName = r.verifiedByName;
+        dayData.verifiedBySignature = r.verifiedBySignature;
       }
     });
 
@@ -123,10 +136,56 @@ export default function ReportsPage() {
     return dailyReports.reduce((acc, r) => acc + (r.hours || 0), 0);
   }, [dailyReports]);
 
+  const handleVerifyDay = async (report: any) => {
+    if (!db || !user || verifyingId) return;
+    
+    if (!user.signatureUrl && user.role !== 'admin') {
+      toast({
+        variant: "destructive",
+        title: "Firma Faltante",
+        description: "Debes subir tu firma digital en tu perfil para validar jornadas."
+      });
+      return;
+    }
+
+    setVerifyingId(`${report.userId}_${report.date}`);
+    try {
+      // Buscamos todos los registros que coincidan con el usuario y la fecha
+      const userRecordsRef = collection(db, 'userProfiles', report.userId, 'attendanceRecords');
+      const q = query(userRecordsRef, where('date', '==', report.date));
+      const snapshot = await getDocs(q);
+      
+      const batch = writeBatch(db);
+      
+      snapshot.docs.forEach(docSnap => {
+        const updateData = {
+          isVerified: true,
+          verifiedBy: user.id,
+          verifiedByName: user.name,
+          verifiedBySignature: user.signatureUrl || '',
+          verifiedAt: new Date().toISOString()
+        };
+        
+        batch.update(docSnap.ref, updateData);
+        
+        // También actualizar en el historial global
+        const globalRef = doc(db, 'globalAttendanceRecords', docSnap.id);
+        batch.update(globalRef, updateData);
+      });
+
+      await batch.commit();
+      toast({ title: "Jornada Validada", description: `Se ha firmado el cumplimiento de ${report.userName}.` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al validar" });
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
   const handleExportExcel = () => {
     const BOM = "\uFEFF"; 
     const sep = ";";
-    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Validación"];
+    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Estado", "Validado Por"];
     const metaData = [
       ["CIUDAD DON BOSCO - INFORME OFICIAL DE ASISTENCIA"],
       [`Periodo: ${period}`],
@@ -136,10 +195,11 @@ export default function ReportsPage() {
     ];
     const rows = dailyReports.map(r => [
       r.userName, r.documentId, r.campus, r.date, r.shiftName,
-      r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours), "Sello Digital Track"
+      r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours),
+      r.isVerified ? "CUMPLIDO" : "PENDIENTE", r.verifiedByName || "N/A"
     ]);
     rows.push([]);
-    rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", formatDuration(totalTimeHours), "Don Bosco Track Sinc"]);
+    rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", formatDuration(totalTimeHours), "", ""]);
     const csvContent = metaData.concat(rows).map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -224,54 +284,83 @@ export default function ReportsPage() {
                   <th className="px-10 py-6">Fecha / Jornada</th>
                   <th className="px-10 py-6">Marcaje</th>
                   <th className="px-10 py-6 text-center">Duración</th>
+                  <th className="px-10 py-6 text-center print:hidden">Validación</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
-                  <tr><td colSpan={4} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
                 ) : dailyReports.length > 0 ? (
                   <>
-                    {dailyReports.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/50 transition-all border-b border-gray-50">
-                        <td className="px-10 py-8">
-                          <div className="font-black text-[13px] text-gray-800">{r.userName}</div>
-                          <div className="text-[9px] text-muted-foreground font-bold tracking-widest">{r.documentId}</div>
-                        </td>
-                        <td className="px-10 py-8">
-                          <div className="text-[12px] font-bold text-gray-700">{r.date}</div>
-                          <div className="text-[8px] font-black text-primary uppercase tracking-wider">{r.shiftName}</div>
-                        </td>
-                        <td className="px-10 py-8 text-[12px] font-bold">
-                           <span className="text-green-600">{r.entry || '--:--'}</span>
-                           <span className="mx-2 opacity-20">→</span>
-                           <span className="text-primary">{r.exit || '--:--'}</span>
-                           {r.location?.lat !== 0 && (
-                             <div className="print:hidden mt-2">
-                               <a 
-                                 href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`} 
-                                 target="_blank" 
-                                 className="text-[8px] font-black text-primary/60 flex items-center gap-1 hover:underline bg-primary/5 px-2 py-1 rounded-md w-fit"
-                               >
-                                 <MapPin className="w-2.5 h-2.5" /> Ver Punto Exacto
-                               </a>
+                    {dailyReports.map((r, idx) => {
+                      const isCurrentVerifying = verifyingId === `${r.userId}_${r.date}`;
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50/50 transition-all border-b border-gray-50">
+                          <td className="px-10 py-8">
+                            <div className="font-black text-[13px] text-gray-800">{r.userName}</div>
+                            <div className="text-[9px] text-muted-foreground font-bold tracking-widest">{r.documentId}</div>
+                          </td>
+                          <td className="px-10 py-8">
+                            <div className="text-[12px] font-bold text-gray-700">{r.date}</div>
+                            <div className="text-[8px] font-black text-primary uppercase tracking-wider">{r.shiftName}</div>
+                          </td>
+                          <td className="px-10 py-8 text-[12px] font-bold">
+                             <div className="flex items-center gap-2">
+                               <span className="text-green-600">{r.entry || '--:--'}</span>
+                               <span className="mx-1 opacity-20">→</span>
+                               <span className="text-primary">{r.exit || '--:--'}</span>
                              </div>
-                           )}
-                        </td>
-                        <td className="px-10 py-8 text-center">
-                          <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none">{formatDuration(r.hours)}</Badge>
-                        </td>
-                      </tr>
-                    ))}
+                             {r.location?.lat !== 0 && (
+                               <div className="print:hidden mt-2">
+                                 <a 
+                                   href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`} 
+                                   target="_blank" 
+                                   className="text-[8px] font-black text-primary/60 flex items-center gap-1 hover:underline bg-primary/5 px-2 py-1 rounded-md w-fit"
+                                 >
+                                   <MapPin className="w-2.5 h-2.5" /> Ver Punto Exacto
+                                 </a>
+                               </div>
+                             )}
+                          </td>
+                          <td className="px-10 py-8 text-center">
+                            <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none">{formatDuration(r.hours)}</Badge>
+                          </td>
+                          <td className="px-10 py-8 text-center print:hidden">
+                            {r.isVerified ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <Badge className="bg-green-500 hover:bg-green-600 font-black text-[8px] gap-1 px-3 py-1 rounded-lg">
+                                  <CheckCircle2 className="w-3 h-3" /> CUMPLIDO
+                                </Badge>
+                                <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.verifiedByName}</span>
+                              </div>
+                            ) : isPrivileged ? (
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleVerifyDay(r)}
+                                disabled={isCurrentVerifying}
+                                className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] gap-1.5 px-4"
+                              >
+                                {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck className="w-3 h-3" />}
+                                VALIDAR
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className="text-[8px] font-black opacity-40">PENDIENTE</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     <tr className="bg-gray-50/10">
                       <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em]">TOTAL TIEMPO ACUMULADO</td>
                       <td className="px-10 py-10 text-center">
                         <Badge className="font-black bg-primary/5 text-primary px-6 py-2 rounded-xl text-[14px] border-none shadow-none">{formatDuration(totalTimeHours)}</Badge>
                       </td>
+                      <td className="print:hidden"></td>
                     </tr>
                     
                     {/* SECCIÓN DE FIRMAS PARA PDF */}
                     <tr className="hidden print:table-row">
-                      <td colSpan={4} className="pt-32 pb-16 px-10">
+                      <td colSpan={5} className="pt-32 pb-16 px-10">
                         <div className="grid grid-cols-3 items-end gap-10">
                           {/* Firma Docente */}
                           <div className="space-y-4 text-center">
@@ -295,24 +384,26 @@ export default function ReportsPage() {
                              <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Sello Digital Track Sinc</p>
                           </div>
 
-                          {/* Firma Coordinación */}
+                          {/* Firma Coordinación (Solo si está verificado) */}
                           <div className="space-y-4 text-center">
                             <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
-                               {user?.signatureUrl ? (
-                                 <img src={user.signatureUrl} alt="Firma Coordinación" className="max-h-full object-contain" />
+                               {dailyReports.some(r => r.isVerified && r.verifiedBySignature) ? (
+                                 <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
-                                 <div className="text-[8px] font-bold text-gray-300 italic">Validación Administrativa</div>
+                                 <div className="text-[8px] font-bold text-red-300 italic">PENDIENTE DE VALIDACIÓN</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
-                            <p className="text-[8px] font-bold text-gray-400">{user?.name}</p>
+                            <p className="text-[8px] font-bold text-gray-400">
+                              {dailyReports.find(r => r.isVerified)?.verifiedByName || 'Revisión Técnica'}
+                            </p>
                           </div>
                         </div>
                       </td>
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={4} className="py-20 text-center text-muted-foreground italic font-bold">No se encontraron registros bajo este criterio.</td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No se encontraron registros bajo este criterio.</td></tr>
                 )}
               </tbody>
             </table>
@@ -325,7 +416,7 @@ export default function ReportsPage() {
           body { background-color: white !important; }
           main { padding: 0 !important; margin: 0 !important; }
           .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
-          header { display: none !important; }
+          header, .sidebar-trigger, [data-sidebar="trigger"], .print-hidden { display: none !important; }
           .print-card { border: none !important; box-shadow: none !important; }
           table { width: 100% !important; border-collapse: collapse !important; }
           th, td { border-bottom: 1px solid #f3f4f6 !important; }
