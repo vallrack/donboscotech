@@ -16,7 +16,7 @@ import { useCollection } from '@/firebase';
 import { Campus, Program, Shift } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
+import Image from 'image';
 import Link from 'next/link';
 
 export default function ProfilePage() {
@@ -109,44 +109,164 @@ export default function ProfilePage() {
   return (
     <div className="max-w-6xl mx-auto space-y-8 py-4 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-1"><h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1><p className="text-muted-foreground font-medium flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Gestión de identidad Don Bosco.</p></div>
-        <Button asChild size="lg" className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl"><Link href="/dashboard/profile/carnet"><CreditCard className="w-5 h-5" /> Mi Carnet <ArrowRight className="w-4 h-4" /></Link></Button>
+        <div className="space-y-1">
+          <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
+          <p className="text-muted-foreground font-medium flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> 
+            Gestión de identidad Ciudad Don Bosco.
+          </p>
+        </div>
+        <Button asChild size="lg" className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl">
+          <Link href="/dashboard/profile/carnet">
+            <CreditCard className="w-5 h-5" /> Mi Carnet <ArrowRight className="w-4 h-4" />
+          </Link>
+        </Button>
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-8">
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-10 text-center flex flex-col items-center">
              <div className="relative group cursor-pointer" onClick={() => !saving && fileInputRef.current?.click()}>
                 <div className="w-40 h-40 rounded-[3rem] bg-gray-50 flex items-center justify-center overflow-hidden border-4 border-white shadow-xl relative">
-                  {formData.avatarUrl ? (<Image src={formData.avatarUrl} alt="Avatar" width={160} height={160} className="object-cover w-full h-full" unoptimized />) : (<UserIcon className="w-16 h-16 text-gray-200" />)}
-                  <div className="absolute inset-0 bg-primary/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2"><Camera className="w-8 h-8" /><span className="text-[8px] font-black uppercase">Foto</span></div>
+                  {formData.avatarUrl ? (
+                    <Image src={formData.avatarUrl} alt="Avatar" width={160} height={160} className="object-cover w-full h-full" unoptimized />
+                  ) : (
+                    <UserIcon className="w-16 h-16 text-gray-200" />
+                  )}
+                  <div className="absolute inset-0 bg-primary/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2">
+                    <Camera className="w-8 h-8" />
+                    <span className="text-[8px] font-black uppercase">Cambiar Foto</span>
+                  </div>
                 </div>
                 <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'avatarUrl')} className="hidden" accept="image/*" />
              </div>
-             <div className="mt-8 space-y-2"><h3 className="text-xl font-black text-gray-800">{formData.name || 'Cargando...'}</h3><Badge variant="secondary" className="uppercase font-black text-[9px] px-4 py-1.5 rounded-xl">{user?.role || 'docent'}</Badge></div>
+             <div className="mt-8 space-y-2">
+               <h3 className="text-xl font-black text-gray-800">{formData.name || 'Docente'}</h3>
+               <Badge variant="secondary" className="uppercase font-black text-[9px] px-4 py-1.5 rounded-xl">
+                 {user?.role || 'docent'}
+               </Badge>
+             </div>
           </Card>
+
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-10 flex flex-col items-center gap-4">
-             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Firma Digital</h4>
-             <div className="w-full aspect-video bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden relative group cursor-pointer" onClick={() => !saving && sigInputRef.current?.click()}>
-               {formData.signatureUrl ? (<img src={formData.signatureUrl} alt="Firma" className="max-w-full max-h-full object-contain p-4" />) : (<div className="flex flex-col items-center text-muted-foreground/40 gap-2"><PenTool className="w-8 h-8" /><span className="text-[10px] font-bold">Subir firma</span></div>)}
+             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Firma Digital Oficial</h4>
+             <div 
+               className="w-full aspect-video bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden relative group cursor-pointer" 
+               onClick={() => !saving && sigInputRef.current?.click()}
+             >
+               {formData.signatureUrl ? (
+                 <img src={formData.signatureUrl} alt="Firma" className="max-w-full max-h-full object-contain p-4" />
+               ) : (
+                 <div className="flex flex-col items-center text-muted-foreground/40 gap-2">
+                   <PenTool className="w-8 h-8" />
+                   <span className="text-[10px] font-bold">Subir Firma Escaneada</span>
+                 </div>
+               )}
              </div>
              <input type="file" ref={sigInputRef} onChange={(e) => handleFileChange(e, 'signatureUrl')} className="hidden" accept="image/*" />
-             <p className="text-[9px] text-center text-muted-foreground font-medium italic">Esta firma validará tus reportes oficiales.</p>
+             <p className="text-[9px] text-center text-muted-foreground font-medium italic px-4">
+               Esta firma validará tus reportes oficiales de asistencia.
+             </p>
           </Card>
         </div>
+
         <div className="lg:col-span-8">
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white overflow-hidden">
              <form onSubmit={handleSave}>
-                <CardHeader className="border-b bg-gray-50/50 p-10"><CardTitle className="text-xl font-black">Información Institucional</CardTitle></CardHeader>
+                <CardHeader className="border-b bg-gray-50/50 p-10">
+                  <CardTitle className="text-xl font-black text-gray-800">Información Institucional</CardTitle>
+                </CardHeader>
                 <CardContent className="p-10 space-y-8">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     <div className="space-y-3"><Label className="text-[10px] font-black uppercase tracking-[0.2em]">Nombre Completo</Label><Input value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required /></div>
-                     <div className="space-y-3"><Label className="text-[10px] font-black uppercase tracking-[0.2em]">Cédula</Label><Input value={formData.documentId} onChange={(e) => updateField('documentId', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required /></div>
-                     <div className="space-y-3"><Label className="text-[10px] font-black uppercase tracking-[0.2em]">Sede</Label><Select value={formData.campus || undefined} onValueChange={(v) => updateField('campus', v)}><SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold"><SelectValue placeholder="Sede" /></SelectTrigger><SelectContent>{campuses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                     <div className="space-y-3"><Label className="text-[10px] font-black uppercase tracking-[0.2em]">Programa</Label><Select value={formData.program || undefined} onValueChange={(v) => updateField('program', v)}><SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold"><SelectValue placeholder="Programa" /></SelectTrigger><SelectContent>{programs.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                     <div className="space-y-3">
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Nombre Completo</Label>
+                       <Input value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
+                     </div>
+                     <div className="space-y-3">
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Cédula de Ciudadanía</Label>
+                       <Input value={formData.documentId} onChange={(e) => updateField('documentId', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
+                     </div>
+                     <div className="space-y-3">
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede Asignada</Label>
+                       <Select 
+                        value={formData.campus || undefined} 
+                        onValueChange={(v) => updateField('campus', v)}
+                       >
+                        <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
+                          <SelectValue placeholder="Seleccionar Sede" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          {campuses.map(c => <SelectItem key={c.id} value={c.name} className="font-bold">{c.name}</SelectItem>)}
+                        </SelectContent>
+                       </Select>
+                     </div>
+                     <div className="space-y-3">
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Proceso</Label>
+                       <Select 
+                        value={formData.program || undefined} 
+                        onValueChange={(v) => updateField('program', v)}
+                       >
+                        <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
+                          <SelectValue placeholder="Seleccionar Programa" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          {programs.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}
+                        </SelectContent>
+                       </Select>
+                     </div>
                    </div>
-                   <div className="space-y-4 pt-4"><Label className="text-[10px] font-black uppercase tracking-[0.2em]">Mis Jornadas</Label><Select onValueChange={(v) => toggleShift(v)}><SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-primary"><div className="flex items-center gap-3"><Plus className="w-5 h-5" /><span>Añadir Jornada</span></div></SelectTrigger><SelectContent>{shifts.map(s => <SelectItem key={s.id} value={s.id} className="font-black py-4 border-b last:border-0 border-gray-100"><div className="flex flex-col"><div className="flex items-center gap-2"><span>{s.name}</span>{formData.shiftIds?.includes(s.id) && <Check className="w-3 h-3 text-green-500" />}</div><span className="text-[10px] font-bold text-muted-foreground">{s.startTime} - {s.endTime}</span></div></SelectItem>)}</SelectContent></Select><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{assignedShifts.map(s => (<div key={s.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between group"><div><p className="text-[10px] font-black text-primary uppercase">{s.name}</p><p className="text-[9px] font-bold text-muted-foreground">{s.startTime} - {s.endTime}</p></div><Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => toggleShift(s.id)}><Trash2 className="w-4 h-4" /></Button></div>))}</div></div>
+
+                   <div className="space-y-4 pt-4 border-t border-dashed">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Mis Jornadas Laborales</Label>
+                    <Select onValueChange={(v) => toggleShift(v)}>
+                      <SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-primary">
+                        <div className="flex items-center gap-3">
+                          <Plus className="w-5 h-5" />
+                          <span>Añadir Nueva Jornada</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl shadow-2xl">
+                        {shifts.map(s => (
+                          <SelectItem key={s.id} value={s.id} className="font-black py-4 border-b last:border-0 border-gray-100">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span>{s.name}</span>
+                                {formData.shiftIds?.includes(s.id) && <Check className="w-3 h-3 text-green-500" />}
+                              </div>
+                              <span className="text-[10px] font-bold text-muted-foreground">{s.startTime} - {s.endTime}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                      {assignedShifts.map(s => (
+                        <div key={s.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between group animate-in slide-in-from-bottom-2">
+                          <div>
+                            <p className="text-[10px] font-black text-primary uppercase">{s.name}</p>
+                            <p className="text-[9px] font-bold text-muted-foreground">{s.startTime} - {s.endTime}</p>
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
+                            onClick={() => toggleShift(s.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                   </div>
                 </CardContent>
-                <CardFooter className="bg-gray-50/80 p-10 border-t justify-end"><Button type="submit" className="h-16 px-14 rounded-2xl font-black gap-3 shadow-2xl" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Save className="w-5 h-5" />} Sincronizar Perfil</Button></CardFooter>
+                <CardFooter className="bg-gray-50/80 p-10 border-t justify-end">
+                  <Button type="submit" className="h-16 px-14 rounded-2xl font-black gap-3 shadow-2xl" disabled={saving}>
+                    {saving ? <Loader2 className="animate-spin" /> : <Save className="w-5 h-5" />} 
+                    Sincronizar Perfil
+                  </Button>
+                </CardFooter>
              </form>
           </Card>
         </div>
