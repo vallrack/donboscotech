@@ -93,10 +93,11 @@ export default function ReportsPage() {
           shiftName: r.shiftName || 'N/A',
           campus: uData?.campus || 'Sede Principal',
           documentId: uData?.documentId || 'N/A',
-          docentSignature: uData?.signatureUrl || null,
+          docentSignature: null,
           isVerified: false,
           verifiedByName: '',
-          verifiedBySignature: ''
+          verifiedBySignature: '',
+          verifiedBy: null
         });
       }
       
@@ -107,15 +108,15 @@ export default function ReportsPage() {
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
 
-      // La firma del docente se toma de los registros del propio docente
+      // La firma del docente se toma estrictamente de sus registros de salida
       if (r.docentSignature) dayData.docentSignature = r.docentSignature;
       
-      // SOLO marcar como verificado si el registro tiene firma de un coordinador real
-      // Y que esa firma no sea la del propio docente (evitar contaminación)
-      if (r.isVerified && r.verifiedBySignature && r.verifiedBy !== r.userId) {
+      // Validación estricta: solo si fue validado por alguien DIFERENTE al docente
+      if (r.isVerified === true && r.verifiedBySignature && r.verifiedBy && r.verifiedBy !== r.userId) {
         dayData.isVerified = true;
         dayData.verifiedByName = r.verifiedByName;
         dayData.verifiedBySignature = r.verifiedBySignature;
+        dayData.verifiedBy = r.verifiedBy;
       }
     });
 
@@ -240,22 +241,20 @@ export default function ReportsPage() {
     link.click();
   };
 
-  // Determinar los datos para el pie de firma en el PDF de forma segura
   const reportSummary = useMemo(() => {
     if (dailyReports.length === 0) return null;
+    const isSingleUser = selectedDocent !== 'all' || isDocent;
     
-    // Si estamos viendo a un docente específico, tomamos sus datos
-    // Si vemos a todos, solo mostramos el pie de firma si es una vista de auditoría individualizada
-    const isSingleUserReport = selectedDocent !== 'all' || isDocent;
-    
-    const verifiedRecord = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
-    
+    // Buscar un registro validado para el pie de firma de coordinación
+    const verifiedRec = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
+    const docentWithSig = dailyReports.find(r => r.docentSignature);
+
     return {
-      docentName: isSingleUserReport ? (activeDocentProfile?.name || 'Personal Ciudad Don Bosco') : 'Auditoría Institucional',
-      docentSignature: isSingleUserReport ? (activeDocentProfile?.signatureUrl || null) : null,
-      coordinatorName: verifiedRecord?.verifiedByName || 'Auditoría Técnica',
-      coordinatorSignature: verifiedRecord?.verifiedBySignature || null,
-      isVerified: !!verifiedRecord
+      docentName: isSingleUser ? (activeDocentProfile?.name || 'Personal') : 'Auditoría Institucional',
+      docentSignature: isSingleUser ? (docentWithSig?.docentSignature || activeDocentProfile?.signatureUrl || null) : null,
+      coordinatorName: verifiedRec?.verifiedByName || '',
+      coordinatorSignature: verifiedRec?.verifiedBySignature || null,
+      isVerified: !!verifiedRec
     };
   }, [dailyReports, activeDocentProfile, isDocent, selectedDocent]);
 
@@ -406,7 +405,6 @@ export default function ReportsPage() {
                       <td className="print:hidden"></td>
                     </tr>
                     
-                    {/* Sección de Firmas Dinámicas en PDF */}
                     <tr className="hidden print:table-row">
                       <td colSpan={5} className="pt-32 pb-16 px-10">
                         <div className="grid grid-cols-3 items-end gap-10">
@@ -456,6 +454,7 @@ export default function ReportsPage() {
           @page { margin: 10mm; size: portrait; }
           body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          svg, .lucide { display: none !important; }
         }
       `}</style>
     </div>
