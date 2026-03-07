@@ -10,7 +10,7 @@ import {
   Loader2, Printer, 
   MapPin, Download, 
   ShieldCheck, CheckCircle2,
-  Clock, UserCheck, Check
+  Clock, UserCheck, Check, PenTool
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
@@ -339,7 +339,8 @@ export default function ReportsPage() {
                                       disabled={isCurrentVerifying}
                                       className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] px-4 mt-1"
                                     >
-                                      {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : "VALIDAR TÉCNICAMENTE"}
+                                      {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <PenTool className="w-3 h-3 mr-1" />}
+                                      VALIDAR TÉCNICAMENTE
                                     </Button>
                                   )}
                                 </>
@@ -365,13 +366,13 @@ export default function ReportsPage() {
                       <td colSpan={5} className="pt-32 pb-16 px-10">
                         <div className="grid grid-cols-3 items-end gap-10">
                           <div className="space-y-4 text-center">
-                            <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
+                            <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
                                {(dailyReports.find(r => r.userId === activeDocentProfile?.id)?.docentSignature || activeDocentProfile?.signatureUrl) && (
                                  <img src={dailyReports.find(r => r.userId === activeDocentProfile?.id)?.docentSignature || activeDocentProfile?.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Firma del Docente</p>
-                            <p className="text-[8px] font-bold text-gray-400">{activeDocentProfile?.name || 'N/A'}</p>
+                            <p className="text-[8px] font-bold text-gray-400">{activeDocentProfile?.name || 'Personal Ciudad Don Bosco'}</p>
                           </div>
 
                           <div className="text-center space-y-2 pb-1">
@@ -383,16 +384,16 @@ export default function ReportsPage() {
                           </div>
 
                           <div className="space-y-4 text-center">
-                            <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
+                            <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
                                {dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature ? (
                                  <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
-                                 <div className="text-[8px] font-bold text-red-300 italic">PENDIENTE VALIDACIÓN</div>
+                                 <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Validación Técnica</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
                             <p className="text-[8px] font-bold text-gray-400">
-                              {dailyReports.find(r => r.isVerified)?.verifiedByName || 'Revisión Técnica'}
+                              {dailyReports.find(r => r.isVerified)?.verifiedByName || 'Revisión Técnica / Secretaría'}
                             </p>
                           </div>
                         </div>
@@ -400,7 +401,7 @@ export default function ReportsPage() {
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No hay registros.</td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No hay registros hoy.</td></tr>
                 )}
               </tbody>
             </table>
