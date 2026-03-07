@@ -277,7 +277,7 @@ export default function ReportsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
-                  <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
                 ) : dailyReports.length > 0 ? (
                   <>
                     {dailyReports.map((r, idx) => {
@@ -295,7 +295,7 @@ export default function ReportsPage() {
                           <td className="px-10 py-8 text-[12px] font-bold">
                              <div className="flex items-center gap-2">
                                <span className="text-green-600">{r.entry || '--:--'}</span>
-                               <span className="mx-1 opacity-20">→</span>
+                               <span className="mx-1 opacity-20 print:hidden">→</span>
                                <span className="text-primary">{r.exit || '--:--'}</span>
                              </div>
                              {r.location?.lat !== 0 && (
@@ -311,7 +311,7 @@ export default function ReportsPage() {
                              )}
                           </td>
                           <td className="px-10 py-8 text-center">
-                            <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none">{formatDuration(r.hours)}</Badge>
+                            <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none print:bg-transparent">{formatDuration(r.hours)}</Badge>
                           </td>
                           <td className="px-10 py-8 text-center print:hidden">
                             {r.isVerified ? (
@@ -338,9 +338,9 @@ export default function ReportsPage() {
                       );
                     })}
                     <tr className="bg-gray-50/10">
-                      <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em]">TOTAL TIEMPO ACUMULADO</td>
+                      <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em] print:text-gray-800">TOTAL TIEMPO ACUMULADO</td>
                       <td className="px-10 py-10 text-center">
-                        <Badge className="font-black bg-primary/5 text-primary px-6 py-2 rounded-xl text-[14px] border-none shadow-none">{formatDuration(totalTimeHours)}</Badge>
+                        <Badge className="font-black bg-primary/5 text-primary px-6 py-2 rounded-xl text-[14px] border-none shadow-none print:text-gray-800">{formatDuration(totalTimeHours)}</Badge>
                       </td>
                       <td className="print:hidden"></td>
                     </tr>
@@ -394,7 +394,11 @@ export default function ReportsPage() {
 
       <style jsx global>{`
         @media print {
-          body { background-color: white !important; }
+          @page {
+            margin: 10mm;
+            size: portrait;
+          }
+          body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           main { padding: 0 !important; margin: 0 !important; }
           .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
           header, .sidebar-trigger, [data-sidebar="trigger"], .print-hidden, svg { display: none !important; }

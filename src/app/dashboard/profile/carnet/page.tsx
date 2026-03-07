@@ -53,7 +53,7 @@ export default function CarnetPage() {
       </div>
 
       <div className="flex justify-center items-center py-10 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-200 no-print-bg">
-        <Card className="w-[360px] min-h-[600px] h-auto bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card flex flex-col">
+        <Card className="w-[360px] min-h-[580px] h-auto bg-white shadow-2xl rounded-[2.5rem] overflow-hidden relative border-none print-card flex flex-col">
           {/* Header Superior Institucional */}
           <div className="bg-primary pt-8 pb-12 px-8 text-white text-center relative header-red">
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
@@ -77,7 +77,7 @@ export default function CarnetPage() {
             <div className="text-center mb-4">
               <h2 className="text-lg font-black text-gray-800 leading-tight uppercase tracking-tight px-4">{user.name}</h2>
               <div className="mt-2 inline-flex items-center gap-1.5 bg-primary/10 text-primary px-4 py-1 rounded-full role-badge">
-                <ShieldCheck className="w-3 h-3" />
+                <ShieldCheck className="w-3 h-3 print:hidden" />
                 <span className="text-[9px] font-black uppercase tracking-widest">
                   {user.role === 'docent' ? 'Docente' : 
                    user.role === 'secretary' ? 'Secretaría' : 
@@ -102,25 +102,25 @@ export default function CarnetPage() {
             <div className="grid grid-cols-2 gap-y-3 gap-x-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-1 text-[7px] font-black text-muted-foreground uppercase tracking-widest">
-                  <Fingerprint className="w-2 h-2 opacity-50" /> CÉDULA
+                  <Fingerprint className="w-2 h-2 opacity-50 print:hidden" /> CÉDULA
                 </div>
                 <p className="text-[11px] font-black text-gray-700">{user.documentId || 'N/A'}</p>
               </div>
               <div className="space-y-1 text-right">
                 <div className="flex items-center justify-end gap-1 text-[7px] font-black text-muted-foreground uppercase tracking-widest">
-                  <Building2 className="w-2 h-2 opacity-50" /> SEDE
+                  <Building2 className="w-2 h-2 opacity-50 print:hidden" /> SEDE
                 </div>
                 <p className="text-[11px] font-black text-gray-700 truncate">{user.campus || 'PRINCIPAL'}</p>
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1 text-[7px] font-black text-muted-foreground uppercase tracking-widest">
-                  <BookOpen className="w-2 h-2 opacity-50" /> PROGRAMA
+                  <BookOpen className="w-2 h-2 opacity-50 print:hidden" /> PROGRAMA
                 </div>
                 <p className="text-[11px] font-black text-primary truncate uppercase">{user.program || 'N/A'}</p>
               </div>
               <div className="space-y-1 text-right">
                 <div className="flex items-center justify-end gap-1 text-[7px] font-black text-muted-foreground uppercase tracking-widest">
-                  <Clock className="w-2 h-2 opacity-50" /> JORNADA
+                  <Clock className="w-2 h-2 opacity-50 print:hidden" /> JORNADA
                 </div>
                 <p className="text-[10px] font-black text-gray-700 truncate uppercase">{userShiftNames}</p>
               </div>
@@ -128,7 +128,7 @@ export default function CarnetPage() {
             
             <div className="pt-3 border-t border-dashed border-gray-200 flex items-center justify-between">
                <div className="flex items-center gap-1">
-                  <ShieldCheck className="w-2.5 h-2.5 text-primary opacity-30" />
+                  <ShieldCheck className="w-2.5 h-2.5 text-primary opacity-30 print:hidden" />
                   <span className="text-[7px] font-black text-gray-400 uppercase tracking-tighter">DON BOSCO TRACK SINC</span>
                </div>
                <span className="text-[7px] font-mono text-gray-300 font-bold uppercase">UID: {user.id.substring(0, 8)}</span>
@@ -139,26 +139,39 @@ export default function CarnetPage() {
 
       <style jsx global>{`
         @media print {
-          body * { visibility: hidden; }
-          .print-card, .print-card * { 
-            visibility: visible; 
+          @page {
+            margin: 0;
+            size: portrait;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            background-color: white !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          .print-card { 
-            position: absolute; 
-            left: 50%; 
-            top: 50%; 
-            transform: translate(-50%, -50%); 
-            box-shadow: none !important;
+          .no-print {
+            display: none !important;
+          }
+          .print-card {
+            display: block !important;
+            margin: 10mm auto !important;
+            width: 85mm !important;
+            min-height: 135mm !important;
+            height: auto !important;
             border: 1px solid #e5e7eb !important;
             border-radius: 2.5rem !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
             background-color: white !important;
-            width: 340px !important;
+            position: static !important;
+            transform: none !important;
           }
           .header-red {
             background-color: #a01c2c !important;
             color: white !important;
+            -webkit-print-color-adjust: exact !important;
           }
           .role-badge {
             background-color: rgba(160, 28, 44, 0.1) !important;
@@ -166,8 +179,11 @@ export default function CarnetPage() {
           }
           .info-section {
             background-color: #f9fafb !important;
+            -webkit-print-color-adjust: exact !important;
           }
-          .no-print { display: none !important; }
+          img {
+            max-width: 100% !important;
+          }
         }
       `}</style>
     </div>
