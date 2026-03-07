@@ -80,9 +80,8 @@ export default function ReportsPage() {
 
     records.forEach(r => {
       const uData = userMap.get(r.userId);
-      if (!isDocent && selectedDocent !== 'all' && r.userId !== selectedDocent) return;
-
       const key = `${r.userId}_${r.date}_${r.shiftId || 'none'}`;
+      
       if (!grouped.has(key)) {
         grouped.set(key, {
           userId: r.userId, 
@@ -94,11 +93,10 @@ export default function ReportsPage() {
           shiftName: r.shiftName || 'N/A',
           campus: uData?.campus || 'Sede Principal',
           documentId: uData?.documentId || 'N/A',
-          location: r.location || { lat: 0, lng: 0 },
-          docentSignature: r.docentSignature || uData?.signatureUrl || null,
-          isVerified: r.isVerified || false,
-          verifiedByName: r.verifiedByName || '',
-          verifiedBySignature: r.verifiedBySignature || ''
+          docentSignature: uData?.signatureUrl || null,
+          isVerified: false,
+          verifiedByName: '',
+          verifiedBySignature: ''
         });
       }
       
@@ -109,8 +107,11 @@ export default function ReportsPage() {
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
       }
 
+      // IMPORTANTE: Solo tomar la firma del docente de sus propios registros
       if (r.docentSignature) dayData.docentSignature = r.docentSignature;
-      if (r.isVerified) {
+      
+      // IMPORTANTE: Solo marcar como verificado si el registro tiene firma de coordinador real
+      if (r.isVerified && r.verifiedBySignature) {
         dayData.isVerified = true;
         dayData.verifiedByName = r.verifiedByName;
         dayData.verifiedBySignature = r.verifiedBySignature;
@@ -133,7 +134,7 @@ export default function ReportsPage() {
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [records, profiles, selectedDocent, period, isDocent]);
+  }, [records, profiles, period]);
 
   const totalTimeHours = useMemo(() => {
     return dailyReports.reduce((acc, r) => acc + (r.hours || 0), 0);
@@ -142,7 +143,7 @@ export default function ReportsPage() {
   const handleVerifyDay = async (report: any) => {
     if (!db || !user || verifyingId) return;
     
-    if (!user.signatureUrl && (user.role === 'admin' || user.role === 'coordinator')) {
+    if (!user.signatureUrl) {
       toast({
         variant: "destructive",
         title: "Firma Faltante",
@@ -173,9 +174,9 @@ export default function ReportsPage() {
       });
 
       await batch.commit();
-      toast({ title: "Informe Firmado", description: `Validación técnica de ${report.userName} completada.` });
+      toast({ title: "Informe Firmado", description: `Vo.Bo. de ${user.name} aplicado correctamente.` });
     } catch (e) {
-      toast({ variant: "destructive", title: "Error al validar" });
+      toast({ variant: "destructive", title: "Error al firmar" });
     } finally {
       setVerifyingId(null);
     }
@@ -183,7 +184,7 @@ export default function ReportsPage() {
 
   const handleSignAll = async () => {
     if (!db || !user || globalVerifying) return;
-    if (!user.signatureUrl && (user.role === 'admin' || user.role === 'coordinator')) {
+    if (!user.signatureUrl) {
       toast({ variant: "destructive", title: "Firma Faltante", description: "Configura tu firma en Mi Perfil." });
       return;
     }
@@ -213,7 +214,7 @@ export default function ReportsPage() {
       }
 
       await batch.commit();
-      toast({ title: "Validación Global Exitosa", description: "Todos los informes del periodo han sido firmados." });
+      toast({ title: "Firma Global Exitosa", description: "Todos los registros pendientes han sido firmados." });
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
     } finally {
@@ -230,8 +231,6 @@ export default function ReportsPage() {
       r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours),
       r.isVerified ? "VALIDADO" : (r.exit ? "CUMPLIDO" : "PENDIENTE"), r.verifiedByName || "N/A"
     ]);
-    rows.push([]);
-    rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", formatDuration(totalTimeHours), "", ""]);
     const csvContent = headers.join(sep) + "\n" + rows.map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -240,9 +239,21 @@ export default function ReportsPage() {
     link.click();
   };
 
+  // Determinar los datos para el pie de firma en el PDF
+  const reportSummary = useMemo(() => {
+    if (dailyReports.length === 0) return null;
+    const first = dailyReports[0];
+    const verified = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
+    return {
+      docentName: isDocent ? user?.name : (selectedDocent !== 'all' ? activeDocentProfile?.name : 'Personal Ciudad Don Bosco'),
+      docentSignature: isDocent ? user?.signatureUrl : (selectedDocent !== 'all' ? activeDocentProfile?.signatureUrl : null),
+      coordinatorName: verified?.verifiedByName || 'Auditoría Técnica',
+      coordinatorSignature: verified?.verifiedBySignature || null
+    };
+  }, [dailyReports, activeDocentProfile, isDocent, user, selectedDocent]);
+
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
-      {/* Encabezado PDF Institucional */}
       <div className="hidden print:flex justify-between items-center border-b-2 border-primary pb-6 mb-8">
         <div>
            <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
@@ -349,17 +360,6 @@ export default function ReportsPage() {
                                <span className="mx-1 opacity-20 print:hidden">→</span>
                                <span className="text-primary">{r.exit || '--:--'}</span>
                              </div>
-                             {r.location?.lat !== 0 && (
-                               <div className="print:hidden mt-2">
-                                 <a 
-                                   href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`} 
-                                   target="_blank" 
-                                   className="text-[8px] font-black text-primary/60 flex items-center gap-1 hover:underline bg-primary/5 px-2 py-1 rounded-md w-fit"
-                                 >
-                                   <MapPin className="w-2.5 h-2.5" /> Ver Punto Exacto
-                                 </a>
-                               </div>
-                             )}
                           </td>
                           <td className="px-10 py-8 text-center">
                             <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none print:bg-transparent">{formatDuration(r.hours)}</Badge>
@@ -367,30 +367,22 @@ export default function ReportsPage() {
                           <td className="px-10 py-8 text-center print:hidden">
                             <div className="flex flex-col items-center gap-2">
                               {r.isVerified ? (
-                                <>
-                                  <Badge className="bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg gap-1">
-                                    VALIDADO TÉCNICAMENTE
-                                  </Badge>
-                                  <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.verifiedByName}</span>
-                                </>
+                                <Badge className="bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg">VALIDADO: {r.verifiedByName}</Badge>
                               ) : isFulfilledByDocent ? (
-                                <>
-                                  <Badge className="bg-green-500 font-black text-[8px] px-3 py-1 rounded-lg">
-                                    CUMPLIDO POR DOCENTE
-                                  </Badge>
-                                  <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.userName}</span>
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge className="bg-green-500 font-black text-[8px] px-3 py-1 rounded-lg">CUMPLIDO</Badge>
                                   {isPrivileged && (
                                     <Button 
                                       size="sm" 
                                       onClick={() => handleVerifyDay(r)}
                                       disabled={isCurrentVerifying}
-                                      className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] px-4 mt-1"
+                                      className="h-8 rounded-lg bg-gray-800 font-black text-[9px] px-4 mt-1"
                                     >
                                       {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <PenTool className="w-3 h-3 mr-1" />}
-                                      FIRMAR Y VALIDAR
+                                      FIRMAR
                                     </Button>
                                   )}
-                                </>
+                                </div>
                               ) : (
                                 <Badge variant="outline" className="text-[8px] font-black opacity-40">EN PROCESO</Badge>
                               )}
@@ -399,7 +391,6 @@ export default function ReportsPage() {
                         </tr>
                       );
                     })}
-                    {/* Fila de Totales */}
                     <tr className="bg-gray-50/10">
                       <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em] print:text-gray-800">TOTAL TIEMPO ACUMULADO</td>
                       <td className="px-10 py-10 text-center">
@@ -408,18 +399,18 @@ export default function ReportsPage() {
                       <td className="print:hidden"></td>
                     </tr>
                     
-                    {/* Espacio para Firmas Digitales en PDF */}
+                    {/* Sección de Firmas Dinámicas en PDF */}
                     <tr className="hidden print:table-row">
                       <td colSpan={5} className="pt-32 pb-16 px-10">
                         <div className="grid grid-cols-3 items-end gap-10">
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
-                               {activeDocentProfile?.signatureUrl && (
-                                 <img src={activeDocentProfile.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
+                               {reportSummary?.docentSignature && (
+                                 <img src={reportSummary.docentSignature} alt="Firma Docente" className="max-h-full object-contain" />
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Firma del Docente</p>
-                            <p className="text-[8px] font-bold text-gray-400">{activeDocentProfile?.name || 'Personal Ciudad Don Bosco'}</p>
+                            <p className="text-[8px] font-bold text-gray-400">{reportSummary?.docentName}</p>
                           </div>
 
                           <div className="text-center space-y-2 pb-1">
@@ -429,15 +420,15 @@ export default function ReportsPage() {
 
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
-                               {dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature ? (
-                                 <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)!.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
+                               {reportSummary?.coordinatorSignature ? (
+                                 <img src={reportSummary.coordinatorSignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
                                  <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Vo.Bo. Coordinación</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
                             <p className="text-[8px] font-bold text-gray-400">
-                              {dailyReports.find(r => r.isVerified)?.verifiedByName || 'Auditoría Técnica'}
+                              {reportSummary?.coordinatorName}
                             </p>
                           </div>
                         </div>
@@ -455,17 +446,8 @@ export default function ReportsPage() {
 
       <style jsx global>{`
         @media print {
-          @page {
-            margin: 10mm;
-            size: portrait;
-          }
+          @page { margin: 10mm; size: portrait; }
           body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          main { padding: 0 !important; margin: 0 !important; }
-          .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
-          header, .sidebar-trigger, [data-sidebar="trigger"], .print-hidden, svg, .lucide { display: none !important; }
-          .print-card { border: none !important; box-shadow: none !important; }
-          table { width: 100% !important; border-collapse: collapse !important; border: 1px solid #eee !important; }
-          th, td { border: 1px solid #f3f4f6 !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
       `}</style>

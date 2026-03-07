@@ -32,7 +32,7 @@ export default function PublicAttendanceScanner() {
   const isProcessing = useRef(false);
 
   useEffect(() => {
-    if ("geolocation" in navigator) {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -140,7 +140,7 @@ export default function PublicAttendanceScanner() {
       const recordId = `${userId}_${now.getTime()}_terminal`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
 
-      // AUTOMATIZACIÓN DE FIRMA EN SALIDA
+      // REGISTRO OFICIAL SIN AUTO-VALIDACIÓN DE COORDINADOR
       const recordData = {
         userId, 
         userName: userData.name, 
@@ -152,11 +152,13 @@ export default function PublicAttendanceScanner() {
         shiftName: activeShift?.name,
         location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `Punto GPS: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
         createdAt: serverTimestamp(),
-        // Si es salida, auto-verificamos con la firma del docente
-        isVerified: recordType === 'exit',
-        verifiedByName: recordType === 'exit' ? userData.name : null,
-        verifiedBySignature: recordType === 'exit' ? (userData.signatureUrl || null) : null,
-        verifiedAt: recordType === 'exit' ? new Date().toISOString() : null
+        // Firma del docente si es salida
+        docentSignature: recordType === 'exit' ? (userData.signatureUrl || null) : null,
+        // isVerified queda en false para que el coordinador valide en el reporte
+        isVerified: false,
+        verifiedByName: null,
+        verifiedBySignature: null,
+        verifiedAt: null
       };
 
       await Promise.all([
