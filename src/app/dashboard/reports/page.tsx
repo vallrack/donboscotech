@@ -10,7 +10,7 @@ import {
   Loader2, Printer, 
   MapPin, Download, 
   ShieldCheck, CheckCircle2,
-  Clock, UserCheck
+  Clock, UserCheck, Check
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
@@ -187,7 +187,7 @@ export default function ReportsPage() {
     const rows = dailyReports.map(r => [
       r.userName, r.documentId, r.campus, r.date, r.shiftName,
       r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours),
-      r.isVerified ? "CUMPLIDO" : "PENDIENTE", r.verifiedByName || "N/A"
+      r.isVerified ? "VALIDADO" : (r.exit ? "CUMPLIDO" : "PENDIENTE"), r.verifiedByName || "N/A"
     ]);
     rows.push([]);
     rows.push(["TOTAL ACUMULADO", "", "", "", "", "", "", formatDuration(totalTimeHours), "", ""]);
@@ -284,6 +284,7 @@ export default function ReportsPage() {
                   <>
                     {dailyReports.map((r, idx) => {
                       const isCurrentVerifying = verifyingId === `${r.userId}_${r.date}`;
+                      const isFulfilledByDocent = !!r.exit;
                       return (
                         <tr key={idx} className="hover:bg-gray-50/50 transition-all border-b border-gray-50">
                           <td className="px-10 py-8">
@@ -316,25 +317,35 @@ export default function ReportsPage() {
                             <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none print:bg-transparent">{formatDuration(r.hours)}</Badge>
                           </td>
                           <td className="px-10 py-8 text-center print:hidden">
-                            {r.isVerified ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <Badge className="bg-green-500 hover:bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg">
-                                  CUMPLIDO
-                                </Badge>
-                                <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.verifiedByName}</span>
-                              </div>
-                            ) : isPrivileged ? (
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleVerifyDay(r)}
-                                disabled={isCurrentVerifying}
-                                className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] px-4"
-                              >
-                                {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : "VALIDAR"}
-                              </Button>
-                            ) : (
-                              <Badge variant="outline" className="text-[8px] font-black opacity-40">PENDIENTE</Badge>
-                            )}
+                            <div className="flex flex-col items-center gap-2">
+                              {r.isVerified ? (
+                                <>
+                                  <Badge className="bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg gap-1">
+                                    <Check className="w-3 h-3" /> VALIDADO
+                                  </Badge>
+                                  <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.verifiedByName}</span>
+                                </>
+                              ) : isFulfilledByDocent ? (
+                                <>
+                                  <Badge className="bg-green-500 font-black text-[8px] px-3 py-1 rounded-lg">
+                                    CUMPLIDO
+                                  </Badge>
+                                  <span className="text-[7px] font-bold text-muted-foreground uppercase">{r.userName}</span>
+                                  {isPrivileged && (
+                                    <Button 
+                                      size="sm" 
+                                      onClick={() => handleVerifyDay(r)}
+                                      disabled={isCurrentVerifying}
+                                      className="h-8 rounded-lg bg-gray-800 hover:bg-black font-black text-[9px] px-4 mt-1"
+                                    >
+                                      {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : "VALIDAR TÉCNICAMENTE"}
+                                    </Button>
+                                  )}
+                                </>
+                              ) : (
+                                <Badge variant="outline" className="text-[8px] font-black opacity-40">PENDIENTE</Badge>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -373,7 +384,7 @@ export default function ReportsPage() {
                                {dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature ? (
                                  <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
-                                 <div className="text-[8px] font-bold text-red-300 italic">PENDIENTE</div>
+                                 <div className="text-[8px] font-bold text-red-300 italic">PENDIENTE VALIDACIÓN</div>
                                )}
                             </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
