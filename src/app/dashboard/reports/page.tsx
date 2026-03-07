@@ -370,7 +370,7 @@ export default function ReportsPage() {
 
                           <div className="space-y-4 text-center">
                             <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
-                               {dailyReports.some(r => r.isVerified && r.verifiedBySignature) ? (
+                               {dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature ? (
                                  <img src={dailyReports.find(r => r.isVerified && r.verifiedBySignature)?.verifiedBySignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
                                  <div className="text-[8px] font-bold text-red-300 italic">PENDIENTE</div>
