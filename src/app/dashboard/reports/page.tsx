@@ -201,6 +201,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
+      {/* Encabezado PDF Institucional */}
       <div className="hidden print:flex justify-between items-center border-b-2 border-primary pb-6 mb-8">
         <div>
            <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
@@ -350,6 +351,7 @@ export default function ReportsPage() {
                         </tr>
                       );
                     })}
+                    {/* Fila de Totales */}
                     <tr className="bg-gray-50/10">
                       <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em] print:text-gray-800">TOTAL TIEMPO ACUMULADO</td>
                       <td className="px-10 py-10 text-center">
@@ -358,6 +360,7 @@ export default function ReportsPage() {
                       <td className="print:hidden"></td>
                     </tr>
                     
+                    {/* Espacio para Firmas Digitales en PDF */}
                     <tr className="hidden print:table-row">
                       <td colSpan={5} className="pt-32 pb-16 px-10">
                         <div className="grid grid-cols-3 items-end gap-10">
