@@ -8,15 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Loader2, Printer, 
-  MapPin, ExternalLink, Download, 
-  Filter
+  MapPin, Download, 
+  Filter, ShieldCheck
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { AttendanceRecord, User, Campus } from '@/lib/types';
+import { AttendanceRecord, User } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 function calculateHoursDecimal(start: string | null, end: string | null): number {
   if (!start || !end) return 0;
@@ -42,6 +43,7 @@ function formatDuration(decimalHours: number): string {
 export default function ReportsPage() {
   const { user } = useAuth();
   const db = useFirestore();
+  const { toast } = useToast();
   
   const isDocent = user?.role === 'docent';
   const [period, setPeriod] = useState('Mes Actual');
@@ -61,6 +63,12 @@ export default function ReportsPage() {
 
   const records = useMemo(() => recordsRaw || [], [recordsRaw]);
   const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
+
+  // Identificar el docente actual para el PDF
+  const activeDocentProfile = useMemo(() => {
+    if (isDocent) return user;
+    return profiles.find(p => p.id === selectedDocent);
+  }, [isDocent, user, selectedDocent, profiles]);
 
   const dailyReports = useMemo(() => {
     const userMap = new Map((profiles || []).map(p => [p.id, p]));
@@ -142,17 +150,29 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Encabezado PDF Institucional */}
+      <div className="hidden print:flex justify-between items-center border-b-2 border-primary pb-6 mb-8">
+        <div>
+           <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
+           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mt-1">Ciudad Don Bosco - Track Sinc</p>
+        </div>
+        <div className="text-right">
+           <p className="text-[10px] font-black text-gray-400 uppercase">Generado el: {new Date().toLocaleDateString()}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase">Periodo: {period}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
-          <p className="text-muted-foreground font-medium text-[10px] print:hidden">Control de jornadas Ciudad Don Bosco.</p>
+          <p className="text-muted-foreground font-medium text-[10px]">Control de jornadas Ciudad Don Bosco.</p>
         </div>
-        <div className="flex gap-2 print:hidden">
+        <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExportExcel} className="rounded-xl font-bold border-green-200 text-green-700 h-9 px-4">
             <Download className="w-4 h-4 mr-2" /> Excel
           </Button>
           <Button size="sm" onClick={() => window.print()} className="rounded-xl font-bold h-9 px-4 shadow-md">
-            <Printer className="w-4 h-4 mr-2" /> Imprimir
+            <Printer className="w-4 h-4 mr-2" /> Imprimir PDF
           </Button>
         </div>
       </div>
@@ -172,11 +192,11 @@ export default function ReportsPage() {
           </div>
           {!isDocent && (
             <div className="flex-1 min-w-[180px] space-y-1">
-              <label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Docente</label>
+              <label className="text-[9px] font-black uppercase text-muted-foreground ml-1">Personal</label>
               <Select value={selectedDocent} onValueChange={setSelectedDocent}>
                 <SelectTrigger className="rounded-lg font-bold bg-gray-50/50 border-none h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="all">Todos los registros</SelectItem>
                   {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -190,7 +210,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      <Card className="border-none shadow-xl rounded-[2rem] bg-white overflow-hidden print:shadow-none print:border print:rounded-none">
+      <Card className="border-none shadow-xl rounded-[2rem] bg-white overflow-hidden print:shadow-none print:border-none print:rounded-none">
         <CardHeader className="border-b bg-gray-50/50 p-4 flex flex-row items-center justify-between print:hidden">
           <CardTitle className="text-sm font-black text-gray-800">Desglose de Actividad</CardTitle>
           <Badge className="font-black bg-primary/10 text-primary border-none px-3 py-1 rounded-lg text-[10px]">{dailyReports.length} Registros</Badge>
@@ -200,81 +220,118 @@ export default function ReportsPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/20 border-b text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-6 py-4">Personal</th>
-                  <th className="px-6 py-4">Fecha / Jornada</th>
-                  <th className="px-6 py-4">Marcaje</th>
-                  <th className="px-6 py-4 print:hidden">Ubicación</th>
-                  <th className="px-6 py-4 text-center">Duración</th>
+                  <th className="px-10 py-6">Personal</th>
+                  <th className="px-10 py-6">Fecha / Jornada</th>
+                  <th className="px-10 py-6">Marcaje</th>
+                  <th className="px-10 py-6 text-center">Duración</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
-                  <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
+                  <tr><td colSpan={4} className="py-20 text-center"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
                 ) : dailyReports.length > 0 ? (
                   <>
                     {dailyReports.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/50 transition-all">
-                        <td className="px-6 py-4">
-                          <div className="font-black text-[12px] text-gray-800">{r.userName}</div>
-                          <div className="text-[9px] text-muted-foreground font-bold">{r.documentId}</div>
+                      <tr key={idx} className="hover:bg-gray-50/50 transition-all border-b border-gray-50">
+                        <td className="px-10 py-8">
+                          <div className="font-black text-[13px] text-gray-800">{r.userName}</div>
+                          <div className="text-[9px] text-muted-foreground font-bold tracking-widest">{r.documentId}</div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="text-[11px] font-bold">{r.date}</div>
-                          <div className="text-[8px] font-black text-primary uppercase">{r.shiftName}</div>
+                        <td className="px-10 py-8">
+                          <div className="text-[12px] font-bold text-gray-700">{r.date}</div>
+                          <div className="text-[8px] font-black text-primary uppercase tracking-wider">{r.shiftName}</div>
                         </td>
-                        <td className="px-6 py-4 text-[11px] font-bold">
+                        <td className="px-10 py-8 text-[12px] font-bold">
                            <span className="text-green-600">{r.entry || '--:--'}</span>
-                           <span className="mx-1 opacity-20">→</span>
+                           <span className="mx-2 opacity-20">→</span>
                            <span className="text-primary">{r.exit || '--:--'}</span>
+                           {r.location?.lat !== 0 && (
+                             <div className="print:hidden mt-2">
+                               <a 
+                                 href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`} 
+                                 target="_blank" 
+                                 className="text-[8px] font-black text-primary/60 flex items-center gap-1 hover:underline bg-primary/5 px-2 py-1 rounded-md w-fit"
+                               >
+                                 <MapPin className="w-2.5 h-2.5" /> Ver Punto Exacto
+                               </a>
+                             </div>
+                           )}
                         </td>
-                        <td className="px-6 py-4 print:hidden">
-                           {r.location?.lat !== 0 ? (
-                             <a 
-                               href={`https://www.google.com/maps?q=${r.location?.lat},${r.location?.lng}`} 
-                               target="_blank" 
-                               className="text-[9px] font-black text-primary flex items-center gap-1 hover:underline bg-primary/5 px-2 py-1 rounded-md w-fit"
-                             >
-                               <MapPin className="w-3 h-3" /> Ver GPS
-                             </a>
-                           ) : <span className="text-[8px] text-muted-foreground/30 font-bold italic">Sin GPS</span>}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <Badge className="font-black bg-green-500 text-white text-[10px] px-3 py-1 rounded-lg border-none">{formatDuration(r.hours)}</Badge>
+                        <td className="px-10 py-8 text-center">
+                          <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none">{formatDuration(r.hours)}</Badge>
                         </td>
                       </tr>
                     ))}
-                    <tr className="bg-primary/5">
-                      <td colSpan={4} className="px-6 py-6 text-right font-black text-[10px] uppercase text-primary tracking-widest print:col-span-4">TOTAL TIEMPO ACUMULADO</td>
-                      <td className="px-6 py-6 text-center">
-                        <Badge className="font-black bg-primary text-white px-4 py-1.5 rounded-lg text-[12px] border-none">{formatDuration(totalTimeHours)}</Badge>
+                    <tr className="bg-gray-50/10">
+                      <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em]">TOTAL TIEMPO ACUMULADO</td>
+                      <td className="px-10 py-10 text-center">
+                        <Badge className="font-black bg-primary/5 text-primary px-6 py-2 rounded-xl text-[14px] border-none shadow-none">{formatDuration(totalTimeHours)}</Badge>
                       </td>
                     </tr>
-                    {/* Firma oficial solo para PDF */}
+                    
+                    {/* SECCIÓN DE FIRMAS PARA PDF */}
                     <tr className="hidden print:table-row">
-                      <td colSpan={5} className="pt-20 pb-10 px-6">
-                        <div className="flex justify-between items-end">
-                          <div className="w-48 border-t-2 border-gray-400 pt-2">
+                      <td colSpan={4} className="pt-32 pb-16 px-10">
+                        <div className="grid grid-cols-3 items-end gap-10">
+                          {/* Firma Docente */}
+                          <div className="space-y-4 text-center">
+                            <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
+                               {activeDocentProfile?.signatureUrl ? (
+                                 <img src={activeDocentProfile.signatureUrl} alt="Firma Docente" className="max-h-full object-contain" />
+                               ) : (
+                                 <div className="text-[8px] font-bold text-gray-300 italic">Sello Biométrico Digital</div>
+                               )}
+                            </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Firma del Docente</p>
+                            <p className="text-[8px] font-bold text-gray-400">{activeDocentProfile?.name || 'N/A'}</p>
                           </div>
-                          <div className="text-right">
-                             <p className="text-[10px] font-black text-primary">CIUDAD DON BOSCO</p>
-                             <p className="text-[8px] font-bold text-gray-400">Sello Digital Track Sinc</p>
+
+                          {/* Sello Central */}
+                          <div className="text-center space-y-2 pb-1">
+                             <div className="w-12 h-12 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
+                               <ShieldCheck className="w-6 h-6 text-primary opacity-20" />
+                             </div>
+                             <p className="text-[11px] font-black text-primary tracking-tighter">CIUDAD DON BOSCO</p>
+                             <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Sello Digital Track Sinc</p>
                           </div>
-                          <div className="w-48 border-t-2 border-gray-400 pt-2">
+
+                          {/* Firma Coordinación */}
+                          <div className="space-y-4 text-center">
+                            <div className="h-20 flex items-center justify-center border-b-2 border-gray-200">
+                               {user?.signatureUrl ? (
+                                 <img src={user.signatureUrl} alt="Firma Coordinación" className="max-h-full object-contain" />
+                               ) : (
+                                 <div className="text-[8px] font-bold text-gray-300 italic">Validación Administrativa</div>
+                               )}
+                            </div>
                             <p className="text-[10px] font-black uppercase text-gray-500">Vo.Bo. Coordinación</p>
+                            <p className="text-[8px] font-bold text-gray-400">{user?.name}</p>
                           </div>
                         </div>
                       </td>
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No hay registros.</td></tr>
+                  <tr><td colSpan={4} className="py-20 text-center text-muted-foreground italic font-bold">No se encontraron registros bajo este criterio.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
+
+      <style jsx global>{`
+        @media print {
+          body { background-color: white !important; }
+          main { padding: 0 !important; margin: 0 !important; }
+          .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
+          header { display: none !important; }
+          .print-card { border: none !important; box-shadow: none !important; }
+          table { width: 100% !important; border-collapse: collapse !important; }
+          th, td { border-bottom: 1px solid #f3f4f6 !important; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+      `}</style>
     </div>
   );
 }
