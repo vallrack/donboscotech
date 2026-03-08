@@ -10,7 +10,7 @@ import {
   Loader2, Printer, 
   MapPin, Download, 
   ShieldCheck, CheckCircle2,
-  Clock, UserCheck, Check, PenTool, ShieldAlert, AlertCircle
+  Clock, UserCheck, Check, PenTool, ShieldAlert, AlertCircle, ExternalLink
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { AttendanceRecord, User as UserType } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 function calculateHoursDecimal(start: string | null, end: string | null): number {
   if (!start || !end) return 0;
@@ -233,12 +234,13 @@ export default function ReportsPage() {
   const handleExportExcel = () => {
     const BOM = "\uFEFF"; 
     const sep = ";";
-    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "GPS Entrada", "GPS Salida", "Duración", "Estado", "Firmado Por"];
+    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "GPS Entrada", "GPS Salida", "Dirección Cierre", "Duración", "Estado", "Firmado Por"];
     const rows = dailyReports.map(r => [
       r.userName, r.documentId, r.campus, r.date, r.shiftName,
       r.entry || "--:--", r.exit || "--:--", 
       r.entryLoc ? `${r.entryLoc.lat}, ${r.entryLoc.lng}` : "N/A",
       r.exitLoc ? `${r.exitLoc.lat}, ${r.exitLoc.lng}` : "N/A",
+      r.exitLoc?.address || "N/A",
       formatDuration(r.hours),
       r.isVerified ? "VALIDADO" : (r.exit ? "CUMPLIDO" : "PENDIENTE"), r.verifiedByName || "N/A"
     ]);
@@ -344,7 +346,7 @@ export default function ReportsPage() {
                   <th className="px-6 py-6">Personal</th>
                   <th className="px-6 py-6">Fecha / Jornada</th>
                   <th className="px-6 py-6">Entrada/Salida</th>
-                  <th className="px-6 py-6">Ubicación GPS (Lat, Lng)</th>
+                  <th className="px-6 py-6">Ubicación Técnica (GPS)</th>
                   <th className="px-6 py-6 text-center">Duración</th>
                   <th className="px-6 py-6 text-center print:hidden">Visto Bueno</th>
                 </tr>
@@ -372,15 +374,35 @@ export default function ReportsPage() {
                            </div>
                         </td>
                         <td className="px-6 py-8">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground">
-                              <MapPin className="w-3 h-3 text-green-500" />
-                              <span className="truncate max-w-[150px]">E: {r.entryLoc ? `${r.entryLoc.lat.toFixed(6)}, ${r.entryLoc.lng.toFixed(6)}` : 'Sin GPS'}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground">
-                              <MapPin className="w-3 h-3 text-primary" />
-                              <span className="truncate max-w-[150px]">S: {r.exitLoc ? `${r.exitLoc.lat.toFixed(6)}, ${r.exitLoc.lng.toFixed(6)}` : 'Sin GPS'}</span>
-                            </div>
+                          <div className="space-y-2">
+                            {r.entryLoc && (
+                              <Link 
+                                href={`https://www.google.com/maps/search/?api=1&query=${r.entryLoc.lat},${r.entryLoc.lng}`}
+                                target="_blank"
+                                className="group/loc flex flex-col gap-0.5 hover:bg-gray-100 p-1.5 rounded-lg transition-all"
+                              >
+                                <div className="flex items-center gap-1.5 text-[8px] font-black text-green-600 uppercase">
+                                  <MapPin className="w-2.5 h-2.5" /> Entrada <ExternalLink className="w-2 h-2 opacity-0 group-hover/loc:opacity-100" />
+                                </div>
+                                <div className="text-[7px] font-bold text-muted-foreground truncate max-w-[180px]">
+                                  {r.entryLoc.address || `${r.entryLoc.lat.toFixed(5)}, ${r.entryLoc.lng.toFixed(5)}`}
+                                </div>
+                              </Link>
+                            )}
+                            {r.exitLoc && (
+                              <Link 
+                                href={`https://www.google.com/maps/search/?api=1&query=${r.exitLoc.lat},${r.exitLoc.lng}`}
+                                target="_blank"
+                                className="group/loc flex flex-col gap-0.5 hover:bg-gray-100 p-1.5 rounded-lg transition-all"
+                              >
+                                <div className="flex items-center gap-1.5 text-[8px] font-black text-primary uppercase">
+                                  <MapPin className="w-2.5 h-2.5" /> Salida (Cierre) <ExternalLink className="w-2 h-2 opacity-0 group-hover/loc:opacity-100" />
+                                </div>
+                                <div className="text-[7px] font-bold text-muted-foreground truncate max-w-[180px]">
+                                  {r.exitLoc.address || `${r.exitLoc.lat.toFixed(5)}, ${r.exitLoc.lng.toFixed(5)}`}
+                                </div>
+                              </Link>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-8 text-center">
@@ -435,7 +457,7 @@ export default function ReportsPage() {
 
                           <div className="text-center space-y-2 pb-1">
                              <p className="text-[11px] font-black text-primary tracking-tighter">CIUDAD DON BOSCO</p>
-                             <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Auditoría GPS Track Sinc</p>
+                             <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Auditoría Técnica GPS Sinc</p>
                           </div>
 
                           <div className="space-y-4 text-center">
