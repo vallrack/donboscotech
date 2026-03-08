@@ -136,7 +136,6 @@ export default function UserManagementPage() {
   };
 
   const handleEditClick = (u: User) => {
-    // Protección: Coordinador no puede editar Administrador
     if (currentUser?.role === 'coordinator' && u.role === 'admin') {
       toast({ 
         variant: "destructive", 
@@ -198,7 +197,6 @@ export default function UserManagementPage() {
   };
 
   const handleDeleteUser = async (userId: string, targetRole?: string) => {
-    // Protección: Coordinador no puede eliminar Administrador
     if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
       toast({ 
         variant: "destructive", 
