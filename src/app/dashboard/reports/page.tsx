@@ -10,7 +10,7 @@ import {
   Loader2, Printer, 
   MapPin, Download, 
   ShieldCheck, CheckCircle2,
-  Clock, UserCheck, Check, PenTool, ShieldAlert, AlertCircle
+  Clock, UserCheck, Check, PenTool, ShieldAlert, AlertCircle, Map
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
@@ -83,6 +83,8 @@ export default function ReportsPage() {
           date: r.date, 
           entry: null, 
           exit: null,
+          entryLoc: null,
+          exitLoc: null,
           shiftId: r.shiftId,
           shiftName: r.shiftName || 'N/A',
           campus: uData?.campus || 'Sede Principal',
@@ -97,9 +99,15 @@ export default function ReportsPage() {
       
       const dayData = grouped.get(key);
       if (r.type === 'entry') { 
-        if (!dayData.entry || r.time < dayData.entry) dayData.entry = r.time; 
+        if (!dayData.entry || r.time < dayData.entry) {
+          dayData.entry = r.time;
+          dayData.entryLoc = r.location;
+        }
       } else { 
-        if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
+        if (!dayData.exit || r.time > dayData.exit) {
+          dayData.exit = r.time;
+          dayData.exitLoc = r.location;
+        }
         if (r.docentSignature) dayData.docentSignature = r.docentSignature;
       }
 
@@ -225,17 +233,20 @@ export default function ReportsPage() {
   const handleExportExcel = () => {
     const BOM = "\uFEFF"; 
     const sep = ";";
-    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "Duración", "Estado", "Firmado Por"];
+    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "GPS Entrada", "GPS Salida", "Duración", "Estado", "Firmado Por"];
     const rows = dailyReports.map(r => [
       r.userName, r.documentId, r.campus, r.date, r.shiftName,
-      r.entry || "--:--", r.exit || "--:--", formatDuration(r.hours),
+      r.entry || "--:--", r.exit || "--:--", 
+      r.entryLoc ? `${r.entryLoc.lat}, ${r.entryLoc.lng}` : "N/A",
+      r.exitLoc ? `${r.exitLoc.lat}, ${r.exitLoc.lng}` : "N/A",
+      formatDuration(r.hours),
       r.isVerified ? "VALIDADO" : (r.exit ? "CUMPLIDO" : "PENDIENTE"), r.verifiedByName || "N/A"
     ]);
     const csvContent = headers.join(sep) + "\n" + rows.map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Auditoria_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Auditoria_GPS_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -263,8 +274,8 @@ export default function ReportsPage() {
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
       <div className="hidden print:flex justify-between items-center border-b-2 border-primary pb-6 mb-8">
         <div>
-           <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
-           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mt-1">Ciudad Don Bosco - Track Sinc</p>
+           <h1 className="text-4xl font-black text-primary tracking-tighter">Auditoría de Alta Precisión</h1>
+           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mt-1">Ciudad Don Bosco - Track Sinc (Sello GPS)</p>
         </div>
         <div className="text-right">
            <p className="text-[10px] font-black text-gray-400 uppercase">Generado el: {new Date().toLocaleDateString()}</p>
@@ -275,7 +286,7 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-black text-primary tracking-tighter">Auditoría Institucional</h1>
-          <p className="text-muted-foreground font-medium text-[10px]">Control de jornadas Ciudad Don Bosco.</p>
+          <p className="text-muted-foreground font-medium text-[10px]">Control georreferenciado de jornadas Ciudad Don Bosco.</p>
         </div>
         <div className="flex gap-2">
           {isPrivileged && (
@@ -328,47 +339,60 @@ export default function ReportsPage() {
 
       <Card className="border-none shadow-xl rounded-[2rem] bg-white overflow-hidden print:shadow-none print:border-none print:rounded-none">
         <CardHeader className="border-b bg-gray-50/50 p-4 flex flex-row items-center justify-between print:hidden">
-          <CardTitle className="text-sm font-black text-gray-800">Desglose de Actividad</CardTitle>
-          <Badge className="font-black bg-primary/10 text-primary border-none px-3 py-1 rounded-lg text-[10px]">{dailyReports.length} Registros</Badge>
+          <CardTitle className="text-sm font-black text-gray-800">Desglose de Actividad Georreferenciada</CardTitle>
+          <Badge className="font-black bg-primary/10 text-primary border-none px-3 py-1 rounded-lg text-[10px]">{dailyReports.length} Jornadas</Badge>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50/20 border-b text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                  <th className="px-10 py-6">Personal</th>
-                  <th className="px-10 py-6">Fecha / Jornada</th>
-                  <th className="px-10 py-6">Marcaje</th>
-                  <th className="px-10 py-6 text-center">Duración</th>
-                  <th className="px-10 py-6 text-center print:hidden">Validación Técnica</th>
+                  <th className="px-6 py-6">Personal</th>
+                  <th className="px-6 py-6">Fecha / Jornada</th>
+                  <th className="px-6 py-6">Marcaje</th>
+                  <th className="px-6 py-6">Ubicación GPS</th>
+                  <th className="px-6 py-6 text-center">Duración</th>
+                  <th className="px-6 py-6 text-center print:hidden">Validación Técnica</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
+                  <tr><td colSpan={6} className="py-20 text-center text-muted-foreground"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
                 ) : dailyReports.length > 0 ? (
                   <>
                     {dailyReports.map((r, idx) => (
                       <tr key={idx} className="hover:bg-gray-50/50 transition-all border-b border-gray-50">
-                        <td className="px-10 py-8">
+                        <td className="px-6 py-8">
                           <div className="font-black text-[13px] text-gray-800">{r.userName}</div>
                           <div className="text-[9px] text-muted-foreground font-bold tracking-widest">{r.documentId}</div>
                         </td>
-                        <td className="px-10 py-8">
+                        <td className="px-6 py-8">
                           <div className="text-[12px] font-bold text-gray-700">{r.date}</div>
                           <div className="text-[8px] font-black text-primary uppercase tracking-wider">{r.shiftName}</div>
                         </td>
-                        <td className="px-10 py-8 text-[12px] font-bold">
+                        <td className="px-6 py-8 text-[12px] font-bold">
                            <div className="flex items-center gap-2">
                              <span className="text-green-600">{r.entry || '--:--'}</span>
                              <span className="opacity-20">→</span>
                              <span className="text-primary">{r.exit || '--:--'}</span>
                            </div>
                         </td>
-                        <td className="px-10 py-8 text-center">
+                        <td className="px-6 py-8">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground">
+                              <MapPin className="w-3 h-3 text-green-500" />
+                              <span className="truncate max-w-[120px]">E: {r.entryLoc ? `${r.entryLoc.lat.toFixed(6)}, ${r.entryLoc.lng.toFixed(6)}` : 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground">
+                              <MapPin className="w-3 h-3 text-primary" />
+                              <span className="truncate max-w-[120px]">S: {r.exitLoc ? `${r.exitLoc.lat.toFixed(6)}, ${r.exitLoc.lng.toFixed(6)}` : 'N/A'}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-8 text-center">
                           <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none print:bg-transparent">{formatDuration(r.hours)}</Badge>
                         </td>
-                        <td className="px-10 py-8 text-center print:hidden">
+                        <td className="px-6 py-8 text-center print:hidden">
                           <div className="flex flex-col items-center gap-2">
                             {r.isVerified ? (
                               <Badge className="bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg">VALIDADO POR: {r.verifiedByName}</Badge>
@@ -395,7 +419,7 @@ export default function ReportsPage() {
                       </tr>
                     ))}
                     <tr className="bg-gray-50/10">
-                      <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em] print:text-gray-800">TOTAL TIEMPO ACUMULADO</td>
+                      <td colSpan={4} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em] print:text-gray-800">TOTAL TIEMPO ACUMULADO</td>
                       <td className="px-10 py-10 text-center">
                         <Badge className="font-black bg-primary/5 text-primary px-6 py-2 rounded-xl text-[14px] border-none print:text-gray-800">{formatDuration(totalTimeHours)}</Badge>
                       </td>
@@ -403,7 +427,7 @@ export default function ReportsPage() {
                     </tr>
                     
                     <tr className="hidden print:table-row">
-                      <td colSpan={5} className="pt-32 pb-16 px-10">
+                      <td colSpan={6} className="pt-32 pb-16 px-10">
                         <div className="grid grid-cols-3 items-end gap-10">
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
@@ -417,7 +441,7 @@ export default function ReportsPage() {
 
                           <div className="text-center space-y-2 pb-1">
                              <p className="text-[11px] font-black text-primary tracking-tighter">CIUDAD DON BOSCO</p>
-                             <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Auditoría Track Sinc</p>
+                             <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Auditoría GPS Track Sinc</p>
                           </div>
 
                           <div className="space-y-4 text-center">
@@ -438,7 +462,7 @@ export default function ReportsPage() {
                     </tr>
                   </>
                 ) : (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic font-bold">No hay registros hoy.</td></tr>
+                  <tr><td colSpan={6} className="py-20 text-center text-muted-foreground italic font-bold">No hay registros hoy.</td></tr>
                 )}
               </tbody>
             </table>
@@ -448,7 +472,7 @@ export default function ReportsPage() {
 
       <style jsx global>{`
         @media print {
-          @page { margin: 10mm; size: portrait; }
+          @page { margin: 10mm; size: landscape; }
           body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           svg, .lucide, button, .print-hidden { display: none !important; }
