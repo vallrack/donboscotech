@@ -68,12 +68,6 @@ export default function ReportsPage() {
   const records = useMemo(() => recordsRaw || [], [recordsRaw]);
   const profiles = useMemo(() => profilesRaw || [], [profilesRaw]);
 
-  const activeDocentProfile = useMemo(() => {
-    if (isDocent) return user;
-    if (selectedDocent !== 'all') return profiles.find(p => p.id === selectedDocent);
-    return null;
-  }, [isDocent, user, selectedDocent, profiles]);
-
   const dailyReports = useMemo(() => {
     const userMap = new Map((profiles || []).map(p => [p.id, p]));
     const grouped = new Map<string, any>();
@@ -93,7 +87,7 @@ export default function ReportsPage() {
           shiftName: r.shiftName || 'N/A',
           campus: uData?.campus || 'Sede Principal',
           documentId: uData?.documentId || 'N/A',
-          docentSignature: r.docentSignature || uData?.signatureUrl || null,
+          docentSignature: null,
           isVerified: false,
           verifiedByName: '',
           verifiedBySignature: '',
@@ -106,6 +100,7 @@ export default function ReportsPage() {
         if (!dayData.entry || r.time < dayData.entry) dayData.entry = r.time; 
       } else { 
         if (!dayData.exit || r.time > dayData.exit) dayData.exit = r.time; 
+        if (r.docentSignature) dayData.docentSignature = r.docentSignature;
       }
 
       if (r.isVerified === true) {
@@ -157,22 +152,22 @@ export default function ReportsPage() {
       const snapshot = await getDocs(q);
       
       const batch = writeBatch(db);
-      
+      const updateData = {
+        isVerified: true,
+        verifiedBy: user.id,
+        verifiedByName: user.name,
+        verifiedBySignature: user.signatureUrl,
+        verifiedAt: new Date().toISOString()
+      };
+
       snapshot.docs.forEach(docSnap => {
-        const updateData = {
-          isVerified: true,
-          verifiedBy: user.id,
-          verifiedByName: user.name,
-          verifiedBySignature: user.signatureUrl,
-          verifiedAt: new Date().toISOString()
-        };
         batch.update(docSnap.ref, updateData);
         const globalRef = doc(db, 'globalAttendanceRecords', docSnap.id);
         batch.update(globalRef, updateData);
       });
 
       await batch.commit();
-      toast({ title: "Informe Firmado", description: "Tu firma actual ha sido estampada en el registro." });
+      toast({ title: "Informe Firmado", description: "Tu firma ha sido estampada oficialmente." });
     } catch (e) {
       toast({ variant: "destructive", title: "Error al firmar" });
     } finally {
@@ -183,15 +178,10 @@ export default function ReportsPage() {
   const handleSignAll = async () => {
     if (!db || !user || globalVerifying) return;
     
-    // Solo firmamos los que están visibles en la tabla actual según el filtro de periodo
     const pendingReports = dailyReports.filter(r => !r.isVerified && r.entry && r.exit);
     
     if (pendingReports.length === 0) {
-      toast({
-        title: "Sin Pendientes",
-        description: "No hay registros completados pendientes de firma en el periodo seleccionado.",
-        variant: "default"
-      });
+      toast({ title: "Sin Pendientes", description: "No hay registros completos por firmar en este periodo." });
       return;
     }
 
@@ -203,6 +193,13 @@ export default function ReportsPage() {
     setGlobalVerifying(true);
     try {
       const batch = writeBatch(db);
+      const updateData = {
+        isVerified: true,
+        verifiedBy: user.id,
+        verifiedByName: user.name,
+        verifiedBySignature: user.signatureUrl,
+        verifiedAt: new Date().toISOString()
+      };
       
       for (const report of pendingReports) {
         const userRecordsRef = collection(db, 'userProfiles', report.userId, 'attendanceRecords');
@@ -210,13 +207,6 @@ export default function ReportsPage() {
         const snapshot = await getDocs(q);
         
         snapshot.docs.forEach(docSnap => {
-          const updateData = {
-            isVerified: true,
-            verifiedBy: user.id,
-            verifiedByName: user.name,
-            verifiedBySignature: user.signatureUrl,
-            verifiedAt: new Date().toISOString()
-          };
           batch.update(docSnap.ref, updateData);
           const globalRef = doc(db, 'globalAttendanceRecords', docSnap.id);
           batch.update(globalRef, updateData);
@@ -224,7 +214,7 @@ export default function ReportsPage() {
       }
 
       await batch.commit();
-      toast({ title: "Firma Global Exitosa", description: `${pendingReports.length} jornadas han sido firmadas oficialmente.` });
+      toast({ title: "Firma Global Exitosa", description: `${pendingReports.length} jornadas firmadas.` });
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
     } finally {
@@ -249,22 +239,25 @@ export default function ReportsPage() {
     link.click();
   };
 
+  const activeDocentProfile = useMemo(() => {
+    if (isDocent) return user;
+    if (selectedDocent !== 'all') return profiles.find(p => p.id === selectedDocent);
+    return null;
+  }, [isDocent, user, selectedDocent, profiles]);
+
   const reportSummary = useMemo(() => {
     if (dailyReports.length === 0) return null;
-    const isSingleUser = selectedDocent !== 'all' || isDocent;
-    
-    // Verificamos si hay alguna firma de coordinación en el set filtrado
-    const verifiedRec = dailyReports.find(r => r.isVerified && r.verifiedBySignature);
-    const docentWithSig = dailyReports.find(r => r.docentSignature);
+    const firstVerified = dailyReports.find(r => r.isVerified);
+    const firstDocentWithSig = dailyReports.find(r => r.docentSignature);
 
     return {
-      docentName: isSingleUser ? (activeDocentProfile?.name || 'Personal') : 'Auditoría Institucional',
-      docentSignature: isSingleUser ? (docentWithSig?.docentSignature || activeDocentProfile?.signatureUrl || null) : null,
-      coordinatorName: verifiedRec?.verifiedByName || (isPrivileged ? user?.name : ''),
-      coordinatorSignature: verifiedRec?.verifiedBySignature || null,
-      isVerified: !!verifiedRec
+      docentName: activeDocentProfile?.name || dailyReports[0].userName,
+      docentSignature: firstDocentWithSig?.docentSignature || activeDocentProfile?.signatureUrl || null,
+      coordinatorName: firstVerified?.verifiedByName || (isPrivileged ? user?.name : ''),
+      coordinatorSignature: firstVerified?.verifiedBySignature || null,
+      isVerified: !!firstVerified
     };
-  }, [dailyReports, activeDocentProfile, isDocent, selectedDocent, user?.name, isPrivileged]);
+  }, [dailyReports, activeDocentProfile, user?.name, isPrivileged]);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
@@ -288,7 +281,7 @@ export default function ReportsPage() {
           {isPrivileged && (
             <Button variant="default" size="sm" onClick={handleSignAll} disabled={globalVerifying || dailyReports.length === 0} className="rounded-xl font-black h-9 px-6 bg-primary shadow-lg gap-2">
               {globalVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenTool className="w-4 h-4" />}
-              FIRMAR TODO EL PERIODO
+              FIRMAR PERIODO FILTRADO
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={handleExportExcel} className="rounded-xl font-bold border-green-200 text-green-700 h-9 px-4">
@@ -352,63 +345,59 @@ export default function ReportsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recordsLoading ? (
-                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10 print:hidden" /></td></tr>
+                  <tr><td colSpan={5} className="py-20 text-center text-muted-foreground"><Loader2 className="animate-spin mx-auto opacity-20 w-10 h-10" /></td></tr>
                 ) : dailyReports.length > 0 ? (
                   <>
-                    {dailyReports.map((r, idx) => {
-                      const isCurrentVerifying = verifyingId === `${r.userId}_${r.date}`;
-                      const isFulfilledByDocent = !!r.exit;
-                      return (
-                        <tr key={idx} className="hover:bg-gray-50/50 transition-all border-b border-gray-50">
-                          <td className="px-10 py-8">
-                            <div className="font-black text-[13px] text-gray-800">{r.userName}</div>
-                            <div className="text-[9px] text-muted-foreground font-bold tracking-widest">{r.documentId}</div>
-                          </td>
-                          <td className="px-10 py-8">
-                            <div className="text-[12px] font-bold text-gray-700">{r.date}</div>
-                            <div className="text-[8px] font-black text-primary uppercase tracking-wider">{r.shiftName}</div>
-                          </td>
-                          <td className="px-10 py-8 text-[12px] font-bold">
-                             <div className="flex items-center gap-2">
-                               <span className="text-green-600">{r.entry || '--:--'}</span>
-                               <span className="mx-1 opacity-20 print:hidden">→</span>
-                               <span className="text-primary">{r.exit || '--:--'}</span>
-                             </div>
-                          </td>
-                          <td className="px-10 py-8 text-center">
-                            <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none shadow-none print:bg-transparent">{formatDuration(r.hours)}</Badge>
-                          </td>
-                          <td className="px-10 py-8 text-center print:hidden">
-                            <div className="flex flex-col items-center gap-2">
-                              {r.isVerified ? (
-                                <Badge className="bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg">VALIDADO: {r.verifiedByName}</Badge>
-                              ) : isFulfilledByDocent ? (
-                                <div className="flex flex-col items-center gap-1">
-                                  <Badge className="bg-green-500 font-black text-[8px] px-3 py-1 rounded-lg">CUMPLIDO</Badge>
-                                  {isPrivileged && (
-                                    <Button 
-                                      size="sm" 
-                                      onClick={() => handleVerifyDay(r)}
-                                      disabled={isCurrentVerifying}
-                                      className="h-8 rounded-lg bg-gray-800 font-black text-[9px] px-4 mt-1"
-                                    >
-                                      {isCurrentVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <PenTool className="w-3 h-3 mr-1" />}
-                                      FIRMAR
-                                    </Button>
-                                  )}
-                                </div>
-                              ) : (
-                                <Badge variant="outline" className="text-[8px] font-black opacity-40">EN PROCESO</Badge>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {dailyReports.map((r, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50/50 transition-all border-b border-gray-50">
+                        <td className="px-10 py-8">
+                          <div className="font-black text-[13px] text-gray-800">{r.userName}</div>
+                          <div className="text-[9px] text-muted-foreground font-bold tracking-widest">{r.documentId}</div>
+                        </td>
+                        <td className="px-10 py-8">
+                          <div className="text-[12px] font-bold text-gray-700">{r.date}</div>
+                          <div className="text-[8px] font-black text-primary uppercase tracking-wider">{r.shiftName}</div>
+                        </td>
+                        <td className="px-10 py-8 text-[12px] font-bold">
+                           <div className="flex items-center gap-2">
+                             <span className="text-green-600">{r.entry || '--:--'}</span>
+                             <span className="opacity-20">→</span>
+                             <span className="text-primary">{r.exit || '--:--'}</span>
+                           </div>
+                        </td>
+                        <td className="px-10 py-8 text-center">
+                          <Badge className="font-black bg-gray-100 text-gray-500 text-[10px] px-3 py-1.5 rounded-lg border-none print:bg-transparent">{formatDuration(r.hours)}</Badge>
+                        </td>
+                        <td className="px-10 py-8 text-center print:hidden">
+                          <div className="flex flex-col items-center gap-2">
+                            {r.isVerified ? (
+                              <Badge className="bg-green-600 font-black text-[8px] px-3 py-1 rounded-lg">VALIDADO POR: {r.verifiedByName}</Badge>
+                            ) : (r.entry && r.exit) ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <Badge className="bg-green-500 font-black text-[8px] px-3 py-1 rounded-lg">CUMPLIDO</Badge>
+                                {isPrivileged && (
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => handleVerifyDay(r)}
+                                    disabled={!!verifyingId}
+                                    className="h-8 rounded-lg bg-gray-800 font-black text-[9px] px-4 mt-1"
+                                  >
+                                    {verifyingId === `${r.userId}_${r.date}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <PenTool className="w-3 h-3 mr-1" />}
+                                    FIRMAR
+                                  </Button>
+                                )}
+                              </div>
+                            ) : (
+                              <Badge variant="outline" className="text-[8px] font-black opacity-40">EN PROCESO</Badge>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                     <tr className="bg-gray-50/10">
                       <td colSpan={3} className="px-10 py-10 text-right font-black text-[10px] uppercase text-primary tracking-[0.2em] print:text-gray-800">TOTAL TIEMPO ACUMULADO</td>
                       <td className="px-10 py-10 text-center">
-                        <Badge className="font-black bg-primary/5 text-primary px-6 py-2 rounded-xl text-[14px] border-none shadow-none print:text-gray-800">{formatDuration(totalTimeHours)}</Badge>
+                        <Badge className="font-black bg-primary/5 text-primary px-6 py-2 rounded-xl text-[14px] border-none print:text-gray-800">{formatDuration(totalTimeHours)}</Badge>
                       </td>
                       <td className="print:hidden"></td>
                     </tr>
@@ -428,12 +417,12 @@ export default function ReportsPage() {
 
                           <div className="text-center space-y-2 pb-1">
                              <p className="text-[11px] font-black text-primary tracking-tighter">CIUDAD DON BOSCO</p>
-                             <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Sello Digital Track Sinc</p>
+                             <p className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.3em]">Auditoría Track Sinc</p>
                           </div>
 
                           <div className="space-y-4 text-center">
                             <div className="h-24 flex items-center justify-center border-b-2 border-gray-200">
-                               {reportSummary?.isVerified && reportSummary?.coordinatorSignature ? (
+                               {reportSummary?.coordinatorSignature ? (
                                  <img src={reportSummary.coordinatorSignature} alt="Firma Coordinación" className="max-h-full object-contain" />
                                ) : (
                                  <div className="text-[8px] font-bold text-red-300 italic uppercase">Pendiente Vo.Bo. Coordinación</div>

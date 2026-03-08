@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon, UserCheck, ShieldAlert
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon, UserCheck, ShieldAlert, Lock
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -136,6 +136,12 @@ export default function UserManagementPage() {
   };
 
   const handleEditClick = (u: User) => {
+    // Restricción: Coordinador no puede editar Admin
+    if (currentUser?.role === 'coordinator' && u.role === 'admin') {
+      toast({ variant: "destructive", title: "Acción Restringida", description: "Un coordinador no puede gestionar perfiles de administrador." });
+      return;
+    }
+
     setEditingUser(u);
     setFormData({
       name: u.name || '',
@@ -187,7 +193,13 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const handleDeleteUser = async (userId: string, targetRole?: string) => {
+    // Restricción: Coordinador no puede eliminar Admin
+    if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
+      toast({ variant: "destructive", title: "Acción Restringida", description: "No tienes permisos para dar de baja a un administrador." });
+      return;
+    }
+
     if (!db || !confirm('¿Dar de baja a este miembro de forma permanente?')) return;
     try {
       await deleteDoc(doc(db, 'userProfiles', userId));
@@ -397,26 +409,50 @@ export default function UserManagementPage() {
                 {usersLoading ? (
                   <tr><td colSpan={4} className="py-40 text-center"><Loader2 className="w-16 h-16 animate-spin mx-auto text-primary opacity-20" /></td></tr>
                 ) : (
-                  filteredUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-gray-50/50 transition-all group">
-                      <td className="px-10 py-8">
-                        <div className="flex items-center gap-6">
-                          <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg", u.role === 'admin' ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
-                            {u.name?.charAt(0).toUpperCase()}
+                  filteredUsers.map((u) => {
+                    const isProtected = currentUser?.role === 'coordinator' && u.role === 'admin';
+                    return (
+                      <tr key={u.id} className={cn("hover:bg-gray-50/50 transition-all group", isProtected && "opacity-80")}>
+                        <td className="px-10 py-8">
+                          <div className="flex items-center gap-6">
+                            <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg", u.role === 'admin' ? "bg-primary text-white" : "bg-primary/10 text-primary")}>
+                              {u.name?.charAt(0).toUpperCase()}
+                            </div>
+                            <div><div className="font-black text-lg text-gray-800">{u.name}</div><div className="text-xs text-muted-foreground font-bold">{u.email}</div></div>
                           </div>
-                          <div><div className="font-black text-lg text-gray-800">{u.name}</div><div className="text-xs text-muted-foreground font-bold">{u.email}</div></div>
-                        </div>
-                      </td>
-                      <td className="px-10 py-8">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><MapPin className="w-3.5 h-3.5" /> {u.campus || 'Sin Sede Asignada'}</div>
-                          <div className="flex items-center gap-2 text-[10px] font-black text-primary uppercase"><BookOpen className="w-3.5 h-3.5" /> {u.program || 'Sin Programa / Proceso'}</div>
-                        </div>
-                      </td>
-                      <td className="px-10 py-8"><Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="font-black uppercase text-[10px] px-4 py-1.5 rounded-xl">{u.role || 'docent'}</Badge></td>
-                      <td className="px-10 py-8"><div className="flex items-center justify-center gap-2"><Button variant="ghost" size="icon" className="text-primary hover:bg-primary/5 rounded-xl h-12 w-12" onClick={() => handleEditClick(u)}><Edit3 className="w-5 h-5" /></Button><Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl h-12 w-12" onClick={() => handleDeleteUser(u.id)}><Trash2 className="w-5 h-5" /></Button></div></td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-10 py-8">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><MapPin className="w-3.5 h-3.5" /> {u.campus || 'Sin Sede Asignada'}</div>
+                            <div className="flex items-center gap-2 text-[10px] font-black text-primary uppercase"><BookOpen className="w-3.5 h-3.5" /> {u.program || 'Sin Programa / Proceso'}</div>
+                          </div>
+                        </td>
+                        <td className="px-10 py-8">
+                          <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="font-black uppercase text-[10px] px-4 py-1.5 rounded-xl">
+                            {u.role || 'docent'}
+                          </Badge>
+                        </td>
+                        <td className="px-10 py-8">
+                          <div className="flex items-center justify-center gap-2">
+                            {isProtected ? (
+                              <div className="flex items-center gap-1 text-[9px] font-black text-muted-foreground uppercase bg-gray-100 px-3 py-1.5 rounded-lg">
+                                <Lock className="w-3 h-3" /> Nivel Superior
+                              </div>
+                            ) : (
+                              <>
+                                <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/5 rounded-xl h-12 w-12" onClick={() => handleEditClick(u)}>
+                                  <Edit3 className="w-5 h-5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl h-12 w-12" onClick={() => handleDeleteUser(u.id, u.role)}>
+                                  <Trash2 className="w-5 h-5" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
