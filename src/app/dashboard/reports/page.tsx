@@ -10,7 +10,7 @@ import {
   Loader2, Printer, 
   MapPin, Download, 
   ShieldCheck, CheckCircle2,
-  Clock, UserCheck, Check, PenTool, ShieldAlert, AlertCircle, Map
+  Clock, UserCheck, Check, PenTool, ShieldAlert, AlertCircle
 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs, where, writeBatch } from 'firebase/firestore';
@@ -148,7 +148,7 @@ export default function ReportsPage() {
       toast({
         variant: "destructive",
         title: "Firma Faltante",
-        description: "Debes subir tu firma digital en tu perfil para firmar informes."
+        description: "Debes subir tu firma digital en tu perfil."
       });
       return;
     }
@@ -175,7 +175,7 @@ export default function ReportsPage() {
       });
 
       await batch.commit();
-      toast({ title: "Informe Firmado", description: "Tu firma ha sido estampada oficialmente." });
+      toast({ title: "Informe Firmado", description: "Visto Bueno Técnico aplicado." });
     } catch (e) {
       toast({ variant: "destructive", title: "Error al firmar" });
     } finally {
@@ -189,7 +189,7 @@ export default function ReportsPage() {
     const pendingReports = dailyReports.filter(r => !r.isVerified && r.entry && r.exit);
     
     if (pendingReports.length === 0) {
-      toast({ title: "Sin Pendientes", description: "No hay registros completos por firmar en este periodo." });
+      toast({ title: "Sin Pendientes", description: "No hay registros completos por firmar en este filtro." });
       return;
     }
 
@@ -250,25 +250,19 @@ export default function ReportsPage() {
     link.click();
   };
 
-  const activeDocentProfile = useMemo(() => {
-    if (isDocent) return user;
-    if (selectedDocent !== 'all') return profiles.find(p => p.id === selectedDocent);
-    return null;
-  }, [isDocent, user, selectedDocent, profiles]);
-
   const reportSummary = useMemo(() => {
     if (dailyReports.length === 0) return null;
     const firstVerified = dailyReports.find(r => r.isVerified);
     const firstDocentWithSig = dailyReports.find(r => r.docentSignature);
 
     return {
-      docentName: activeDocentProfile?.name || dailyReports[0].userName,
-      docentSignature: firstDocentWithSig?.docentSignature || activeDocentProfile?.signatureUrl || null,
+      docentName: isDocent ? user?.name : (selectedDocent !== 'all' ? profiles.find(p => p.id === selectedDocent)?.name : dailyReports[0].userName),
+      docentSignature: firstDocentWithSig?.docentSignature || (isDocent ? user?.signatureUrl : profiles.find(p => p.id === dailyReports[0].userId)?.signatureUrl) || null,
       coordinatorName: firstVerified?.verifiedByName || (isPrivileged ? user?.name : ''),
       coordinatorSignature: firstVerified?.verifiedBySignature || null,
       isVerified: !!firstVerified
     };
-  }, [dailyReports, activeDocentProfile, user?.name, isPrivileged]);
+  }, [dailyReports, isDocent, user, selectedDocent, profiles, isPrivileged]);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-700 pb-20">
@@ -279,7 +273,7 @@ export default function ReportsPage() {
         </div>
         <div className="text-right">
            <p className="text-[10px] font-black text-gray-400 uppercase">Generado el: {new Date().toLocaleDateString()}</p>
-           <p className="text-[10px] font-black text-gray-400 uppercase">Periodo: {period}</p>
+           <p className="text-[10px] font-black text-gray-400 uppercase">Filtro: {period}</p>
         </div>
       </div>
 
@@ -332,14 +326,14 @@ export default function ReportsPage() {
         </Card>
         
         <Card className="md:col-span-3 bg-primary text-white rounded-xl shadow-md flex flex-col items-center justify-center p-3 border-none h-[64px]">
-           <p className="text-[8px] font-black uppercase opacity-70 tracking-widest">TOTAL ACUMULADO</p>
+           <p className="text-[8px] font-black uppercase opacity-70 tracking-widest">TIEMPO TOTAL</p>
            <h3 className="text-lg font-black">{formatDuration(totalTimeHours)}</h3>
         </Card>
       </div>
 
       <Card className="border-none shadow-xl rounded-[2rem] bg-white overflow-hidden print:shadow-none print:border-none print:rounded-none">
         <CardHeader className="border-b bg-gray-50/50 p-4 flex flex-row items-center justify-between print:hidden">
-          <CardTitle className="text-sm font-black text-gray-800">Desglose de Actividad Georreferenciada</CardTitle>
+          <CardTitle className="text-sm font-black text-gray-800">Registros Georreferenciados</CardTitle>
           <Badge className="font-black bg-primary/10 text-primary border-none px-3 py-1 rounded-lg text-[10px]">{dailyReports.length} Jornadas</Badge>
         </CardHeader>
         <CardContent className="p-0">
@@ -349,10 +343,10 @@ export default function ReportsPage() {
                 <tr className="bg-gray-50/20 border-b text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                   <th className="px-6 py-6">Personal</th>
                   <th className="px-6 py-6">Fecha / Jornada</th>
-                  <th className="px-6 py-6">Marcaje</th>
-                  <th className="px-6 py-6">Ubicación GPS</th>
+                  <th className="px-6 py-6">Entrada/Salida</th>
+                  <th className="px-6 py-6">Ubicación GPS (Lat, Lng)</th>
                   <th className="px-6 py-6 text-center">Duración</th>
-                  <th className="px-6 py-6 text-center print:hidden">Validación Técnica</th>
+                  <th className="px-6 py-6 text-center print:hidden">Visto Bueno</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -381,11 +375,11 @@ export default function ReportsPage() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground">
                               <MapPin className="w-3 h-3 text-green-500" />
-                              <span className="truncate max-w-[120px]">E: {r.entryLoc ? `${r.entryLoc.lat.toFixed(6)}, ${r.entryLoc.lng.toFixed(6)}` : 'N/A'}</span>
+                              <span className="truncate max-w-[150px]">E: {r.entryLoc ? `${r.entryLoc.lat.toFixed(6)}, ${r.entryLoc.lng.toFixed(6)}` : 'Sin GPS'}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[8px] font-black text-muted-foreground">
                               <MapPin className="w-3 h-3 text-primary" />
-                              <span className="truncate max-w-[120px]">S: {r.exitLoc ? `${r.exitLoc.lat.toFixed(6)}, ${r.exitLoc.lng.toFixed(6)}` : 'N/A'}</span>
+                              <span className="truncate max-w-[150px]">S: {r.exitLoc ? `${r.exitLoc.lat.toFixed(6)}, ${r.exitLoc.lng.toFixed(6)}` : 'Sin GPS'}</span>
                             </div>
                           </div>
                         </td>

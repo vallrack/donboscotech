@@ -17,7 +17,7 @@ import { Campus, Program, Shift } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import Link from 'link';
+import Link from 'next/link';
 
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -94,7 +94,7 @@ export default function ProfilePage() {
         ...formData,
         updatedAt: new Date().toISOString()
       });
-      toast({ title: "Perfil Sincronizado", description: "Tus datos y firma han sido actualizados en la base de datos." });
+      toast({ title: "Perfil Sincronizado", description: "Tus datos y firma han sido actualizados." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al guardar" });
     } finally {
@@ -159,7 +159,7 @@ export default function ProfilePage() {
                ) : (
                  <div className="flex flex-col items-center text-muted-foreground/40 gap-2">
                    <PenTool className="w-8 h-8" />
-                   <span className="text-[10px] font-bold">Subir Firma Escaneada</span>
+                   <span className="text-[10px] font-bold">Subir Firma Digital</span>
                  </div>
                )}
              </div>
@@ -183,7 +183,7 @@ export default function ProfilePage() {
                        <Input value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
                      </div>
                      <div className="space-y-3">
-                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Cédula de Ciudadanía</Label>
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Cédula</Label>
                        <Input value={formData.documentId} onChange={(e) => updateField('documentId', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
                      </div>
                      <div className="space-y-3">
@@ -217,12 +217,12 @@ export default function ProfilePage() {
                    </div>
 
                    <div className="space-y-4 pt-4 border-t border-dashed">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Mis Jornadas Laborales</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Jornadas Laborales</Label>
                     <Select onValueChange={(v) => toggleShift(v)}>
                       <SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-primary">
                         <div className="flex items-center gap-3">
                           <Plus className="w-5 h-5" />
-                          <span>Añadir Nueva Jornada</span>
+                          <span>Añadir Jornada</span>
                         </div>
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl shadow-2xl">
@@ -264,7 +264,7 @@ export default function ProfilePage() {
                 <CardFooter className="bg-gray-50/80 p-10 border-t justify-end">
                   <Button type="submit" className="h-16 px-14 rounded-2xl font-black gap-3 shadow-2xl" disabled={saving}>
                     {saving ? <Loader2 className="animate-spin" /> : <Save className="w-5 h-5" />} 
-                    Sincronizar Perfil
+                    Actualizar Perfil
                   </Button>
                 </CardFooter>
              </form>

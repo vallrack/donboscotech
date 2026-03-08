@@ -124,7 +124,7 @@ export default function UserManagementPage() {
         await setDoc(doc(db, col, newUserId), { email: formData.email, assignedAt: new Date().toISOString() });
       }
 
-      toast({ title: "Personal Registrado Exitosamente" });
+      toast({ title: "Personal Registrado" });
       setIsCreateDialogOpen(false);
       resetForm();
     } catch (error: any) {
@@ -136,9 +136,13 @@ export default function UserManagementPage() {
   };
 
   const handleEditClick = (u: User) => {
-    // Restricción: Coordinador no puede editar Admin
+    // Protección: Coordinador no puede editar Administrador
     if (currentUser?.role === 'coordinator' && u.role === 'admin') {
-      toast({ variant: "destructive", title: "Acción Restringida", description: "Un coordinador no puede gestionar perfiles de administrador." });
+      toast({ 
+        variant: "destructive", 
+        title: "Acceso Denegado", 
+        description: "Un coordinador no puede modificar perfiles de administrador." 
+      });
       return;
     }
 
@@ -194,18 +198,22 @@ export default function UserManagementPage() {
   };
 
   const handleDeleteUser = async (userId: string, targetRole?: string) => {
-    // Restricción: Coordinador no puede eliminar Admin
+    // Protección: Coordinador no puede eliminar Administrador
     if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
-      toast({ variant: "destructive", title: "Acción Restringida", description: "No tienes permisos para dar de baja a un administrador." });
+      toast({ 
+        variant: "destructive", 
+        title: "Acceso Denegado", 
+        description: "No tienes permisos para eliminar a un administrador." 
+      });
       return;
     }
 
-    if (!db || !confirm('¿Dar de baja a este miembro de forma permanente?')) return;
+    if (!db || !confirm('¿Dar de baja a este miembro permanentemente?')) return;
     try {
       await deleteDoc(doc(db, 'userProfiles', userId));
       const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
       for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
-      toast({ title: "Personal removido de la base de datos" });
+      toast({ title: "Personal removido" });
     } catch (e) {
       toast({ variant: "destructive", title: "Error al eliminar" });
     }
@@ -226,7 +234,7 @@ export default function UserManagementPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tighter">Gestión de Personal</h1>
-          <p className="text-muted-foreground font-medium mt-2">Administra roles, sedes y jornadas institucionales.</p>
+          <p className="text-muted-foreground font-medium mt-2">Administra roles y credenciales de Ciudad Don Bosco.</p>
         </div>
         
         <Dialog open={isCreateDialogOpen} onOpenChange={(val) => { setIsCreateDialogOpen(val); if(!val) resetForm(); }}>
@@ -248,7 +256,7 @@ export default function UserManagementPage() {
                       <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Número de Cédula</Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Cédula</Label>
                       <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
                     </div>
                     <div className="space-y-2">
@@ -256,7 +264,7 @@ export default function UserManagementPage() {
                       <Input type="email" value={formData.email} onChange={(e) => updateFormField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña de Acceso</Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña</Label>
                       <Input type="password" value={formData.password} onChange={(e) => updateFormField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
                     </div>
                   </div>
@@ -269,7 +277,7 @@ export default function UserManagementPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Proceso</Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa</Label>
                       <Select value={formData.program || undefined} onValueChange={(val) => updateFormField('program', val)}>
                         <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                         <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}</SelectContent>
@@ -280,7 +288,7 @@ export default function UserManagementPage() {
                     <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Asignación de Jornadas</Label>
                     <Select onValueChange={(val) => toggleShift(val)}>
                       <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
-                        <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada Oficial</span></div>
+                        <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada</span></div>
                       </SelectTrigger>
                       <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id} className="font-bold py-3">{s.name} ({s.startTime} - {s.endTime})</SelectItem>)}</SelectContent>
                     </Select>
@@ -292,7 +300,7 @@ export default function UserManagementPage() {
                     </div>
                   </div>
                   <div className="space-y-4 pt-4 border-t">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nivel de Permisos (Rol)</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nivel de Permisos</Label>
                     <Select value={formData.role} onValueChange={(val: UserRole) => updateFormField('role', val)}>
                       <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -305,7 +313,7 @@ export default function UserManagementPage() {
                   </div>
                   <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isSaving}>
                     {isSaving ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
-                    Confirmar Registro Oficial
+                    Confirmar Registro
                   </Button>
                 </div>
               </form>
@@ -317,14 +325,14 @@ export default function UserManagementPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={(val) => { setIsEditDialogOpen(val); if(!val) resetForm(); }}>
         <DialogContent className="sm:max-w-[750px] rounded-[3rem] border-none shadow-2xl bg-white p-0 overflow-hidden flex flex-col max-h-[90vh]">
           <DialogHeader className="p-10 pb-0">
-            <DialogTitle className="text-2xl font-black text-gray-800">Actualizar Perfil de Miembro</DialogTitle>
+            <DialogTitle className="text-2xl font-black text-gray-800">Actualizar Perfil</DialogTitle>
           </DialogHeader>
           <div className="overflow-y-auto flex-1 p-10 pt-4 space-y-8">
             <form onSubmit={handleUpdateUser}>
               <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre</Label>
                     <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
                   </div>
                   <div className="space-y-2">
@@ -334,14 +342,14 @@ export default function UserManagementPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede de Trabajo</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede</Label>
                     <Select value={formData.campus || undefined} onValueChange={(val) => updateFormField('campus', val)}>
                       <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
                       <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold">{c.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa / Proceso</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa</Label>
                     <Select value={formData.program || undefined} onValueChange={(val) => updateFormField('program', val)}>
                       <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
                       <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}</SelectContent>
@@ -349,7 +357,7 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas Oficiales</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Jornadas</Label>
                   <Select onValueChange={(val) => toggleShift(val)}>
                     <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
                       <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada</span></div>
@@ -364,7 +372,7 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <div className="space-y-4 pt-4 border-t">
-                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Rol en la Institución</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Rol</Label>
                   <Select value={formData.role} onValueChange={(val: UserRole) => updateFormField('role', val)}>
                     <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -377,7 +385,7 @@ export default function UserManagementPage() {
                 </div>
                 <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isSaving}>
                   {isSaving ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <Save className="w-6 h-6 mr-2" />}
-                  Guardar Cambios Oficiales
+                  Guardar Cambios
                 </Button>
               </div>
             </form>
@@ -423,8 +431,8 @@ export default function UserManagementPage() {
                         </td>
                         <td className="px-10 py-8">
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><MapPin className="w-3.5 h-3.5" /> {u.campus || 'Sin Sede Asignada'}</div>
-                            <div className="flex items-center gap-2 text-[10px] font-black text-primary uppercase"><BookOpen className="w-3.5 h-3.5" /> {u.program || 'Sin Programa / Proceso'}</div>
+                            <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><MapPin className="w-3.5 h-3.5" /> {u.campus || 'N/A'}</div>
+                            <div className="flex items-center gap-2 text-[10px] font-black text-primary uppercase"><BookOpen className="w-3.5 h-3.5" /> {u.program || 'N/A'}</div>
                           </div>
                         </td>
                         <td className="px-10 py-8">
@@ -436,7 +444,7 @@ export default function UserManagementPage() {
                           <div className="flex items-center justify-center gap-2">
                             {isProtected ? (
                               <div className="flex items-center gap-1 text-[9px] font-black text-muted-foreground uppercase bg-gray-100 px-3 py-1.5 rounded-lg">
-                                <Lock className="w-3 h-3" /> Nivel Superior
+                                <Lock className="w-3 h-3" /> Protegido
                               </div>
                             ) : (
                               <>
