@@ -1,31 +1,28 @@
+
 # Don Bosco Track - Sistema Institucional de Asistencia
 
 Este proyecto es una solución inteligente para la gestión de asistencia y jornadas laborales en Ciudad Don Bosco.
 
-## Tecnologías Principales
-- **NextJS 15** (App Router)
-- **Firebase** (Firestore & Auth)
-- **Genkit** (IA para reportes)
-- **ShadCN UI** & **Tailwind CSS**
+## Configuración de Correos Reales (Resend)
+Para que las alertas y recordatorios lleguen realmente al correo de los docentes:
 
-## Autenticación de GitHub (IMPORTANTE)
-Si recibes un error de "Authentication failed" al hacer push, recuerda que GitHub ya no acepta contraseñas normales por terminal. Debes usar un **Personal Access Token (PAT)**:
+1. Ve a [Resend.com](https://resend.com) y crea una cuenta.
+2. Genera una **API Key** en la sección "API Keys".
+3. En Vercel, ve a **Settings > Environment Variables**.
+4. Añade una nueva variable:
+   - Key: `RESEND_API_KEY`
+   - Value: (Tu clave de Resend que empieza con `re_`)
+5. Realiza un nuevo despliegue (Redeploy).
 
-1. Ve a **GitHub Settings > Developer Settings > Personal access tokens > Tokens (classic)**.
-2. Genera un nuevo token con el permiso **`repo`**.
-3. Copia el token.
-4. Cuando la terminal te pida "Password", **pega el token** en lugar de tu contraseña de GitHub.
+## Reglas de Marcaje
+- **10 Minutos**: El sistema bloquea el registro de entrada si se intenta marcar más de 10 minutos antes del inicio de la jornada.
+- **Geolocalización**: Cada marcaje captura las coordenadas GPS y la dirección física para auditoría.
 
-## Comandos para GitHub (Pasos para subir cambios)
-Para subir tus últimos cambios al repositorio:
-
-1. Abre tu terminal en la carpeta del proyecto.
-2. `git add .` (Prepara todos los archivos modificados).
-3. `git commit -m "Fix: corrección de firmas digitales, auditoría GPS y exportación Excel"` (Crea el punto de guardado).
-4. `git push origin main` (Sube los cambios a la nube). Usa tu **PAT** como contraseña.
-
-## Despliegue en Vercel
-La aplicación está optimizada para desplegarse en Vercel. Asegúrate de configurar las variables de entorno de Firebase en el panel de Vercel antes de desplegar. Se han corregido los errores de `next/image` y `Link` para una compilación exitosa.
+## Autenticación de GitHub (PAT)
+Si recibes errores al subir cambios, usa un **Personal Access Token (PAT)**:
+1. GitHub Settings > Developer Settings > Tokens (classic).
+2. Genera un token con el permiso `repo`.
+3. Úsalo como contraseña en la terminal.
 
 ---
 © 2024 Ciudad Don Bosco. Todos los derechos reservados.
