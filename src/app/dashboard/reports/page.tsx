@@ -232,23 +232,77 @@ export default function ReportsPage() {
   };
 
   const handleExportExcel = () => {
-    const BOM = "\uFEFF"; 
-    const sep = ";";
-    const headers = ["Personal", "Cédula", "Sede", "Fecha", "Jornada", "Entrada", "Salida", "GPS Entrada", "GPS Salida", "Dirección Cierre", "Duración", "Estado", "Firmado Por"];
-    const rows = dailyReports.map(r => [
-      r.userName, r.documentId, r.campus, r.date, r.shiftName,
-      r.entry || "--:--", r.exit || "--:--", 
-      r.entryLoc ? `${r.entryLoc.lat}, ${r.entryLoc.lng}` : "N/A",
-      r.exitLoc ? `${r.exitLoc.lat}, ${r.exitLoc.lng}` : "N/A",
-      r.exitLoc?.address || "N/A",
-      formatDuration(r.hours),
-      r.isVerified ? "VALIDADO" : (r.exit ? "CUMPLIDO" : "PENDIENTE"), r.verifiedByName || "N/A"
-    ]);
-    const csvContent = headers.join(sep) + "\n" + rows.map(row => row.map(cell => `"${cell}"`).join(sep)).join("\n");
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Definimos el estilo HTML para Excel para que interprete colores y bordes
+    const tableHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+        <style>
+          body { font-family: 'Inter', sans-serif; }
+          .title-row { font-size: 16pt; font-weight: bold; color: #B1123B; text-align: center; }
+          .subtitle-row { font-size: 10pt; color: #666666; text-align: center; font-style: italic; }
+          .header-cell { background-color: #B1123B; color: #ffffff; font-weight: bold; border: 0.5pt solid #000000; text-align: center; vertical-align: middle; padding: 10px; }
+          .data-cell { border: 0.5pt solid #cccccc; padding: 6px; text-align: left; vertical-align: top; }
+          .data-cell-center { border: 0.5pt solid #cccccc; padding: 6px; text-align: center; vertical-align: middle; }
+          .total-label { font-weight: bold; text-align: right; background-color: #f3f4f6; border: 0.5pt solid #cccccc; padding: 8px; }
+          .total-value { font-weight: bold; color: #B1123B; background-color: #f3f4f6; border: 0.5pt solid #cccccc; text-align: center; padding: 8px; }
+          .validado { color: #16a34a; font-weight: bold; }
+          .pendiente { color: #dc2626; font-weight: bold; }
+          .gps-link { color: #2563eb; text-decoration: underline; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr><td colspan="13" class="title-row">AUDITORÍA DE ASISTENCIA TÉCNICA GPS - CIUDAD DON BOSCO</td></tr>
+          <tr><td colspan="13" class="subtitle-row">Filtro: ${period} | Reporte Generado el ${new Date().toLocaleDateString()}</td></tr>
+          <tr><td colspan="13"></td></tr>
+          <tr>
+            <th class="header-cell">Nombre Completo</th>
+            <th class="header-cell">Cédula</th>
+            <th class="header-cell">Sede</th>
+            <th class="header-cell">Fecha</th>
+            <th class="header-cell">Jornada</th>
+            <th class="header-cell">Entrada</th>
+            <th class="header-cell">Salida</th>
+            <th class="header-cell">Punto GPS Entrada</th>
+            <th class="header-cell">Punto GPS Salida</th>
+            <th class="header-cell">Dirección de Cierre</th>
+            <th class="header-cell">Duración</th>
+            <th class="header-cell">Estado Auditoría</th>
+            <th class="header-cell">Validado Por</th>
+          </tr>
+          ${dailyReports.map(r => `
+            <tr>
+              <td class="data-cell">${r.userName}</td>
+              <td class="data-cell">${r.documentId}</td>
+              <td class="data-cell">${r.campus}</td>
+              <td class="data-cell-center">${r.date}</td>
+              <td class="data-cell">${r.shiftName}</td>
+              <td class="data-cell-center" style="color: #16a34a; font-weight: bold;">${r.entry || "--:--"}</td>
+              <td class="data-cell-center" style="color: #B1123B; font-weight: bold;">${r.exit || "--:--"}</td>
+              <td class="data-cell" style="font-size: 8pt;">${r.entryLoc ? `${r.entryLoc.lat}, ${r.entryLoc.lng}` : "N/A"}</td>
+              <td class="data-cell" style="font-size: 8pt;">${r.exitLoc ? `${r.exitLoc.lat}, ${r.exitLoc.lng}` : "N/A"}</td>
+              <td class="data-cell" style="font-size: 8pt;">${r.exitLoc?.address || "N/A"}</td>
+              <td class="data-cell-center">${formatDuration(r.hours)}</td>
+              <td class="data-cell-center ${r.isVerified ? 'validado' : 'pendiente'}">${r.isVerified ? "VALIDADO" : (r.exit ? "CUMPLIDO" : "PENDIENTE")}</td>
+              <td class="data-cell">${r.verifiedByName || "N/A"}</td>
+            </tr>
+          `).join('')}
+          <tr><td colspan="13"></td></tr>
+          <tr>
+            <td colspan="10" class="total-label">TIEMPO TOTAL ACUMULADO DEL PERIODO:</td>
+            <td class="total-value">${formatDuration(totalTimeHours)}</td>
+            <td colspan="2"></td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', tableHtml], { type: 'application/vnd.ms-excel' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Auditoria_GPS_DonBosco_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Auditoria_GPS_DonBosco_${new Date().toISOString().split('T')[0]}.xls`;
     link.click();
   };
 
@@ -291,8 +345,8 @@ export default function ReportsPage() {
               FIRMAR PERIODO FILTRADO
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={handleExportExcel} className="rounded-xl font-bold border-green-200 text-green-700 h-9 px-4">
-            <Download className="w-4 h-4 mr-2" /> Excel
+          <Button variant="outline" size="sm" onClick={handleExportExcel} className="rounded-xl font-bold border-green-200 text-green-700 h-9 px-4 hover:bg-green-50">
+            <Download className="w-4 h-4 mr-2" /> Excel Corporativo
           </Button>
           <Button size="sm" onClick={() => window.print()} className="rounded-xl font-bold h-9 px-4 shadow-md">
             <Printer className="w-4 h-4 mr-2" /> Imprimir PDF
