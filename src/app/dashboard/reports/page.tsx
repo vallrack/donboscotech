@@ -84,7 +84,7 @@ export default function ReportsPage() {
           date: r.date, 
           entry: null, 
           exit: null,
-          entryLoc: null,
+          entryLoc: r.location, // Asignación inicial
           exitLoc: null,
           shiftId: r.shiftId,
           shiftName: r.shiftName || 'N/A',
@@ -232,67 +232,69 @@ export default function ReportsPage() {
   };
 
   const handleExportExcel = () => {
-    // Definimos el estilo HTML para Excel para que interprete colores y bordes
     const tableHtml = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
         <style>
-          body { font-family: 'Inter', sans-serif; }
-          .title-row { font-size: 16pt; font-weight: bold; color: #B1123B; text-align: center; }
-          .subtitle-row { font-size: 10pt; color: #666666; text-align: center; font-style: italic; }
-          .header-cell { background-color: #B1123B; color: #ffffff; font-weight: bold; border: 0.5pt solid #000000; text-align: center; vertical-align: middle; padding: 10px; }
-          .data-cell { border: 0.5pt solid #cccccc; padding: 6px; text-align: left; vertical-align: top; }
-          .data-cell-center { border: 0.5pt solid #cccccc; padding: 6px; text-align: center; vertical-align: middle; }
-          .total-label { font-weight: bold; text-align: right; background-color: #f3f4f6; border: 0.5pt solid #cccccc; padding: 8px; }
-          .total-value { font-weight: bold; color: #B1123B; background-color: #f3f4f6; border: 0.5pt solid #cccccc; text-align: center; padding: 8px; }
-          .validado { color: #16a34a; font-weight: bold; }
-          .pendiente { color: #dc2626; font-weight: bold; }
-          .gps-link { color: #2563eb; text-decoration: underline; }
+          body { font-family: 'Inter', 'Segoe UI', sans-serif; }
+          table { border-collapse: collapse; width: 100%; }
+          .title-row { font-size: 18pt; font-weight: bold; color: #B1123B; text-align: center; padding: 20px; }
+          .subtitle-row { font-size: 11pt; color: #666666; text-align: center; font-style: italic; padding-bottom: 20px; }
+          .header-cell { background-color: #B1123B; color: #ffffff; font-weight: bold; border: 1pt solid #800d2a; text-align: center; vertical-align: middle; padding: 12px; font-size: 10pt; }
+          .data-cell { border: 0.5pt solid #e5e7eb; padding: 8px 12px; text-align: left; vertical-align: middle; font-size: 9pt; color: #374151; }
+          .data-cell-center { border: 0.5pt solid #e5e7eb; padding: 8px 12px; text-align: center; vertical-align: middle; font-size: 9pt; }
+          .row-even { background-color: #ffffff; }
+          .row-odd { background-color: #f9fafb; }
+          .total-label { font-weight: bold; text-align: right; background-color: #f3f4f6; border: 1pt solid #d1d5db; padding: 12px; font-size: 10pt; color: #111827; }
+          .total-value { font-weight: bold; color: #B1123B; background-color: #f3f4f6; border: 1pt solid #d1d5db; text-align: center; padding: 12px; font-size: 11pt; }
+          .validado { color: #059669; font-weight: bold; background-color: #ecfdf5; }
+          .pendiente { color: #dc2626; font-weight: bold; background-color: #fef2f2; }
+          .gps-text { font-size: 8pt; color: #6b7280; font-family: 'Courier New', monospace; }
         </style>
       </head>
       <body>
         <table>
-          <tr><td colspan="13" class="title-row">AUDITORÍA DE ASISTENCIA TÉCNICA GPS - CIUDAD DON BOSCO</td></tr>
-          <tr><td colspan="13" class="subtitle-row">Filtro: ${period} | Reporte Generado el ${new Date().toLocaleDateString()}</td></tr>
+          <tr><td colspan="13" class="title-row">REPORTE INSTITUCIONAL DE ASISTENCIA Y AUDITORÍA GPS</td></tr>
+          <tr><td colspan="13" class="subtitle-row">Ciudad Don Bosco | Periodo: ${period} | Generado: ${new Date().toLocaleString()}</td></tr>
           <tr><td colspan="13"></td></tr>
           <tr>
-            <th class="header-cell">Nombre Completo</th>
-            <th class="header-cell">Cédula</th>
-            <th class="header-cell">Sede</th>
+            <th class="header-cell">Colaborador</th>
+            <th class="header-cell">Documento</th>
+            <th class="header-cell">Sede Asignada</th>
             <th class="header-cell">Fecha</th>
             <th class="header-cell">Jornada</th>
             <th class="header-cell">Entrada</th>
             <th class="header-cell">Salida</th>
-            <th class="header-cell">Punto GPS Entrada</th>
-            <th class="header-cell">Punto GPS Salida</th>
-            <th class="header-cell">Dirección de Cierre</th>
-            <th class="header-cell">Duración</th>
-            <th class="header-cell">Estado Auditoría</th>
-            <th class="header-cell">Validado Por</th>
+            <th class="header-cell">GPS Entrada</th>
+            <th class="header-cell">GPS Salida</th>
+            <th class="header-cell">Dirección Cierre</th>
+            <th class="header-cell">H. Efectivas</th>
+            <th class="header-cell">Auditoría</th>
+            <th class="header-cell">Verificador</th>
           </tr>
-          ${dailyReports.map(r => `
-            <tr>
-              <td class="data-cell">${r.userName}</td>
+          ${dailyReports.map((r, i) => `
+            <tr class="${i % 2 === 0 ? 'row-even' : 'row-odd'}">
+              <td class="data-cell" style="font-weight: bold;">${r.userName}</td>
               <td class="data-cell">${r.documentId}</td>
               <td class="data-cell">${r.campus}</td>
               <td class="data-cell-center">${r.date}</td>
               <td class="data-cell">${r.shiftName}</td>
-              <td class="data-cell-center" style="color: #16a34a; font-weight: bold;">${r.entry || "--:--"}</td>
+              <td class="data-cell-center" style="color: #059669; font-weight: bold;">${r.entry || "--:--"}</td>
               <td class="data-cell-center" style="color: #B1123B; font-weight: bold;">${r.exit || "--:--"}</td>
-              <td class="data-cell" style="font-size: 8pt;">${r.entryLoc ? `${r.entryLoc.lat}, ${r.entryLoc.lng}` : "N/A"}</td>
-              <td class="data-cell" style="font-size: 8pt;">${r.exitLoc ? `${r.exitLoc.lat}, ${r.exitLoc.lng}` : "N/A"}</td>
-              <td class="data-cell" style="font-size: 8pt;">${r.exitLoc?.address || "N/A"}</td>
-              <td class="data-cell-center">${formatDuration(r.hours)}</td>
+              <td class="data-cell gps-text">${r.entryLoc ? `${r.entryLoc.lat.toFixed(5)}, ${r.entryLoc.lng.toFixed(5)}` : "N/A"}</td>
+              <td class="data-cell gps-text">${r.exitLoc ? `${r.exitLoc.lat.toFixed(5)}, ${r.exitLoc.lng.toFixed(5)}` : "N/A"}</td>
+              <td class="data-cell" style="font-size: 8pt; color: #4b5563;">${r.exitLoc?.address || "N/A"}</td>
+              <td class="data-cell-center" style="font-weight: bold;">${formatDuration(r.hours)}</td>
               <td class="data-cell-center ${r.isVerified ? 'validado' : 'pendiente'}">${r.isVerified ? "VALIDADO" : (r.exit ? "CUMPLIDO" : "PENDIENTE")}</td>
               <td class="data-cell">${r.verifiedByName || "N/A"}</td>
             </tr>
           `).join('')}
           <tr><td colspan="13"></td></tr>
           <tr>
-            <td colspan="10" class="total-label">TIEMPO TOTAL ACUMULADO DEL PERIODO:</td>
+            <td colspan="10" class="total-label">RESUMEN DE TIEMPO TOTAL ACUMULADO:</td>
             <td class="total-value">${formatDuration(totalTimeHours)}</td>
-            <td colspan="2"></td>
+            <td colspan="2" style="background-color: #f3f4f6; border: 1pt solid #d1d5db;"></td>
           </tr>
         </table>
       </body>
@@ -302,7 +304,7 @@ export default function ReportsPage() {
     const blob = new Blob(['\ufeff', tableHtml], { type: 'application/vnd.ms-excel' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Auditoria_GPS_DonBosco_${new Date().toISOString().split('T')[0]}.xls`;
+    link.download = `Auditoria_DonBosco_${new Date().toISOString().split('T')[0]}.xls`;
     link.click();
   };
 
