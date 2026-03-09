@@ -127,7 +127,7 @@ export default function DashboardPage() {
           <div className="ml-4">
             <AlertTitle className="text-xl font-black text-red-600">¡Atención, Colaborador!</AlertTitle>
             <AlertDescription className="text-gray-700 font-bold mt-2">
-              No has registrado tu entrada para la jornada <span className="text-primary">{needsCheckIn.name}</span> ({{needsCheckIn.startTime}}). 
+              No has registrado tu entrada para la jornada <span className="text-primary">{needsCheckIn.name}</span> ({needsCheckIn.startTime}). 
               Es obligatorio realizar el registro GPS ahora mismo.
             </AlertDescription>
             <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl">
