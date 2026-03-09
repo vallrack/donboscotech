@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -94,9 +93,9 @@ export default function ProfilePage() {
         ...formData,
         updatedAt: new Date().toISOString()
       });
-      toast({ title: "Perfil Sincronizado", description: "Tus datos y firma han sido actualizados." });
+      toast({ title: "Perfil Sincronizado", description: "Tus datos institucionales han sido actualizados satisfactoriamente." });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error al guardar" });
+      toast({ variant: "destructive", title: "Error al guardar", description: "No tienes permisos suficientes para modificar este perfil." });
     } finally {
       setSaving(false);
     }
@@ -113,7 +112,7 @@ export default function ProfilePage() {
           <h1 className="text-4xl font-black text-primary tracking-tighter">Mi Perfil Institucional</h1>
           <p className="text-muted-foreground font-medium flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> 
-            Gestión de identidad Ciudad Don Bosco.
+            Gestión de identidad oficial - Ciudad Don Bosco.
           </p>
         </div>
         <Button asChild size="lg" className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl">
@@ -141,7 +140,7 @@ export default function ProfilePage() {
                 <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'avatarUrl')} className="hidden" accept="image/*" />
              </div>
              <div className="mt-8 space-y-2">
-               <h3 className="text-xl font-black text-gray-800">{formData.name || 'Docente'}</h3>
+               <h3 className="text-xl font-black text-gray-800">{formData.name || 'Miembro Institucional'}</h3>
                <Badge variant="secondary" className="uppercase font-black text-[9px] px-4 py-1.5 rounded-xl">
                  {user?.role || 'docent'}
                </Badge>
@@ -149,7 +148,7 @@ export default function ProfilePage() {
           </Card>
 
           <Card className="border-none shadow-2xl rounded-[3rem] bg-white p-10 flex flex-col items-center gap-4">
-             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Firma Digital Oficial</h4>
+             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Firma Digital para Auditoría</h4>
              <div 
                className="w-full aspect-video bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden relative group cursor-pointer" 
                onClick={() => !saving && sigInputRef.current?.click()}
@@ -159,13 +158,13 @@ export default function ProfilePage() {
                ) : (
                  <div className="flex flex-col items-center text-muted-foreground/40 gap-2">
                    <PenTool className="w-8 h-8" />
-                   <span className="text-[10px] font-bold">Subir Firma Digital</span>
+                   <span className="text-[10px] font-bold">Cargar Firma Digital</span>
                  </div>
                )}
              </div>
              <input type="file" ref={sigInputRef} onChange={(e) => handleFileChange(e, 'signatureUrl')} className="hidden" accept="image/*" />
              <p className="text-[9px] text-center text-muted-foreground font-medium italic px-4">
-               Esta firma validará tus reportes oficiales de asistencia.
+               Esta firma será estampada en tus reportes oficiales de asistencia.
              </p>
           </Card>
         </div>
@@ -183,11 +182,11 @@ export default function ProfilePage() {
                        <Input value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
                      </div>
                      <div className="space-y-3">
-                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Cédula</Label>
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Documento de Identidad</Label>
                        <Input value={formData.documentId} onChange={(e) => updateField('documentId', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
                      </div>
                      <div className="space-y-3">
-                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede Asignada</Label>
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede de Trabajo</Label>
                        <Select 
                         value={formData.campus || ""} 
                         onValueChange={(v) => updateField('campus', v)}
@@ -201,7 +200,7 @@ export default function ProfilePage() {
                        </Select>
                      </div>
                      <div className="space-y-3">
-                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Proceso</Label>
+                       <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Programa / Carrera</Label>
                        <Select 
                         value={formData.program || ""} 
                         onValueChange={(v) => updateField('program', v)}
@@ -217,12 +216,12 @@ export default function ProfilePage() {
                    </div>
 
                    <div className="space-y-4 pt-4 border-t border-dashed">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Jornadas Laborales</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Jornadas Laborales Asignadas</Label>
                     <Select onValueChange={(v) => toggleShift(v)}>
                       <SelectTrigger className="h-16 rounded-3xl bg-primary/5 border-primary/20 font-black text-primary">
                         <div className="flex items-center gap-3">
                           <Plus className="w-5 h-5" />
-                          <span>Añadir Jornada</span>
+                          <span>Vincular Nueva Jornada</span>
                         </div>
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl shadow-2xl">
@@ -264,7 +263,7 @@ export default function ProfilePage() {
                 <CardFooter className="bg-gray-50/80 p-10 border-t justify-end">
                   <Button type="submit" className="h-16 px-14 rounded-2xl font-black gap-3 shadow-2xl" disabled={saving}>
                     {saving ? <Loader2 className="animate-spin" /> : <Save className="w-5 h-5" />} 
-                    Actualizar Perfil
+                    Guardar Cambios en Perfil
                   </Button>
                 </CardFooter>
              </form>

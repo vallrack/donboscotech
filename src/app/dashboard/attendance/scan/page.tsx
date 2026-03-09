@@ -1,18 +1,18 @@
-
 "use client"
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Loader2, MapPin, Camera, QrCode, AlertCircle, HandHelping, XCircle, Clock } from 'lucide-react';
+import { CheckCircle2, Loader2, MapPin, Camera, QrCode, XCircle, HandHelping } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Html5Qrcode } from "html5-qrcode";
 import { Shift } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { notifyAttendance } from '@/ai/flows/attendance-notification-flow';
 
 export default function AttendanceScanPage() {
   const { user } = useAuth();
@@ -107,10 +107,14 @@ export default function AttendanceScanPage() {
       let activeShift: Shift | null = null;
       let isWithinTimeRange = false;
 
+      // REGLA: Marcaje permitido desde 10 minutos antes del inicio de la jornada
       for (const s of todayShifts) {
         const [startH, startM] = s.startTime.split(':').map(Number);
         const [endH, endM] = s.endTime.split(':').map(Number);
-        if (currTotalMinutes >= (startH * 60 + startM - 30) && currTotalMinutes <= (endH * 60 + endM + 60)) {
+        const startTotal = startH * 60 + startM;
+        const endTotal = endH * 60 + endM;
+
+        if (currTotalMinutes >= (startTotal - 10) && currTotalMinutes <= (endTotal + 60)) {
           activeShift = s;
           isWithinTimeRange = true;
           break;
@@ -119,8 +123,8 @@ export default function AttendanceScanPage() {
 
       if (!isWithinTimeRange) {
         setTimeError(todayShifts.length > 0 
-          ? `Jornada hoy: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}.`
-          : "Sin jornada asignada para hoy."
+          ? `Acceso denegado: El marcaje se habilita 10 minutos antes de tu jornada (${todayShifts.map(s => s.startTime).join(', ')}).`
+          : "No tienes jornada oficial asignada para este día."
         );
         setScanning(false); setManualSaving(false); isProcessing.current = false;
         return;
@@ -134,7 +138,7 @@ export default function AttendanceScanPage() {
       if (recordType === 'exit' && activeShift) {
         const [endH, endM] = activeShift.endTime.split(':').map(Number);
         if (currTotalMinutes < (endH * 60 + endM)) {
-          setTimeError(`Salida bloqueada hasta las ${activeShift.endTime}.`);
+          setTimeError(`Salida bloqueada: Debes cumplir tu jornada hasta las ${activeShift.endTime}.`);
           setScanning(false); setManualSaving(false); isProcessing.current = false;
           return;
         }
@@ -143,7 +147,6 @@ export default function AttendanceScanPage() {
       const recordId = `${user.id}_${now.getTime()}_${method.toLowerCase()}`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };
 
-      // AUTOMATIZACIÓN DE FIRMA DEL DOCENTE EN SALIDA
       const recordData = {
         userId: user.id, 
         userName: user.name, 
@@ -153,11 +156,9 @@ export default function AttendanceScanPage() {
         method: method, 
         shiftId: activeShift?.id, 
         shiftName: activeShift?.name,
-        location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `Punto GPS: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
+        location: { lat: currentLoc.lat, lng: currentLoc.lng, address: `GPS: ${currentLoc.lat.toFixed(6)}, ${currentLoc.lng.toFixed(6)}` },
         createdAt: serverTimestamp(),
-        // Firma del docente si es salida
         docentSignature: recordType === 'exit' ? (user.signatureUrl || null) : null,
-        //isVerified queda en false hasta que el coordinador valide en el reporte
         isVerified: false
       };
 
@@ -165,6 +166,17 @@ export default function AttendanceScanPage() {
         setDoc(doc(db, 'userProfiles', user.id, 'attendanceRecords', recordId), recordData),
         setDoc(doc(db, 'globalAttendanceRecords', recordId), recordData)
       ]);
+
+      // Disparar Notificación de Alerta vía Genkit (Simulación de correo)
+      notifyAttendance({
+        userName: user.name,
+        userEmail: user.email,
+        type: recordType,
+        time: timeStr,
+        date: dateStr,
+        method: method,
+        location: recordData.location.address
+      }).catch(e => console.error("Error al notificar", e));
 
       setScanning(false);
       setManualSaving(false);
@@ -177,7 +189,7 @@ export default function AttendanceScanPage() {
 
     } catch (err: any) { 
       setScanning(false); setManualSaving(false); isProcessing.current = false; 
-      toast({ variant: "destructive", title: "Error", description: err.message });
+      toast({ variant: "destructive", title: "Error de Sincronización", description: err.message });
     }
   };
 
@@ -187,13 +199,14 @@ export default function AttendanceScanPage() {
         <div className={cn("w-28 h-28 rounded-full flex items-center justify-center mb-8 shadow-2xl", success.type === 'entry' ? "bg-green-100" : "bg-blue-100")}>
           <CheckCircle2 className={cn("w-16 h-16", success.type === 'entry' ? "text-green-500" : "text-blue-500")} />
         </div>
-        <h2 className="text-4xl font-black text-gray-800">{success.type === 'entry' ? "¡Hola!" : "¡Buen Descanso!"}</h2>
+        <h2 className="text-4xl font-black text-gray-800">{success.type === 'entry' ? "¡Bienvenido!" : "¡Jornada Finalizada!"}</h2>
         <div className="bg-white shadow-xl border border-gray-100 p-8 rounded-[2.5rem] mt-8 w-full max-w-sm">
-          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">Sello Digital Registrado</p>
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">Registro Confirmado</p>
           <p className="text-xl font-black text-primary mb-1">{success.shift}</p>
           <p className="text-sm font-bold text-gray-400">{success.time}</p>
+          <p className="text-[9px] font-bold text-green-600 uppercase mt-4">Alerta enviada a tu correo</p>
         </div>
-        <p className="mt-8 text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Siguiente en 2s...</p>
+        <p className="mt-8 text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse">Reestableciendo...</p>
       </div>
     );
   }
@@ -203,15 +216,15 @@ export default function AttendanceScanPage() {
       <Card className="border-none shadow-2xl overflow-hidden rounded-[3rem] bg-white">
         <CardHeader className="bg-primary text-white text-center py-10">
           <CardTitle className="text-3xl font-black tracking-tight">Don Bosco Track</CardTitle>
-          <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-widest mt-1">Sello Biométrico Digital</p>
+          <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-widest mt-1">Identidad Digital de Alta Precisión</p>
         </CardHeader>
         <CardContent className="p-8 space-y-6">
           {timeError && (
-            <Alert variant="destructive" className="rounded-2xl border-2">
+            <Alert variant="destructive" className="rounded-2xl border-2 animate-in slide-in-from-top-4">
               <XCircle className="h-5 w-5" />
-              <AlertTitle className="font-black">Restricción de Jornada</AlertTitle>
-              <AlertDescription className="text-xs font-bold">{timeError}</AlertDescription>
-              <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl" onClick={() => setTimeError(null)}>Reintentar</Button>
+              <AlertTitle className="font-black">Restricción Institucional</AlertTitle>
+              <AlertDescription className="text-xs font-bold leading-relaxed">{timeError}</AlertDescription>
+              <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl border-destructive/20" onClick={() => setTimeError(null)}>Entendido</Button>
             </Alert>
           )}
 
@@ -221,7 +234,7 @@ export default function AttendanceScanPage() {
                {!hasCameraPermission && hasCameraPermission !== null && (
                  <div className="absolute inset-0 bg-gray-50/90 rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center gap-4">
                     <Camera className="w-12 h-12 text-muted-foreground opacity-20" />
-                    <p className="text-sm font-black text-gray-400">Activa la cámara para marcar.</p>
+                    <p className="text-sm font-black text-gray-400">Permite el acceso a la cámara para el escaneo de seguridad.</p>
                  </div>
                )}
             </div>
@@ -233,8 +246,8 @@ export default function AttendanceScanPage() {
                 <MapPin className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localización de Alta Precisión</p>
-                <p className="text-xs font-black text-gray-700">{location ? "Punto Georreferenciado" : "Buscando GPS..."}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Geolocalización Activa</p>
+                <p className="text-xs font-black text-gray-700">{location ? "Punto Verificado" : "Capturando GPS..."}</p>
               </div>
               {scanning && <Loader2 className="w-6 h-6 animate-spin text-primary ml-auto" />}
             </div>
@@ -247,7 +260,7 @@ export default function AttendanceScanPage() {
                 className="w-full h-16 rounded-[1.5rem] border-2 border-primary/20 bg-white text-primary font-black gap-3 hover:bg-primary hover:text-white transition-all shadow-lg"
                >
                  {manualSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <HandHelping className="w-6 h-6" />}
-                 Marcaje Manual (Firma Automática)
+                 Marcaje Manual (Valida Geolocalización)
                </Button>
             </div>
           </div>
