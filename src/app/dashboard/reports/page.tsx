@@ -130,6 +130,12 @@ export default function ReportsPage() {
           lastWeek.setDate(now.getDate() - 7);
           return recordDate >= lastWeek;
         }
+        if (period === 'Quincena Actual') {
+          // Lógica de quincena institucional (1-15 o 16-fin)
+          const startDay = now.getDate() <= 15 ? 1 : 16;
+          const fortnightStart = new Date(now.getFullYear(), now.getMonth(), startDay);
+          return recordDate >= fortnightStart;
+        }
         if (period === 'Mes Actual') {
           return recordDate >= new Date(now.getFullYear(), now.getMonth(), 1);
         }
@@ -378,6 +384,7 @@ export default function ReportsPage() {
               <SelectTrigger className="rounded-lg font-bold bg-gray-50/50 border-none h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Semana Actual">Semana Actual</SelectItem>
+                <SelectItem value="Quincena Actual">Quincena Actual</SelectItem>
                 <SelectItem value="Mes Actual">Mes Actual</SelectItem>
                 <SelectItem value="Todo el Historial">Todo el Historial</SelectItem>
               </SelectContent>
