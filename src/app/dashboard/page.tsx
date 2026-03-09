@@ -4,20 +4,22 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, where, getCountFromServer } from 'firebase/firestore';
+import { collection, query, orderBy, limit, where, getCountFromServer, getDocs } from 'firebase/firestore';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Clock, CheckCircle2, Users, CalendarDays, Loader2, MapPin, Megaphone } from 'lucide-react';
+import { Clock, CheckCircle2, Users, CalendarDays, Loader2, MapPin, Megaphone, AlertTriangle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { AttendanceRecord, Announcement } from '@/lib/types';
+import { AttendanceRecord, Announcement, Shift } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const db = useFirestore();
   const [todayCount, setTodayCount] = useState<number | null>(null);
+  const [needsCheckIn, setNeedsCheckIn] = useState<Shift | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const recordsQuery = useMemoFirebase(() => {
@@ -39,6 +41,50 @@ export default function DashboardPage() {
   const activeAnnouncements = useMemo(() => {
     return (annRaw || []).filter(a => a.status === 'active');
   }, [annRaw]);
+
+  // Lógica para detectar si el docente debe marcar asistencia ahora
+  useEffect(() => {
+    if (!db || !user || user.role !== 'docent') return;
+
+    const checkMissingAttendance = async () => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const [currH, currM] = timeStr.split(':').map(Number);
+      const currTotal = currH * 60 + currM;
+      const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
+
+      try {
+        const shiftsSnap = await getDocs(collection(db, 'shifts'));
+        const allShifts = shiftsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Shift));
+        const todayShifts = allShifts.filter(s => user.shiftIds?.includes(s.id) && s.days?.includes(dayName));
+
+        // Buscar si hay una jornada actual o próxima
+        for (const s of todayShifts) {
+          const [sh, sm] = s.startTime.split(':').map(Number);
+          const startT = sh * 60 + sm;
+          
+          // Si faltan menos de 10 min o ya empezó (y no han pasado más de 2 horas)
+          if (currTotal >= (startT - 10) && currTotal <= (startT + 120)) {
+            // Verificar si ya marcó hoy
+            const q = query(
+              collection(db, 'userProfiles', user.id, 'attendanceRecords'), 
+              where('date', '==', todayStr),
+              where('type', '==', 'entry')
+            );
+            const snap = await getDocs(q);
+            if (snap.empty) {
+              setNeedsCheckIn(s);
+            } else {
+              setNeedsCheckIn(null);
+            }
+            break;
+          }
+        }
+      } catch (e) { console.error(e); }
+    };
+
+    checkMissingAttendance();
+  }, [db, user, todayStr]);
 
   useEffect(() => {
     if (!db || !user || user.role === 'docent') return;
@@ -74,6 +120,24 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {needsCheckIn && (
+        <Alert variant="destructive" className="bg-red-50 border-2 border-red-200 rounded-[2rem] p-8 shadow-xl animate-bounce">
+          <AlertTriangle className="h-8 w-8 text-red-600" />
+          <div className="ml-4">
+            <AlertTitle className="text-xl font-black text-red-600">¡Atención, Colaborador!</AlertTitle>
+            <AlertDescription className="text-gray-700 font-bold mt-2">
+              No has registrado tu entrada para la jornada <span className="text-primary">{needsCheckIn.name}</span> ({{needsCheckIn.startTime}}). 
+              Es obligatorio realizar el registro GPS ahora mismo.
+            </AlertDescription>
+            <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl">
+              <Link href="/dashboard/attendance/scan" className="flex items-center gap-2">
+                Ir a Marcar Ahora <ArrowRight className="w-4 h-4" />
+              </Link>
+            </Button>
+          </div>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {stats.map((stat) => (

@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon, UserCheck, ShieldAlert, Lock
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon, UserCheck, ShieldAlert, Lock, BellRing
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +30,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
+import { sendAttendanceReminder } from '@/ai/flows/attendance-reminder-flow';
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
@@ -39,6 +40,7 @@ export default function UserManagementPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isNotifying, setIsNotifying] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
@@ -92,6 +94,34 @@ export default function UserManagementPage() {
     setFormData({ name: '', email: '', password: '', documentId: '', campus: '', program: '', shiftIds: [], role: 'docent' });
     setEditingUser(null);
   }, []);
+
+  const handleSendReminder = async (targetUser: User) => {
+    if (isNotifying) return;
+    setIsNotifying(targetUser.id);
+    
+    try {
+      // Intentar obtener la jornada actual para el correo
+      const firstShiftId = targetUser.shiftIds?.[0];
+      const shift = shifts.find(s => s.id === firstShiftId);
+      
+      const result = await sendAttendanceReminder({
+        userName: targetUser.name,
+        userEmail: targetUser.email,
+        shiftName: shift?.name || 'Jornada Institucional',
+        startTime: shift?.startTime || '07:00'
+      });
+
+      if (result.success) {
+        toast({ title: "Recordatorio Enviado", description: `Se ha notificado a ${targetUser.name} vía correo electrónico.` });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al enviar", description: error.message });
+    } finally {
+      setIsNotifying(null);
+    }
+  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -458,6 +488,16 @@ export default function UserManagementPage() {
                               </div>
                             ) : (
                               <>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="text-primary hover:bg-primary/5 rounded-xl h-12 w-12" 
+                                  onClick={() => handleSendReminder(u)}
+                                  disabled={isNotifying === u.id}
+                                  title="Enviar Recordatorio"
+                                >
+                                  {isNotifying === u.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <BellRing className="w-5 h-5" />}
+                                </Button>
                                 <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/5 rounded-xl h-12 w-12" onClick={() => handleEditClick(u)}>
                                   <Edit3 className="w-5 h-5" />
                                 </Button>
