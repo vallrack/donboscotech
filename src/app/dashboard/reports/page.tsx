@@ -84,7 +84,7 @@ export default function ReportsPage() {
           date: r.date, 
           entry: null, 
           exit: null,
-          entryLoc: r.location, // Asignación inicial
+          entryLoc: r.location,
           exitLoc: null,
           shiftId: r.shiftId,
           shiftName: r.shiftName || 'N/A',
@@ -235,6 +235,20 @@ export default function ReportsPage() {
     const tableHtml = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Auditoria Don Bosco</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
         <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
         <style>
           body { font-family: 'Inter', 'Segoe UI', sans-serif; }
