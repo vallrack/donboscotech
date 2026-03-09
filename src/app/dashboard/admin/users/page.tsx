@@ -8,6 +8,8 @@ import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, 
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth as getFirebaseAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -117,7 +119,8 @@ export default function UserManagementPage() {
         status: 'active'
       };
 
-      await setDoc(doc(db, 'userProfiles', newUserId), userProfile);
+      const profileRef = doc(db, 'userProfiles', newUserId);
+      await setDoc(profileRef, userProfile);
 
       if (formData.role !== 'docent') {
         const col = formData.role === 'admin' ? 'roles_admins' : formData.role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
@@ -164,39 +167,42 @@ export default function UserManagementPage() {
     if (!db || !editingUser || isSaving) return;
 
     setIsSaving(true);
-    try {
-      const updateData = {
-        name: formData.name,
-        documentId: formData.documentId,
-        campus: formData.campus,
-        program: formData.program,
-        shiftIds: formData.shiftIds,
-        role: formData.role,
-        updatedAt: serverTimestamp()
-      };
+    const profileRef = doc(db, 'userProfiles', editingUser.id);
+    const updateData = {
+      name: formData.name,
+      documentId: formData.documentId,
+      campus: formData.campus,
+      program: formData.program,
+      shiftIds: formData.shiftIds,
+      role: formData.role,
+      updatedAt: serverTimestamp()
+    };
 
-      await updateDoc(doc(db, 'userProfiles', editingUser.id), updateData);
-
-      if (formData.role !== editingUser.role) {
-        const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
-        for (const col of rolesCols) await deleteDoc(doc(db, col, editingUser.id));
-        if (formData.role !== 'docent') {
-          const col = formData.role === 'admin' ? 'roles_admins' : formData.role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
-          await setDoc(doc(db, col, editingUser.id), { email: formData.email, assignedAt: new Date().toISOString() });
+    updateDoc(profileRef, updateData)
+      .then(async () => {
+        if (formData.role !== editingUser.role) {
+          const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
+          for (const col of rolesCols) await deleteDoc(doc(db, col, editingUser.id));
+          if (formData.role !== 'docent') {
+            const col = formData.role === 'admin' ? 'roles_admins' : formData.role === 'coordinator' ? 'roles_coordinators' : 'roles_secretaries';
+            await setDoc(doc(db, col, editingUser.id), { email: formData.email, assignedAt: new Date().toISOString() });
+          }
         }
-      }
-
-      toast({ title: "Perfil actualizado satisfactoriamente" });
-      setIsEditDialogOpen(false);
-      resetForm();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error al actualizar", description: error.message });
-    } finally {
-      setIsSaving(false);
-    }
+        toast({ title: "Perfil actualizado satisfactoriamente" });
+        setIsEditDialogOpen(false);
+        resetForm();
+      })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: profileRef.path,
+          operation: 'update',
+          requestResourceData: updateData
+        } as SecurityRuleContext));
+      })
+      .finally(() => setIsSaving(false));
   };
 
-  const handleDeleteUser = async (userId: string, targetRole?: string) => {
+  const handleDeleteUser = useCallback((userId: string, targetRole?: string) => {
     if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
       toast({ 
         variant: "destructive", 
@@ -207,15 +213,21 @@ export default function UserManagementPage() {
     }
 
     if (!db || !confirm('¿Dar de baja a este miembro permanentemente?')) return;
-    try {
-      await deleteDoc(doc(db, 'userProfiles', userId));
-      const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
-      for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
-      toast({ title: "Personal removido" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error al eliminar" });
-    }
-  };
+    const profileRef = doc(db, 'userProfiles', userId);
+    
+    deleteDoc(profileRef)
+      .then(async () => {
+        const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
+        for (const col of rolesCols) await deleteDoc(doc(db, col, userId));
+        toast({ title: "Personal removido" });
+      })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: profileRef.path,
+          operation: 'delete'
+        } as SecurityRuleContext));
+      });
+  }, [db, currentUser, toast]);
 
   if (currentUser?.role !== 'admin' && currentUser?.role !== 'coordinator') {
     return (
