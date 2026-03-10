@@ -1,5 +1,4 @@
 
-
 # Don Bosco Track - Sistema Institucional de Asistencia
 
 Este proyecto es una solución inteligente para la gestión de asistencia y jornadas laborales en Ciudad Don Bosco.
