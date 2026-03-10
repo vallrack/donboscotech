@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useRef } from 'react';
@@ -90,7 +91,8 @@ export default function AttendanceScanPage() {
     else setScanning(true);
 
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
+    // Usar fecha local
+    const dateStr = now.toLocaleDateString('sv-SE');
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     const [currH, currM] = timeStr.split(':').map(Number);
     const currTotalMinutes = currH * 60 + currM;
@@ -107,7 +109,6 @@ export default function AttendanceScanPage() {
       let activeShift: Shift | null = null;
       let isWithinTimeRange = false;
 
-      // REGLA: Marcaje permitido desde 10 minutos antes del inicio de la jornada
       for (const s of todayShifts) {
         const [startH, startM] = s.startTime.split(':').map(Number);
         const [endH, endM] = s.endTime.split(':').map(Number);
@@ -167,7 +168,6 @@ export default function AttendanceScanPage() {
         setDoc(doc(db, 'globalAttendanceRecords', recordId), recordData)
       ]);
 
-      // Disparar Notificación de Alerta vía Genkit (Simulación de correo)
       notifyAttendance({
         userName: user.name,
         userEmail: user.email,

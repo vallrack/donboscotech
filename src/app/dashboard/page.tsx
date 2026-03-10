@@ -22,7 +22,9 @@ export default function DashboardPage() {
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const [needsCheckIn, setNeedsCheckIn] = useState<Shift | null>(null);
   const hasSentAutoReminder = useRef(false);
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  
+  // Usar fecha local YYYY-MM-DD
+  const todayStr = useMemo(() => new Date().toLocaleDateString('sv-SE'), []);
 
   const recordsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -98,10 +100,18 @@ export default function DashboardPage() {
     if (!db || !user || user.role === 'docent') return;
     const fetchTodayStats = async () => {
       try {
-        const q = query(collection(db, 'globalAttendanceRecords'), where('date', '==', todayStr));
+        // Contar ingresos únicos (Presencia Real)
+        const q = query(
+          collection(db, 'globalAttendanceRecords'), 
+          where('date', '==', todayStr),
+          where('type', '==', 'entry')
+        );
         const snapshot = await getCountFromServer(q);
         setTodayCount(snapshot.data().count);
-      } catch (e) { setTodayCount(0); }
+      } catch (e) { 
+        console.error("Error fetching stats:", e);
+        setTodayCount(0); 
+      }
     };
     fetchTodayStats();
   }, [db, user?.role, todayStr, user?.id]);
@@ -109,7 +119,15 @@ export default function DashboardPage() {
   const stats = useMemo(() => {
     const isAdminView = user?.role !== 'docent';
     return [
-      { id: 'stat-main', label: isAdminView ? 'Presencia Hoy' : 'Mis Registros', value: isAdminView ? (todayCount !== null ? todayCount.toString() : '...') : (records?.length || 0).toString(), icon: isAdminView ? Users : Clock, color: 'text-primary' },
+      { 
+        id: 'stat-main', 
+        label: isAdminView ? 'Presencia Hoy' : 'Mis Registros', 
+        value: isAdminView 
+          ? (todayCount !== null ? todayCount.toString() : '...') 
+          : (records?.length || 0).toString(), 
+        icon: isAdminView ? Users : Clock, 
+        color: 'text-primary' 
+      },
       { id: 'stat-status', label: 'Estado', value: 'Sincronizado', icon: CheckCircle2, color: 'text-green-600' },
       { id: 'stat-loc', label: 'Sede Principal', value: user?.campus || 'Don Bosco Medellín', icon: MapPin, color: 'text-blue-600' },
     ];
