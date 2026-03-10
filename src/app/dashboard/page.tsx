@@ -8,7 +8,7 @@ import { collection, query, orderBy, limit, where, getCountFromServer, getDocs }
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Clock, CheckCircle2, Users, CalendarDays, Loader2, MapPin, Megaphone, AlertTriangle, ArrowRight } from 'lucide-react';
-import Link from 'link';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AttendanceRecord, Announcement, Shift } from '@/lib/types';
