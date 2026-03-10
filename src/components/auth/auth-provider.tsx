@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   }, [auth]);
 
-  // Control de Inactividad (Session Timeout)
+  // CONTROL DE INACTIVIDAD: Cierre de sesión automático tras 2 minutos (120000ms)
   useEffect(() => {
     if (!resolvedUser || !auth) return;
 
@@ -42,18 +42,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const resetTimer = () => {
       if (timeoutId) clearTimeout(timeoutId);
       
-      // 120000 ms = 2 minutos de inactividad
       timeoutId = setTimeout(() => {
         logout();
         toast({
           variant: "destructive",
           title: "Sesión Expirada",
-          description: "Se ha cerrado la sesión automáticamente por inactividad para proteger tus datos.",
+          description: "Se ha cerrado la sesión por inactividad (2 min) para proteger tus datos.",
         });
       }, 120000); 
     };
 
-    // Eventos que reinician el temporizador de actividad
     const activityEvents = [
       'mousedown', 
       'mousemove', 
@@ -67,7 +65,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.addEventListener(event, resetTimer);
     });
 
-    // Iniciar el temporizador
     resetTimer();
 
     return () => {

@@ -100,7 +100,6 @@ export default function DashboardPage() {
     if (!db || !user || user.role === 'docent') return;
     const fetchTodayStats = async () => {
       try {
-        // Contar ingresos únicos (Presencia Real)
         const q = query(
           collection(db, 'globalAttendanceRecords'), 
           where('date', '==', todayStr),
