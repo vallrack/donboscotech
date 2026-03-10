@@ -1,11 +1,12 @@
 
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, UserRole } from '@/lib/types';
 import { useAuth as useFirebaseAuth, useUser, useFirestore } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: User | null;
@@ -21,9 +22,61 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useFirebaseAuth();
   const db = useFirestore();
+  const { toast } = useToast();
   const { user: authUser, loading: authLoading } = useUser();
   const [resolvedUser, setResolvedUser] = useState<User | null>(null);
   const [resolving, setResolving] = useState(false);
+
+  const logout = useCallback(async () => {
+    if (!auth) return;
+    setResolvedUser(null);
+    await signOut(auth);
+  }, [auth]);
+
+  // Control de Inactividad (Session Timeout)
+  useEffect(() => {
+    if (!resolvedUser || !auth) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      // 120000 ms = 2 minutos de inactividad
+      timeoutId = setTimeout(() => {
+        logout();
+        toast({
+          variant: "destructive",
+          title: "Sesión Expirada",
+          description: "Se ha cerrado la sesión automáticamente por inactividad para proteger tus datos.",
+        });
+      }, 120000); 
+    };
+
+    // Eventos que reinician el temporizador de actividad
+    const activityEvents = [
+      'mousedown', 
+      'mousemove', 
+      'keypress', 
+      'scroll', 
+      'touchstart', 
+      'click'
+    ];
+
+    activityEvents.forEach(event => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    // Iniciar el temporizador
+    resetTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [resolvedUser, logout, toast, auth]);
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | undefined;
@@ -128,12 +181,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         assignedAt: new Date().toISOString()
       });
     }
-  };
-
-  const logout = async () => {
-    if (!auth) return;
-    setResolvedUser(null);
-    await signOut(auth);
   };
 
   const loading = authLoading || resolving;
