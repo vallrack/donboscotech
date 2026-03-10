@@ -44,7 +44,6 @@ export default function DashboardPage() {
     return (annRaw || []).filter(a => a.status === 'active');
   }, [annRaw]);
 
-  // Lógica para detectar si el docente debe marcar asistencia ahora y enviar recordatorio automático
   useEffect(() => {
     if (!db || !user || user.role !== 'docent') return;
 
@@ -74,7 +73,6 @@ export default function DashboardPage() {
             if (snap.empty) {
               setNeedsCheckIn(s);
               
-              // ENVÍO AUTOMÁTICO DE RECORDATORIO (Solo una vez por sesión/día)
               if (!hasSentAutoReminder.current) {
                 hasSentAutoReminder.current = true;
                 sendAttendanceReminder({

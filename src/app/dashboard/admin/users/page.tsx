@@ -4,7 +4,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth as getFirebaseAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, Loader2, ShieldCheck, 
-  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon, UserCheck, ShieldAlert, Lock, BellRing
+  PlusCircle, MapPin, BookOpen, Trash2, Plus, Trash, Edit3, Save, X as CloseIcon, UserCheck, ShieldAlert, Lock, BellRing, Zap
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,7 @@ export default function UserManagementPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isNotifying, setIsNotifying] = useState<string | null>(null);
+  const [isGlobalNotifying, setIsGlobalNotifying] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const campusesQuery = useMemoFirebase(() => db ? query(collection(db, 'campuses'), orderBy('name')) : null, [db]);
@@ -95,12 +96,65 @@ export default function UserManagementPage() {
     setEditingUser(null);
   }, []);
 
+  const handleGlobalReminders = async () => {
+    if (!db || isGlobalNotifying) return;
+    setIsGlobalNotifying(true);
+    
+    try {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const [currH, currM] = timeStr.split(':').map(Number);
+      const currTotal = currH * 60 + currM;
+      const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
+
+      const docents = users.filter(u => u.role === 'docent');
+      let sentCount = 0;
+
+      for (const docent of docents) {
+        const todayShifts = shifts.filter(s => docent.shiftIds?.includes(s.id) && s.days?.includes(dayName));
+        
+        for (const s of todayShifts) {
+          const [sh, sm] = s.startTime.split(':').map(Number);
+          const startT = sh * 60 + sm;
+          
+          if (currTotal >= (startT - 10) && currTotal <= (startT + 120)) {
+            const q = query(
+              collection(db, 'userProfiles', docent.id, 'attendanceRecords'), 
+              where('date', '==', todayStr),
+              where('type', '==', 'entry')
+            );
+            const snap = await getDocs(q);
+            
+            if (snap.empty) {
+              await sendAttendanceReminder({
+                userName: docent.name,
+                userEmail: docent.email,
+                shiftName: s.name,
+                startTime: s.startTime
+              });
+              sentCount++;
+            }
+          }
+        }
+      }
+
+      toast({
+        title: "Proceso Completado",
+        description: `Se han enviado ${sentCount} recordatorios automáticos.`
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error en el proceso global" });
+    } finally {
+      setIsGlobalNotifying(false);
+    }
+  };
+
   const handleSendReminder = async (targetUser: User) => {
     if (isNotifying) return;
     setIsNotifying(targetUser.id);
     
     try {
-      // Intentar obtener la jornada actual para el correo
       const firstShiftId = targetUser.shiftIds?.[0];
       const shift = shifts.find(s => s.id === firstShiftId);
       
@@ -170,14 +224,9 @@ export default function UserManagementPage() {
 
   const handleEditClick = (u: User) => {
     if (currentUser?.role === 'coordinator' && u.role === 'admin') {
-      toast({ 
-        variant: "destructive", 
-        title: "Acceso Denegado", 
-        description: "Un coordinador no puede modificar perfiles de administrador." 
-      });
+      toast({ variant: "destructive", title: "Acceso Denegado", description: "Un coordinador no puede modificar perfiles de administrador." });
       return;
     }
-
     setEditingUser(u);
     setFormData({
       name: u.name || '',
@@ -195,7 +244,6 @@ export default function UserManagementPage() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db || !editingUser || isSaving) return;
-
     setIsSaving(true);
     const profileRef = doc(db, 'userProfiles', editingUser.id);
     const updateData = {
@@ -207,7 +255,6 @@ export default function UserManagementPage() {
       role: formData.role,
       updatedAt: serverTimestamp()
     };
-
     updateDoc(profileRef, updateData)
       .then(async () => {
         if (formData.role !== editingUser.role) {
@@ -218,7 +265,7 @@ export default function UserManagementPage() {
             await setDoc(doc(db, col, editingUser.id), { email: formData.email, assignedAt: new Date().toISOString() });
           }
         }
-        toast({ title: "Perfil actualizado satisfactoriamente" });
+        toast({ title: "Perfil actualizado" });
         setIsEditDialogOpen(false);
         resetForm();
       })
@@ -234,17 +281,11 @@ export default function UserManagementPage() {
 
   const handleDeleteUser = useCallback((userId: string, targetRole?: string) => {
     if (currentUser?.role === 'coordinator' && targetRole === 'admin') {
-      toast({ 
-        variant: "destructive", 
-        title: "Acceso Denegado", 
-        description: "No tienes permisos para eliminar a un administrador." 
-      });
+      toast({ variant: "destructive", title: "Acceso Denegado", description: "No tienes permisos para eliminar a un administrador." });
       return;
     }
-
     if (!db || !confirm('¿Dar de baja a este miembro permanentemente?')) return;
     const profileRef = doc(db, 'userProfiles', userId);
-    
     deleteDoc(profileRef)
       .then(async () => {
         const rolesCols = ['roles_admins', 'roles_coordinators', 'roles_secretaries'];
@@ -252,10 +293,7 @@ export default function UserManagementPage() {
         toast({ title: "Personal removido" });
       })
       .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: profileRef.path,
-          operation: 'delete'
-        } as SecurityRuleContext));
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: profileRef.path, operation: 'delete' } as SecurityRuleContext));
       });
   }, [db, currentUser, toast]);
 
@@ -277,89 +315,101 @@ export default function UserManagementPage() {
           <p className="text-muted-foreground font-medium mt-2">Administra roles y credenciales de Ciudad Don Bosco.</p>
         </div>
         
-        <Dialog open={isCreateDialogOpen} onOpenChange={(val) => { setIsCreateDialogOpen(val); if(!val) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl">
-              <PlusCircle className="w-6 h-6" /> Registrar Nuevo Miembro
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[750px] rounded-[3rem] border-none shadow-2xl bg-white p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            <DialogHeader className="p-10 pb-0">
-              <DialogTitle className="text-2xl font-black text-gray-800">Inscripción Institucional</DialogTitle>
-            </DialogHeader>
-            <div className="overflow-y-auto flex-1 p-10 pt-4 space-y-8">
-              <form onSubmit={handleCreateUser}>
-                <div className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
-                      <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
+        <div className="flex flex-wrap gap-4">
+          <Button 
+            variant="outline" 
+            onClick={handleGlobalReminders} 
+            disabled={isGlobalNotifying}
+            className="h-14 px-8 rounded-2xl font-black gap-2 shadow-xl border-primary/20 text-primary hover:bg-primary/5"
+          >
+            {isGlobalNotifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+            Ejecutar Recordatorio Global
+          </Button>
+
+          <Dialog open={isCreateDialogOpen} onOpenChange={(val) => { setIsCreateDialogOpen(val); if(!val) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button className="h-14 px-10 rounded-2xl font-black gap-2 shadow-2xl">
+                <PlusCircle className="w-6 h-6" /> Registrar Nuevo Miembro
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[750px] rounded-[3rem] border-none shadow-2xl bg-white p-0 overflow-hidden flex flex-col max-h-[90vh]">
+              <DialogHeader className="p-10 pb-0">
+                <DialogTitle className="text-2xl font-black text-gray-800">Inscripción Institucional</DialogTitle>
+              </DialogHeader>
+              <div className="overflow-y-auto flex-1 p-10 pt-4 space-y-8">
+                <form onSubmit={handleCreateUser}>
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nombre Completo</Label>
+                        <Input value={formData.name} onChange={(e) => updateFormField('name', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Cédula</Label>
+                        <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Correo Institucional</Label>
+                        <Input type="email" value={formData.email} onChange={(e) => updateFormField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña</Label>
+                        <Input type="password" value={formData.password} onChange={(e) => updateFormField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Cédula</Label>
-                      <Input value={formData.documentId} onChange={(e) => updateFormField('documentId', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede de Trabajo</Label>
+                        <Select value={formData.campus || undefined} onValueChange={(val) => updateFormField('campus', val)}>
+                          <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
+                          <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold">{c.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa</Label>
+                        <Select value={formData.program || undefined} onValueChange={(val) => updateFormField('program', val)}>
+                          <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
+                          <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Correo Institucional</Label>
-                      <Input type="email" value={formData.email} onChange={(e) => updateFormField('email', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
+                    <div className="space-y-4">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Asignación de Jornadas</Label>
+                      <Select onValueChange={(val) => toggleShift(val)}>
+                        <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
+                          <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada</span></div>
+                        </SelectTrigger>
+                        <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id} className="font-bold py-3">{s.name} ({s.startTime} - {s.endTime})</SelectItem>)}</SelectContent>
+                      </Select>
+                      <div className="flex flex-wrap gap-2">
+                        {formData.shiftIds.map(id => {
+                          const s = shifts.find(sh => sh.id === id);
+                          return <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">{s?.name}<Trash className="w-3 h-3 cursor-pointer" onClick={() => toggleShift(id)} /></Badge>
+                        })}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Contraseña</Label>
-                      <Input type="password" value={formData.password} onChange={(e) => updateFormField('password', e.target.value)} className="h-12 rounded-xl bg-gray-50/50" required />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Sede de Trabajo</Label>
-                      <Select value={formData.campus || undefined} onValueChange={(val) => updateFormField('campus', val)}>
-                        <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Sede" /></SelectTrigger>
-                        <SelectContent>{campuses?.map(c => <SelectItem key={c.id} value={c.name} className="font-bold">{c.name}</SelectItem>)}</SelectContent>
+                    <div className="space-y-4 pt-4 border-t">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nivel de Permisos</Label>
+                      <Select value={formData.role} onValueChange={(val: UserRole) => updateFormField('role', val)}>
+                        <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
+                          <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
+                          <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
+                          <SelectItem value="admin" className="font-bold py-3 text-primary">Administrador</SelectItem>
+                        </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Programa</Label>
-                      <Select value={formData.program || undefined} onValueChange={(val) => updateFormField('program', val)}>
-                        <SelectTrigger className="h-12 rounded-xl bg-gray-50/50 font-bold"><SelectValue placeholder="Seleccionar Programa" /></SelectTrigger>
-                        <SelectContent>{programs?.map(p => <SelectItem key={p.id} value={p.name} className="font-bold">{p.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
+                    <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isSaving}>
+                      {isSaving ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
+                      Confirmar Registro
+                    </Button>
                   </div>
-                  <div className="space-y-4">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Asignación de Jornadas</Label>
-                    <Select onValueChange={(val) => toggleShift(val)}>
-                      <SelectTrigger className="h-14 rounded-2xl bg-gray-50/50 font-bold">
-                        <div className="flex items-center gap-2"><Plus className="w-4 h-4 text-primary" /><span>Añadir Jornada</span></div>
-                      </SelectTrigger>
-                      <SelectContent>{shifts?.map(s => <SelectItem key={s.id} value={s.id} className="font-bold py-3">{s.name} ({s.startTime} - {s.endTime})</SelectItem>)}</SelectContent>
-                    </Select>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.shiftIds.map(id => {
-                        const s = shifts.find(sh => sh.id === id);
-                        return <Badge key={id} variant="secondary" className="px-3 py-1 font-black gap-2">{s?.name}<Trash className="w-3 h-3 cursor-pointer" onClick={() => toggleShift(id)} /></Badge>
-                      })}
-                    </div>
-                  </div>
-                  <div className="space-y-4 pt-4 border-t">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 ml-1">Nivel de Permisos</Label>
-                    <Select value={formData.role} onValueChange={(val: UserRole) => updateFormField('role', val)}>
-                      <SelectTrigger className="h-14 rounded-2xl font-black text-primary border-primary/20 bg-primary/5"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="docent" className="font-bold py-3">Docente</SelectItem>
-                        <SelectItem value="secretary" className="font-bold py-3">Secretaría</SelectItem>
-                        <SelectItem value="coordinator" className="font-bold py-3">Coordinador</SelectItem>
-                        <SelectItem value="admin" className="font-bold py-3 text-primary">Administrador</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg shadow-xl" disabled={isSaving}>
-                    {isSaving ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <ShieldCheck className="w-6 h-6 mr-2" />}
-                    Confirmar Registro
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </DialogContent>
-        </Dialog>
+                </form>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(val) => { setIsEditDialogOpen(val); if(!val) resetForm(); }}>
