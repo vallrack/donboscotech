@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit, where, getCountFromServer, getDocs } from 'firebase/firestore';
@@ -14,12 +14,14 @@ import { cn } from '@/lib/utils';
 import { AttendanceRecord, Announcement, Shift } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { sendAttendanceReminder } from '@/ai/flows/attendance-reminder-flow';
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const db = useFirestore();
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const [needsCheckIn, setNeedsCheckIn] = useState<Shift | null>(null);
+  const hasSentAutoReminder = useRef(false);
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const recordsQuery = useMemoFirebase(() => {
@@ -42,7 +44,7 @@ export default function DashboardPage() {
     return (annRaw || []).filter(a => a.status === 'active');
   }, [annRaw]);
 
-  // Lógica para detectar si el docente debe marcar asistencia ahora
+  // Lógica para detectar si el docente debe marcar asistencia ahora y enviar recordatorio automático
   useEffect(() => {
     if (!db || !user || user.role !== 'docent') return;
 
@@ -58,14 +60,11 @@ export default function DashboardPage() {
         const allShifts = shiftsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Shift));
         const todayShifts = allShifts.filter(s => user.shiftIds?.includes(s.id) && s.days?.includes(dayName));
 
-        // Buscar si hay una jornada actual o próxima
         for (const s of todayShifts) {
           const [sh, sm] = s.startTime.split(':').map(Number);
           const startT = sh * 60 + sm;
           
-          // Si faltan menos de 10 min o ya empezó (y no han pasado más de 2 horas)
           if (currTotal >= (startT - 10) && currTotal <= (startT + 120)) {
-            // Verificar si ya marcó hoy
             const q = query(
               collection(db, 'userProfiles', user.id, 'attendanceRecords'), 
               where('date', '==', todayStr),
@@ -74,6 +73,17 @@ export default function DashboardPage() {
             const snap = await getDocs(q);
             if (snap.empty) {
               setNeedsCheckIn(s);
+              
+              // ENVÍO AUTOMÁTICO DE RECORDATORIO (Solo una vez por sesión/día)
+              if (!hasSentAutoReminder.current) {
+                hasSentAutoReminder.current = true;
+                sendAttendanceReminder({
+                  userName: user.name,
+                  userEmail: user.email,
+                  shiftName: s.name,
+                  startTime: s.startTime
+                }).catch(e => console.error("Error envío automático:", e));
+              }
             } else {
               setNeedsCheckIn(null);
             }
@@ -128,7 +138,7 @@ export default function DashboardPage() {
             <AlertTitle className="text-xl font-black text-red-600">¡Atención, Colaborador!</AlertTitle>
             <AlertDescription className="text-gray-700 font-bold mt-2">
               No has registrado tu entrada para la jornada <span className="text-primary">{needsCheckIn.name}</span> ({needsCheckIn.startTime}). 
-              Es obligatorio realizar el registro GPS ahora mismo.
+              Es obligatorio realizar el registro GPS ahora mismo. Un recordatorio ha sido enviado a tu correo.
             </AlertDescription>
             <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl">
               <Link href="/dashboard/attendance/scan" className="flex items-center gap-2">

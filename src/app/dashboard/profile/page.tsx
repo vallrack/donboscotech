@@ -184,7 +184,7 @@ export default function ProfilePage() {
                      </div>
                      <div className="space-y-3">
                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Documento de Identidad</Label>
-                       <Input value={formData.name} onChange={(e) => updateField('documentId', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
+                       <Input value={formData.documentId} onChange={(e) => updateField('documentId', e.target.value)} className="h-14 rounded-2xl bg-gray-50/50 font-bold" required />
                      </div>
                      <div className="space-y-3">
                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] ml-1">Sede de Trabajo</Label>
