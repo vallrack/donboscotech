@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   }, [auth]);
 
-  // CONTROL DE INACTIVIDAD: Cierre de sesión automático tras 2 minutos (120000ms)
+  // CONTROL DE INACTIVIDAD: Cierre de sesión automático tras 2 minutos de inactividad
   useEffect(() => {
     if (!resolvedUser || !auth) return;
 
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           title: "Sesión Expirada",
           description: "Se ha cerrado la sesión por inactividad (2 min) para proteger tus datos.",
         });
-      }, 120000); 
+      }, 120000); // 120,000 ms = 2 minutos
     };
 
     const activityEvents = [
