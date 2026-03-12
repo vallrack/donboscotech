@@ -9,8 +9,9 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { Resend } from 'resend';
 
-// Inicializar Resend (Requiere RESEND_API_KEY en Vercel/Enviroment Variables)
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// API Key proporcionada por el usuario para asegurar el funcionamiento inmediato
+const RESEND_KEY = 're_vQmMKAsk_JpfmPSBDVNWwoA9k3PxvhfL8';
+const resend = new Resend(RESEND_KEY);
 
 const AttendanceNotificationInputSchema = z.object({
   userName: z.string(),
@@ -68,17 +69,25 @@ const attendanceNotificationFlow = ai.defineFlow(
       
       if (!output) throw new Error("Error generando contenido de alerta.");
 
-      if (resend) {
-        await resend.emails.send({
-          from: 'Don Bosco Track <notificaciones@ciudaddonbosco.edu.co>',
-          to: input.userEmail,
-          subject: output.subject,
-          html: output.body,
-        });
-        console.log(`[ALERTA REAL ENVIADA A ${input.userEmail}]`);
-      } else {
-        console.warn(`[MODO SIMULACIÓN - NO API KEY] Alerta para ${input.userEmail}: ${output.subject}`);
+      // NOTA: Se usa onboarding@resend.dev para pruebas. 
+      // Para usar un dominio propio, debe verificarse en Resend.com
+      const { data, error } = await resend.emails.send({
+        from: 'Don Bosco Track <onboarding@resend.dev>',
+        to: input.userEmail,
+        subject: output.subject,
+        html: output.body,
+      });
+
+      if (error) {
+        console.error("Error de Resend:", error);
+        return {
+          success: false,
+          message: `Resend Error: ${error.message}`,
+          alertContent: "Fallo en el servidor de correo.",
+        };
       }
+      
+      console.log(`[ALERTA ENVIADA EXITOSAMENTE A ${input.userEmail}] ID: ${data?.id}`);
       
       return {
         success: true,
@@ -86,7 +95,7 @@ const attendanceNotificationFlow = ai.defineFlow(
         alertContent: output.body,
       };
     } catch (error: any) {
-      console.error("Error en flujo de notificación:", error);
+      console.error("Error crítico en flujo de notificación:", error);
       return {
         success: false,
         message: `Error: ${error.message}`,

@@ -1,7 +1,6 @@
-
 'use server';
 /**
- * @fileOverview Flujo de Genkit para enviar recordatorios de asistencia.
+ * @fileOverview Flujo de Genkit para enviar recordatorios de asistencia reales.
  * 
  * - sendAttendanceReminder - Genera contenido persuasivo y envía correo real vía Resend.
  */
@@ -10,8 +9,9 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { Resend } from 'resend';
 
-// Inicializar Resend (Se requiere RESEND_API_KEY en .env)
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// API Key proporcionada por el usuario para asegurar el funcionamiento inmediato
+const RESEND_KEY = 're_vQmMKAsk_JpfmPSBDVNWwoA9k3PxvhfL8';
+const resend = new Resend(RESEND_KEY);
 
 const AttendanceReminderInputSchema = z.object({
   userName: z.string().describe('Nombre del docente.'),
@@ -62,18 +62,22 @@ const attendanceReminderFlow = ai.defineFlow(
       
       if (!output) throw new Error("Error generando contenido de recordatorio.");
 
-      if (resend) {
-        await resend.emails.send({
-          from: 'Don Bosco Track <notificaciones@ciudaddonbosco.edu.co>',
-          to: input.userEmail,
-          subject: output.subject,
-          html: output.body,
-        });
-        
-        console.log(`[RECORDATORIO REAL ENVIADO A ${input.userEmail}]`);
-      } else {
-        console.warn(`[MODO SIMULACIÓN - NO RESEND API KEY] Recordatorio para ${input.userEmail}: ${output.subject}`);
+      const { data, error } = await resend.emails.send({
+        from: 'Don Bosco Track <onboarding@resend.dev>',
+        to: input.userEmail,
+        subject: output.subject,
+        html: output.body,
+      });
+
+      if (error) {
+        console.error("Error de Resend en recordatorio:", error);
+        return {
+          success: false,
+          message: `Resend Error: ${error.message}`,
+        };
       }
+
+      console.log(`[RECORDATORIO ENVIADO EXITOSAMENTE A ${input.userEmail}]`);
 
       return {
         success: true,
