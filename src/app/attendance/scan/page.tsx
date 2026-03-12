@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useRef } from 'react';
@@ -105,14 +106,14 @@ export default function PublicAttendanceScanner() {
       let activeShift: Shift | null = null;
       let isWithinTime = false;
 
-      // REGLA: Marcaje habilitado desde 10 minutos antes del inicio oficial
+      // REGLA ESTRICTA: Marcaje habilitado solo durante la jornada oficial con ±10 min de margen
       for (const s of todayShifts) {
         const [sh, sm] = s.startTime.split(':').map(Number);
         const [eh, em] = s.endTime.split(':').map(Number);
         const startT = sh * 60 + sm;
         const endT = eh * 60 + em;
         
-        if (currTotal >= (startT - 10) && currTotal <= (endT + 60)) {
+        if (currTotal >= (startT - 10) && currTotal <= (endT + 10)) {
           activeShift = s;
           isWithinTime = true;
           break;
@@ -121,7 +122,7 @@ export default function PublicAttendanceScanner() {
 
       if (!isWithinTime) {
         setErrorInfo(todayShifts.length > 0 
-          ? `Acceso Denegado: Tu jornada inicia a las ${todayShifts[0].startTime}. Solo puedes marcar desde 10 min antes.`
+          ? `Marcaje Denegado: Debes marcar dentro de tu horario oficial ±10 min (${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}).`
           : "No tienes jornada asignada para hoy en el sistema."
         );
         setScanning(false); isProcessing.current = false; return;
@@ -164,7 +165,6 @@ export default function PublicAttendanceScanner() {
         setDoc(doc(db, 'globalAttendanceRecords', recordId), recordData)
       ]);
 
-      // Notificación de Alerta Genkit
       notifyAttendance({
         userName: userData.name,
         userEmail: userData.email,

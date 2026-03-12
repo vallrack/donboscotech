@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Flujo de Genkit para procesar alertas de asistencia reales vía Resend.
@@ -9,7 +10,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { Resend } from 'resend';
 
-// API Key proporcionada por el usuario para asegurar el funcionamiento inmediato
+// API Key integrada directamente para asegurar el funcionamiento
 const RESEND_KEY = 're_vQmMKAsk_JpfmPSBDVNWwoA9k3PxvhfL8';
 const resend = new Resend(RESEND_KEY);
 
@@ -69,8 +70,7 @@ const attendanceNotificationFlow = ai.defineFlow(
       
       if (!output) throw new Error("Error generando contenido de alerta.");
 
-      // NOTA: Se usa onboarding@resend.dev para pruebas. 
-      // Para usar un dominio propio, debe verificarse en Resend.com
+      // Se usa onboarding@resend.dev para pruebas seguras sin verificación de dominio inmediata
       const { data, error } = await resend.emails.send({
         from: 'Don Bosco Track <onboarding@resend.dev>',
         to: input.userEmail,

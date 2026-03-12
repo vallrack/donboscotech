@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useMemo, useState, useEffect, useRef } from 'react';
@@ -22,7 +23,6 @@ export default function DashboardPage() {
   const [needsCheckIn, setNeedsCheckIn] = useState<Shift | null>(null);
   const hasSentAutoReminder = useRef(false);
   
-  // Usar fecha local YYYY-MM-DD para evitar desfases UTC
   const todayStr = useMemo(() => new Date().toLocaleDateString('sv-SE'), []);
 
   const recordsQuery = useMemoFirebase(() => {

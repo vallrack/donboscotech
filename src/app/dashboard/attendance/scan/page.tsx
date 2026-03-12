@@ -91,7 +91,6 @@ export default function AttendanceScanPage() {
     else setScanning(true);
 
     const now = new Date();
-    // Usar fecha local
     const dateStr = now.toLocaleDateString('sv-SE');
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     const [currH, currM] = timeStr.split(':').map(Number);
@@ -115,7 +114,8 @@ export default function AttendanceScanPage() {
         const startTotal = startH * 60 + startM;
         const endTotal = endH * 60 + endM;
 
-        if (currTotalMinutes >= (startTotal - 10) && currTotalMinutes <= (endTotal + 60)) {
+        // MARGEN ESTRICTO: Solo permite marcaje desde 10 min antes hasta 10 min después de la jornada
+        if (currTotalMinutes >= (startTotal - 10) && currTotalMinutes <= (endTotal + 10)) {
           activeShift = s;
           isWithinTimeRange = true;
           break;
@@ -124,7 +124,7 @@ export default function AttendanceScanPage() {
 
       if (!isWithinTimeRange) {
         setTimeError(todayShifts.length > 0 
-          ? `Acceso denegado: El marcaje se habilita 10 minutos antes de tu jornada (${todayShifts.map(s => s.startTime).join(', ')}).`
+          ? `Marcaje Bloqueado: Solo puedes marcar durante tu jornada oficial (margen ±10 min). Tu horario es: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}.`
           : "No tienes jornada oficial asignada para este día."
         );
         setScanning(false); setManualSaving(false); isProcessing.current = false;
@@ -136,6 +136,7 @@ export default function AttendanceScanPage() {
       const lastRecord = !querySnap.empty ? querySnap.docs[0].data() : null;
       const recordType = lastRecord && lastRecord.date === dateStr && lastRecord.type === 'entry' ? 'exit' : 'entry';
 
+      // Validación extra para salida anticipada
       if (recordType === 'exit' && activeShift) {
         const [endH, endM] = activeShift.endTime.split(':').map(Number);
         if (currTotalMinutes < (endH * 60 + endM)) {
@@ -222,7 +223,7 @@ export default function AttendanceScanPage() {
           {timeError && (
             <Alert variant="destructive" className="rounded-2xl border-2 animate-in slide-in-from-top-4">
               <XCircle className="h-5 w-5" />
-              <AlertTitle className="font-black">Restricción Institucional</AlertTitle>
+              <AlertTitle className="font-black">Restricción de Seguridad</AlertTitle>
               <AlertDescription className="text-xs font-bold leading-relaxed">{timeError}</AlertDescription>
               <Button variant="outline" size="sm" className="mt-4 w-full h-10 font-black rounded-xl border-destructive/20" onClick={() => setTimeError(null)}>Entendido</Button>
             </Alert>

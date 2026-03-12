@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Flujo de Genkit para enviar recordatorios de asistencia reales.
@@ -9,7 +10,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { Resend } from 'resend';
 
-// API Key proporcionada por el usuario para asegurar el funcionamiento inmediato
+// API Key integrada directamente para asegurar el funcionamiento
 const RESEND_KEY = 're_vQmMKAsk_JpfmPSBDVNWwoA9k3PxvhfL8';
 const resend = new Resend(RESEND_KEY);
 
