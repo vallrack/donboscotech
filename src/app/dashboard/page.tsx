@@ -65,7 +65,6 @@ export default function DashboardPage() {
           const [sh, sm] = s.startTime.split(':').map(Number);
           const startT = sh * 60 + sm;
           
-          // Si estamos entre 10 min antes y 2 horas después del inicio
           if (currTotal >= (startT - 10) && currTotal <= (startT + 120)) {
             const q = query(
               collection(db, 'userProfiles', user.id, 'attendanceRecords'), 
