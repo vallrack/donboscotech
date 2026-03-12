@@ -124,7 +124,7 @@ export default function AttendanceScanPage() {
 
       if (!isWithinTimeRange) {
         setTimeError(todayShifts.length > 0 
-          ? `Marcaje Bloqueado: Solo puedes marcar durante tu jornada oficial (margen ±10 min). Tu horario es: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}.`
+          ? `Marcaje Bloqueado: Fuera del horario oficial (margen ±10 min). Tu horario es: ${todayShifts.map(s => `${s.startTime}-${s.endTime}`).join(', ')}.`
           : "No tienes jornada oficial asignada para este día."
         );
         setScanning(false); setManualSaving(false); isProcessing.current = false;
@@ -135,16 +135,6 @@ export default function AttendanceScanPage() {
       const querySnap = await getDocs(q);
       const lastRecord = !querySnap.empty ? querySnap.docs[0].data() : null;
       const recordType = lastRecord && lastRecord.date === dateStr && lastRecord.type === 'entry' ? 'exit' : 'entry';
-
-      // Validación extra para salida anticipada
-      if (recordType === 'exit' && activeShift) {
-        const [endH, endM] = activeShift.endTime.split(':').map(Number);
-        if (currTotalMinutes < (endH * 60 + endM)) {
-          setTimeError(`Salida bloqueada: Debes cumplir tu jornada hasta las ${activeShift.endTime}.`);
-          setScanning(false); setManualSaving(false); isProcessing.current = false;
-          return;
-        }
-      }
 
       const recordId = `${user.id}_${now.getTime()}_${method.toLowerCase()}`;
       const currentLoc = locationRef.current || { lat: 0, lng: 0 };

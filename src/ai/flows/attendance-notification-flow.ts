@@ -70,7 +70,7 @@ const attendanceNotificationFlow = ai.defineFlow(
       
       if (!output) throw new Error("Error generando contenido de alerta.");
 
-      // Se usa onboarding@resend.dev para pruebas seguras sin verificación de dominio inmediata
+      // Se usa onboarding@resend.dev para asegurar la entrega en modo prueba
       const { data, error } = await resend.emails.send({
         from: 'Don Bosco Track <onboarding@resend.dev>',
         to: input.userEmail,
@@ -86,8 +86,6 @@ const attendanceNotificationFlow = ai.defineFlow(
           alertContent: "Fallo en el servidor de correo.",
         };
       }
-      
-      console.log(`[ALERTA ENVIADA EXITOSAMENTE A ${input.userEmail}] ID: ${data?.id}`);
       
       return {
         success: true,

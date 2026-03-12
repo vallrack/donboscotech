@@ -78,8 +78,6 @@ const attendanceReminderFlow = ai.defineFlow(
         };
       }
 
-      console.log(`[RECORDATORIO ENVIADO EXITOSAMENTE A ${input.userEmail}]`);
-
       return {
         success: true,
         message: "Recordatorio enviado correctamente.",
