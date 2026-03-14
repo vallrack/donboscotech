@@ -4,12 +4,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, setDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Search, UserCheck, Loader2, MapPin } from 'lucide-react';
+import { Search, UserCheck, Loader2, MapPin, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Shift, User } from '@/lib/types';
@@ -68,8 +68,7 @@ export default function ManualAttendancePage() {
     
     setSaving(true);
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const dateStr = now.toLocaleDateString('sv-SE');
     const dayName = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'][now.getDay()];
 
     try {
@@ -77,44 +76,52 @@ export default function ManualAttendancePage() {
       const allShifts = shiftsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Shift));
       
       let processed = 0;
-      let blocked = 0;
 
       for (const userId of Array.from(markedUsers)) {
         const docent = allDocents.find(d => d.id === userId);
         if (!docent) continue;
 
+        // 1. Obtener jornada del docente para hoy
         const todayShifts = allShifts.filter(s => 
           docent.shiftIds?.includes(s.id) && s.days?.includes(dayName)
         );
+        const activeShift = todayShifts[0];
+        if (!activeShift) continue;
 
-        let activeShift = todayShifts[0] || null; // En manual permitimos si hay al menos una jornada hoy
+        // 2. Revisar si ya tiene entrada hoy para determinar el tipo (entry/exit)
+        const q = query(
+          collection(db, 'userProfiles', userId, 'attendanceRecords'), 
+          where('date', '==', dateStr),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
+        const lastRecSnap = await getDocs(q);
+        const lastRec = !lastRecSnap.empty ? lastRecSnap.docs[0].data() : null;
+        
+        const recordType = lastRec && lastRec.type === 'entry' ? 'exit' : 'entry';
+        
+        // REGLA INSTITUCIONAL: Se marca la hora oficial de la jornada si es manual por coordinador
+        const recordTime = recordType === 'entry' ? activeShift.startTime : activeShift.endTime;
 
-        if (!activeShift) {
-          blocked++;
-          continue;
-        }
-
-        const recordId = `${userId}_${now.getTime()}_manual_admin`;
+        const recordId = `${userId}_${now.getTime()}_manual_coord`;
         const currentLoc = locationRef.current || { lat: 0, lng: 0 };
         
-        // AUTO-VALIDACIÓN CON FIRMA DEL COORDINADOR
         const recordData = {
           userId, 
           userName: docent.name, 
           date: dateStr, 
-          time: timeStr, 
-          type: 'entry',
+          time: recordTime, 
+          type: recordType,
           method: 'Manual', 
           shiftId: activeShift.id, 
           shiftName: activeShift.name,
           location: { 
             lat: currentLoc.lat, 
             lng: currentLoc.lng, 
-            address: `Validado por: ${currentUser.name}` 
+            address: `Marcaje Manual - Coordinador: ${currentUser.name}` 
           },
           registeredBy: currentUser.id, 
           createdAt: serverTimestamp(),
-          // Se agrega firma automáticamente ya que lo hace un coordinador
           isVerified: true,
           verifiedBy: currentUser.id,
           verifiedByName: currentUser.name,
@@ -128,12 +135,13 @@ export default function ManualAttendancePage() {
       }
 
       toast({
-        title: "Proceso Finalizado",
-        description: `Registrados y validados: ${processed}.`
+        title: "Registros Sincronizados",
+        description: `Se han procesado ${processed} jornadas correctamente.`
       });
       setMarkedUsers(new Set());
     } catch (error) {
-      toast({ variant: "destructive", title: "Error en el registro" });
+      console.error(error);
+      toast({ variant: "destructive", title: "Error en el servidor" });
     } finally {
       setSaving(false);
     }
@@ -143,13 +151,12 @@ export default function ManualAttendancePage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Marcaje Manual Administrativo</h1>
-          <p className="text-muted-foreground text-sm">Validación directa con firma digital automática.</p>
+          <h1 className="text-3xl font-black tracking-tight text-primary">Validación de Coordinación</h1>
+          <p className="text-muted-foreground text-sm font-medium">Marcaje manual con ajuste automático a horario institucional.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 rounded-xl border flex items-center gap-2 text-xs font-bold bg-gray-50 text-gray-500 border-gray-100">
-            <MapPin className="w-3.5 h-3.5" /> GPS Activo
-          </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border rounded-2xl">
+          <MapPin className="w-4 h-4 text-primary" />
+          <span className="text-[10px] font-black uppercase text-gray-400">Punto GPS Activo</span>
         </div>
       </div>
 
@@ -158,8 +165,8 @@ export default function ManualAttendancePage() {
           <div className="relative max-w-lg">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
-              placeholder="Buscar docente..." 
-              className="pl-10 h-11 border-gray-200"
+              placeholder="Buscar docente por nombre..." 
+              className="pl-10 h-11 border-gray-200 bg-gray-50/50"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -171,7 +178,7 @@ export default function ManualAttendancePage() {
               <thead>
                 <tr className="bg-gray-50/50 border-b text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   <th className="px-6 py-4">Docente</th>
-                  <th className="px-6 py-4">Estado</th>
+                  <th className="px-6 py-4">Sede / Programa</th>
                   <th className="px-6 py-4 text-center">Registrar</th>
                 </tr>
               </thead>
@@ -182,24 +189,26 @@ export default function ManualAttendancePage() {
                   filteredDocents.map((docent) => (
                     <tr key={docent.id} className="hover:bg-gray-50/30 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-bold text-sm">{docent.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{docent.email}</div>
+                        <div className="font-bold text-sm text-gray-800">{docent.name}</div>
+                        <div className="text-[10px] text-muted-foreground font-bold">{docent.email}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant="outline" className="text-[10px] uppercase font-bold">Revisión Pendiente</Badge>
+                        <div className="text-[10px] font-black text-gray-500 uppercase">{docent.campus}</div>
+                        <div className="text-[9px] font-bold text-primary">{docent.program}</div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center">
                           <Checkbox 
                             checked={markedUsers.has(docent.id)}
                             onCheckedChange={() => toggleUser(docent.id)}
+                            className="w-5 h-5 data-[state=checked]:bg-primary"
                           />
                         </div>
                       </td>
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan={3} className="py-20 text-center text-muted-foreground italic">No se encontraron docentes.</td></tr>
+                  <tr><td colSpan={3} className="py-20 text-center text-muted-foreground italic">No se encontraron docentes activos.</td></tr>
                 )}
               </tbody>
             </table>
@@ -212,10 +221,10 @@ export default function ManualAttendancePage() {
           size="lg" 
           disabled={markedUsers.size === 0 || saving}
           onClick={handleSave}
-          className="px-12 h-14 text-lg font-bold shadow-xl rounded-2xl"
+          className="px-12 h-14 text-lg font-black shadow-xl rounded-2xl gap-3"
         >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <UserCheck className="w-5 h-5 mr-2" />}
-          Confirmar y Firmar {markedUsers.size} registros
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserCheck className="w-6 h-6" />}
+          Aplicar Marcaje Administrativo ({markedUsers.size})
         </Button>
       </div>
     </div>
