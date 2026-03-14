@@ -89,14 +89,16 @@ export default function ManualAttendancePage() {
         if (!activeShift) continue;
 
         // 2. Revisar si ya tiene entrada hoy para determinar el tipo (entry/exit)
+        // Optimizamos la consulta eliminando orderBy para evitar el error de índice compuesto en Firestore
         const q = query(
           collection(db, 'userProfiles', userId, 'attendanceRecords'), 
-          where('date', '==', dateStr),
-          orderBy('createdAt', 'desc'),
-          limit(1)
+          where('date', '==', dateStr)
         );
-        const lastRecSnap = await getDocs(q);
-        const lastRec = !lastRecSnap.empty ? lastRecSnap.docs[0].data() : null;
+        const snapshot = await getDocs(q);
+        
+        // Ordenamos en memoria para obtener el último registro
+        const docs = snapshot.docs.map(d => ({ ...d.data() as any, id: d.id }));
+        const lastRec = docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))[0];
         
         const recordType = lastRec && lastRec.type === 'entry' ? 'exit' : 'entry';
         
